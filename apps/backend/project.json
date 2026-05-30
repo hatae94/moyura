@@ -1,0 +1,32 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "backend",
+  "projectType": "application",
+  "sourceRoot": "apps/backend/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "outputs": ["{projectRoot}/dist"],
+      "options": { "command": "nest build", "cwd": "apps/backend" }
+    },
+    "start": {
+      "executor": "nx:run-commands",
+      "options": { "command": "nest start", "cwd": "apps/backend" }
+    },
+    "start:dev": {
+      "executor": "nx:run-commands",
+      "options": { "command": "nest start --watch", "cwd": "apps/backend" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "options": { "command": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix", "cwd": "apps/backend" }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "options": { "command": "jest", "cwd": "apps/backend" }
+    }
+  }
+}

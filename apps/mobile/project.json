@@ -1,0 +1,29 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "mobile",
+  "projectType": "application",
+  "sourceRoot": "apps/mobile",
+  "targets": {
+    "start": {
+      "executor": "nx:run-commands",
+      "options": { "command": "expo start", "cwd": "apps/mobile" }
+    },
+    "android": {
+      "executor": "nx:run-commands",
+      "options": { "command": "expo start --android", "cwd": "apps/mobile" }
+    },
+    "ios": {
+      "executor": "nx:run-commands",
+      "options": { "command": "expo start --ios", "cwd": "apps/mobile" }
+    },
+    "web": {
+      "executor": "nx:run-commands",
+      "options": { "command": "expo start --web", "cwd": "apps/mobile" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "options": { "command": "tsc --noEmit", "cwd": "apps/mobile" }
+    }
+  }
+}

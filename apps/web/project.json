@@ -1,0 +1,32 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "web",
+  "projectType": "application",
+  "sourceRoot": "apps/web/app",
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": { "command": "next dev", "cwd": "apps/web" }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "outputs": ["{projectRoot}/.next"],
+      "options": { "command": "next build", "cwd": "apps/web" }
+    },
+    "start": {
+      "executor": "nx:run-commands",
+      "options": { "command": "next start", "cwd": "apps/web" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "options": { "command": "eslint", "cwd": "apps/web" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "options": { "command": "tsc --noEmit", "cwd": "apps/web" }
+    }
+  }
+}

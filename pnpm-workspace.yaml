@@ -1,0 +1,16 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Carried over from apps/web's former nested pnpm-workspace.yaml
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
+
+# Build scripts allowed to run during install.
+# nx requires its postinstall; nest/swc rebuild native bindings.
+onlyBuiltDependencies:
+  - "@nestjs/core"
+  - "@swc/core"
+  - nx
+  - msgpackr-extract
