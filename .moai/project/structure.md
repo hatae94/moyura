@@ -21,22 +21,25 @@ moyura/
 │  │  ├─ src/
 │  │  │  ├─ config/     # @nestjs/config + Zod fail-fast env 검증
 │  │  │  ├─ health/     # GET /health (PrismaService SELECT 1 프로브)
-│  │  │  ├─ auth/       # no-op SupabaseAuthGuard seam (검증 로직 없음)
+│  │  │  ├─ auth/       # SupabaseAuthGuard(ES256 JWKS, jose) + TokenVerifierService + auth.config + @CurrentUser
+│  │  │  ├─ profile/    # ProfileService(upsertBySub) + me.controller(GET /me 보호) + profile-response.dto
 │  │  │  ├─ prisma/     # PrismaService (pg adapter, pingDatabase)
 │  │  │  └─ generated/  # Prisma 7 source-emit 클라이언트 (gitignore, 재생성)
-│  │  ├─ prisma/        # schema.prisma (prisma-client 제너레이터)
+│  │  ├─ prisma/        # schema.prisma (Profile 모델) + migrations/20260602095934_init_profile (첫 도메인 마이그레이션)
 │  │  ├─ prisma.config.ts  # Prisma 7 연결 URL 위치
 │  │  ├─ openapi.ts     # OpenAPI emit 스크립트
 │  │  └─ openapi.json   # 커밋된 OpenAPI 계약 산출물
-│  ├─ mobile/           # @moyura/mobile  — Expo RN 56 (App.tsx, index.ts, assets/)
-│  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비)
+│  ├─ mobile/           # @moyura/mobile  — Expo RN 56 (App.tsx, index.ts, assets/), app.json scheme "moyura"
+│  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비), auth/oauth.ts(시스템 브라우저 OAuth 헬퍼)
 │  │  └─ eas.json       # EAS local/prod 프로파일 스켈레톤
 │  └─ web/              # @moyura/web     — Next.js 16 (app/, public/)
-│     └─ lib/           # env.ts(가드), api.ts(api-client 소비)
+│     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback)
+│     ├─ app/           # auth/callback/route.ts(PKCE 콜백), login/, me/
+│     └─ proxy.ts       # @supabase/ssr updateSession (Next 16 미들웨어 컨벤션)
 ├─ packages/
 │  ├─ config/           # @moyura/config  — 공유 tsconfig base (현재 스텁)
 │  └─ api-client/       # @moyura/api-client — openapi-typescript 타입 + fetch 클라이언트
-├─ supabase/            # 로컬 Supabase CLI 스택 (config.toml, README.md, snippets/)
+├─ supabase/            # 로컬 Supabase CLI 스택 (config.toml — [auth.external.google|apple|kakao] enabled=false env() 스캐폴드, README.md, snippets/)
 ├─ docs/                # deploy-render.md (Render 배포 가이드)
 ├─ .github/workflows/   # ci.yml (install/build/lint/test/typecheck, migrate/deploy 없음)
 ├─ .moai/               # MoAI 설정·SPEC·프로젝트 문서
@@ -64,7 +67,7 @@ moyura/
 | `@moyura/web` | `apps/web` | 메인 UI 표면 (App Router) | Next.js `16.2.6`, react `19.2.4`, Tailwind v4, TypeScript `^5` | 스캐폴드 |
 | `@moyura/backend` | `apps/backend` | 백엔드 REST API | NestJS `11`(`@nestjs/common ^11`), TypeScript `^5.7.3`, Jest | 스캐폴드 |
 | `@moyura/config` | `packages/config` | 공유 tsconfig base 의도 | 현재 `package.json`만 존재(`version 0.0.0`, private) | 스텁(빈 패키지) |
-| `@moyura/api-client` | `packages/api-client` | OpenAPI 생성 타입드 API 클라이언트 | `openapi-typescript 7.13.0` 타입(`src/schema.d.ts`, gitignore) + 얇은 fetch 래퍼(`createApiClient`, `getHealth`) | **구현됨** (SPEC-ENV-SETUP-001 completed) |
+| `@moyura/api-client` | `packages/api-client` | OpenAPI 생성 타입드 API 클라이언트 | `openapi-typescript 7.13.0` 타입(`src/schema.d.ts`, gitignore) + 얇은 fetch 래퍼(`createApiClient`, `getHealth`, optional `getToken`→Bearer, `getMe`) | **구현됨** (SPEC-ENV-SETUP-001 + SPEC-AUTH-001) |
 
 검증 메모:
 - `@moyura/web`의 `version`은 `0.1.0`, 나머지 앱은 `1.0.0`(루트도 `1.0.0`).
@@ -119,7 +122,31 @@ web (Next.js 메인 UI 표면)
 
 - `mobile shell → WebView → web surface → REST → backend` 가 의도된 데이터/제어 흐름.
 - 두 프런트엔드(`web`, `mobile`)는 동일 backend API를 소비한다.
-- **현 시점 검증**: WebView 통합 코드/의존성은 `apps/mobile`에 아직 없다(기본 Expo 스캐폴드). 하이브리드 배선은 향후 SPEC으로 구현된다.
+- **현 시점 검증**: WebView 호스팅 통합 코드/의존성은 `apps/mobile`에 아직 없다(기본 Expo 스캐폴드 + 인증 스캐폴드). webview 호스팅 배선은 향후 SPEC으로 구현된다.
+
+## 인증 흐름 (SPEC-AUTH-001, 구현됨)
+
+웹 레이어가 세션을 소유하고, 백엔드가 stateless JWT 검증자가 되는 단일 인증 surface:
+
+```
+웹/모바일(시스템 브라우저 OAuth or email/pw)
+   │  @supabase/ssr 쿠키 세션 (proxy.ts updateSession, PKCE 콜백 app/auth/callback)
+   ▼
+Supabase 세션 access_token (ES256)
+   │  @moyura/api-client getToken → Authorization: Bearer (토큰 URL/query 금지)
+   ▼
+NestJS SupabaseAuthGuard (jose createRemoteJWKSet, ES256 JWKS 검증, @UseGuards on /me)
+   │  검증된 sub
+   ▼
+ProfileService.upsertBySub (Prisma Profile, id=sub PK, 멱등 UPSERT)
+   │
+   ▼
+GET /me → 200 profile (id === sub) — 가드 + upsert 종단 증명
+```
+
+- 세션 소유 = 웹(`apps/web/lib/supabase` + `proxy.ts`). 소셜 OAuth는 시스템 브라우저(모바일 `lib/auth/oauth.ts`), email/pw는 webview 내 동작 + 로컬 종단 테스트 경로.
+- 백엔드 가드는 `/me`에 per-route `@UseGuards`(global 아님) — `/health`·`GET /`는 public 유지.
+- 소셜 provider 키·모바일 런타임 OAuth는 named follow-up(스캐폴드만). 상세: [`SPEC-AUTH-001/spec.md`](../specs/SPEC-AUTH-001/spec.md) Implementation Notes.
 
 ## 모듈 경계 / 의존 방향
 

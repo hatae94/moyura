@@ -1,15 +1,17 @@
 # Tech — moyura
 
 > 본 문서는 **구현됨(IMPLEMENTED)** 과 **계획됨(PLANNED)** 을 명확히 구분한다.
-> 환경/인프라 배선은 [`SPEC-ENV-SETUP-001`](../specs/SPEC-ENV-SETUP-001/spec.md)(status: `completed`, v0.3.0)에서 정의되었고 **구현 완료**되었다(`master`, 커밋 `7362e2a..1895e05`). 남은 PLANNED 항목은 prod 배포 파이프라인과 인증 구현뿐이다.
+> 환경/인프라 배선은 [`SPEC-ENV-SETUP-001`](../specs/SPEC-ENV-SETUP-001/spec.md)(status: `completed`, v0.3.0)에서 정의되었고 **구현 완료**되었다(`master`, 커밋 `7362e2a..1895e05`).
+> 인증(authn)은 [`SPEC-AUTH-001`](../specs/SPEC-AUTH-001/spec.md)(status: `completed`, v0.3.0)에서 **구현 완료**되었다(`master`, 커밋 `6ca29fd..d54adb0`, evaluator-active PASS — security 0.97). 남은 PLANNED 항목은 prod 배포 파이프라인과 인증 후속 과제(소셜 키, 이메일 확인/재설정, RBAC, 프런트 테스트 타겟)뿐이다.
 
 ## 구현됨 vs 계획됨 (요약)
 
 | 구분 | 내용 |
 |------|------|
 | **IMPLEMENTED (골격)** | 모노레포 골격(pnpm + Nx), 3개 앱 스캐폴드(mobile/web/backend), `@moyura/config` 스텁, 루트/앱별 Nx 타겟, hoisted node_modules |
-| **IMPLEMENTED (SPEC-ENV-SETUP-001, completed)** | Supabase PostgreSQL 연결(Prisma 7 + `@prisma/adapter-pg` 듀얼 URL), Zod 4 환경검증(fail-fast), NestJS `@nestjs/swagger` OpenAPI → `packages/api-client`(`@moyura/api-client`) 타입드 클라이언트 생성, Supabase CLI 로컬 스택(direct `:54322`), CORS allowlist, `GET /health` 엔드포인트, Supabase Auth seam(no-op Guard), CI/EAS 스켈레톤, 프런트 env 가드(web/mobile) |
-| **PLANNED (follow-up, 미구현)** | prod 배포 파이프라인(자동 Prisma migrate + deploy, Render/Supabase 실 배포 및 prod e2e 증명), Supabase Auth **실제 인증 로직**(JWT 검증) — 현재는 seam만 |
+| **IMPLEMENTED (SPEC-ENV-SETUP-001, completed)** | Supabase PostgreSQL 연결(Prisma 7 + `@prisma/adapter-pg` 듀얼 URL), Zod 4 환경검증(fail-fast), NestJS `@nestjs/swagger` OpenAPI → `packages/api-client`(`@moyura/api-client`) 타입드 클라이언트 생성, Supabase CLI 로컬 스택(direct `:54322`), CORS allowlist, `GET /health` 엔드포인트, CI/EAS 스켈레톤, 프런트 env 가드(web/mobile) |
+| **IMPLEMENTED (SPEC-AUTH-001, completed)** | Supabase Auth **실제 인증**(authn-only): 백엔드 ES256 JWKS 검증 가드(jose), 첫 도메인 모델 `Profile` + UPSERT, 보호 라우트 `GET /me`, 웹 `@supabase/ssr` 쿠키 세션 + email/pw + PKCE 콜백, 소셜/모바일 OAuth 스캐폴드, `@moyura/api-client` Bearer 토큰 주입. evaluator-active PASS(security 0.97) |
+| **PLANNED (follow-up, 미구현)** | prod 배포 파이프라인(자동 Prisma migrate + deploy, Render/Supabase 실 배포 및 prod e2e 증명), 인증 후속 과제(실제 소셜 provider 키, 모바일 런타임 OAuth 라운드트립, 이메일 확인/비밀번호 재설정, RBAC/인가, 프런트 자동 테스트 타겟, prod HTTPS 강제) |
 
 ---
 
@@ -63,13 +65,20 @@
 - **CORS**: 환경별 web + mobile origin allowlist를 `CORS_ORIGINS`(validated config)에서 로드, 와일드카드(`*`) 금지. R-F1~R-F3.
 - **헬스 엔드포인트**: `GET /health` — `PrismaService.pingDatabase()`(`SELECT 1`)로 DB 연결 확인. 200(`ok`/`up`) / 503(`degraded`/`down`). end-to-end 배선 증명용(로컬 e2e 검증 완료). R-G1~R-G4.
 - **프런트 env 주입**: web `NEXT_PUBLIC_API_BASE_URL`(`apps/web/lib/env.ts` 가드, 루트 레이아웃에서 실행), mobile `EXPO_PUBLIC_API_BASE_URL`(`apps/mobile/lib/env.ts` 가드, `index.ts`에서 실행). 미설정 시 명시적 throw(R-E4 — `NEXT_PUBLIC_*`/`EXPO_PUBLIC_*`는 build/bundle 시점 정적 인라인). web은 api-client를 `transpilePackages`로 처리.
-- **Auth**: **seam만 구현**(미래 = Supabase Auth). NestJS no-op `SupabaseAuthGuard`(pass-through) + `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_JWT_SECRET` env 플레이스홀더(optional, 검증 로직 없음). R-H1~R-H3.
+- **Auth**: **실제 인증 구현 완료**(SPEC-AUTH-001 completed, authn-only). 환경/인프라 SPEC이 남긴 no-op seam을 실제 인증으로 대체/확장.
+  - **백엔드 JWT 검증**: `SupabaseAuthGuard`가 **jose `^6.2.3`** `createRemoteJWKSet` + `jwtVerify`로 ES256 JWKS 검증(`<SUPABASE_URL>/auth/v1/.well-known/jwks.json`, `kid` 선택, algorithms 화이트리스트 고정, `alg:none`/alg-confusion은 서명 검증 전 거부, `iss`/`aud`/`exp`/`nbf` normative, JWKS 실패 시 fail-closed 무다운그레이드). HS256-only 토큰 전용 레거시 폴백(`SUPABASE_JWT_SECRET`). 가드는 보호 라우트(`/me`)에 **per-route `@UseGuards`**(global 아님) — `/health`·`GET /`는 public 유지.
+  - **profile 모델**: 첫 Prisma 도메인 모델 `Profile`(`id = sub` PK, `createdAt`), 마이그레이션 `20260602095934_init_profile`(`DIRECT_URL`). `ProfileService.upsertBySub`는 가드가 부착한 검증된 `sub`만 사용(mass-assignment 차단).
+  - **웹 세션**: **`@supabase/ssr` `0.10.3`** + `@supabase/supabase-js` `2.106.2`. browser/server 클라이언트(`lib/supabase/`), `proxy.ts` updateSession(Next 16 미들웨어 컨벤션), PKCE 콜백 라우트(`app/auth/callback/route.ts`, 음성 경로 가드), email/pw signup/login/logout(`lib/auth/actions.ts`). `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+  - **api-client Bearer**: `@moyura/api-client`에 optional `getToken`→`Authorization: Bearer` 주입(토큰은 URL/query 금지) + `getMe()` 편의 메서드.
+  - **소셜/모바일 스캐폴드**: `supabase/config.toml` `[auth.external.google|kakao|apple]`(`enabled = false`, `env()` 시크릿). `apps/mobile` app scheme `"moyura"` + 시스템 브라우저 OAuth 헬퍼(`lib/auth/oauth.ts`), `EXPO_PUBLIC_SUPABASE_*`. 네이티브 토큰 저장소 미도입(webview가 웹 세션 공유 — OD-4).
+  - 검증: 백엔드 보안 테스트 53건(14개 적대적 공격 토큰 차단), statement 커버리지 95.71%, 웹 세션→`GET /me`→200 profile LIVE e2e, evaluator-active PASS(Functionality 0.95 / Security 0.97 / Craft 0.78 / Consistency 0.93). R-A1~R-J3.
 - **CI / EAS**: `.github/workflows/ci.yml`(install → prisma generate → `nx affected` build/lint/test/typecheck; **migrate/deploy 없음**) + `apps/mobile/eas.json` `local`/`prod` 프로파일 **스켈레톤**. R-I1~R-I3.
 
-### follow-up (PLANNED — 이 SPEC에서 의도적으로 연기)
+### follow-up (PLANNED — 의도적으로 연기)
 
-- **prod 배포 파이프라인**: 자동 Prisma migrate + deploy, Render/Supabase 실 배포, prod e2e 증명(R-G4 prod — 현재는 Render health check path가 `/health`임만 확인). named follow-up.
-- **인증 실제 구현**: Supabase JWT 검증 로직. 현재는 seam(no-op Guard + optional env)만 존재.
+- **prod 배포 파이프라인**(SPEC-ENV-SETUP-001 연기): 자동 Prisma migrate + deploy, Render/Supabase 실 배포, prod e2e 증명(R-G4 prod — 현재는 Render health check path가 `/health`임만 확인). named follow-up.
+- **인증 후속 과제**(SPEC-AUTH-001 연기): 실제 소셜 provider 키 발급/배선(Google/Apple/Kakao 콘솔), 모바일 런타임 OAuth 라운드트립(디바이스/시뮬레이터 — 현재 코드+config 스캐폴드만), 이메일 확인 + 비밀번호 재설정, RBAC/인가, prod HTTPS 강제. 모두 named follow-up(Non-Goal로 spec.md에 명시).
+- **프런트 자동 테스트 타겟**(SPEC-AUTH-001 evaluator MAJOR): web/mobile/api-client에 자동화 테스트 타겟 부재. 테스트 가능한 순수 함수(`resolveCallbackOutcome`/`resolveSupabaseConfig`/api-client Bearer 주입/`launchSocialOAuth`)가 회귀 보호되지 않음(빌드 시점 node sanity로만 검증). 별도 후속 작업으로 도입.
 
 ## 5. 품질 / 테스트
 
@@ -106,7 +115,11 @@
 | `apps/backend/nest-cli.json`, `.prettierrc`, `eslint.config.mjs` | backend 빌드/포맷/린트 |
 | `apps/mobile/app.json` | Expo 앱 config |
 | `.moai/config/sections/quality.yaml` | 품질/방법론(TDD, 85%) 설정 |
-| `apps/backend/prisma/schema.prisma` | Prisma 7 스키마(`prisma-client` 제너레이터, source-emit) |
+| `apps/backend/prisma/schema.prisma` | Prisma 7 스키마(`prisma-client` 제너레이터, source-emit, `Profile` 모델) |
+| `apps/backend/prisma/migrations/20260602095934_init_profile/` | 첫 도메인 마이그레이션(`Profile`) |
+| `apps/backend/src/auth/`, `apps/backend/src/profile/` | 인증 가드/검증/config + profile 모듈·서비스·`GET /me` |
+| `apps/web/lib/supabase/`, `apps/web/lib/auth/`, `apps/web/proxy.ts` | 웹 `@supabase/ssr` 클라이언트·세션 미들웨어·auth 액션·PKCE 콜백 |
+| `apps/mobile/lib/auth/oauth.ts` | 모바일 시스템 브라우저 OAuth 헬퍼 |
 | `apps/backend/prisma.config.ts` | Prisma 7 연결 URL(`DATABASE_URL`/`DIRECT_URL`) 위치 |
 | `apps/backend/openapi.ts`, `openapi.json` | OpenAPI emit 스크립트 + 커밋된 계약 산출물 |
 | `supabase/config.toml`, `supabase/README.md` | 로컬 Supabase CLI 스택(direct `:54322`) |

@@ -69,7 +69,7 @@ web    ─┘
 
 **현재까지 명시된 비범위**:
 - B2B/엔터프라이즈 기능, 개발자 대상 기능은 범위 밖이다.
-- 인증/로그인 등 도메인 기능은 아직 만들지 않는다 — 인프라 SPEC([`SPEC-ENV-SETUP-001`](../specs/SPEC-ENV-SETUP-001/spec.md))은 Supabase Auth용 seam(접합점)만 남긴다.
+- **B2C 인증(로그인)은 구현됨**: [`SPEC-AUTH-001`](../specs/SPEC-AUTH-001/spec.md)(completed)에서 Supabase 기반 email/pw 로그인 + 소셜 OAuth 스캐폴드가 구축되었다(authn-only). 단, 인가(RBAC)·이메일 확인/재설정·실제 소셜 키 등 인증 후속 과제와 구체 제품 기능은 여전히 TBD다.
 
 **가정**:
 - 일반 소비자가 별도 온보딩 없이 사용 가능한 수준의 UX가 요구된다(가정 — 검증 필요).

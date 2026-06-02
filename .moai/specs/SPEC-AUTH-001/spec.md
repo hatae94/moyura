@@ -1,7 +1,7 @@
 ---
 id: SPEC-AUTH-001
-version: 0.2.0
-status: draft
+version: 0.3.0
+status: completed
 created: 2026-06-02
 updated: 2026-06-02
 author: hatae
@@ -13,6 +13,7 @@ issue_number: null
 
 ## HISTORY
 
+- 2026-06-02 (v0.3.0): implementation completed — M0~M9 authn; ES256 JWKS guard; profile + upsert; web @supabase/ssr + email/pw; social/mobile scaffold; evaluator-active PASS (security 0.97); follow-ups: social keys, mobile runtime OAuth, email-confirm/reset, frontend test targets, prod HTTPS. 상세는 아래 "## Implementation Notes" 참조.
 - 2026-06-02 (M0 spike): 로컬 GoTrue JWT 모드 + claims 관찰 완료(deps `jose` 6.2.3 + `@supabase/supabase-js` 2.106.2 설치). **OD-1 확정 = 로컬 모드 ES256-JWKS**: `<127.0.0.1:54321>/auth/v1/.well-known/jwks.json`가 비대칭 키 노출(`keys`=[{`kty:EC`,`crv:P-256`,`alg:ES256`,`kid:b81269f1-21d8-4f2e-b719-c2240a840d90`}]), 실제 발급된 user access_token 헤더도 `alg:ES256`+동일 `kid`(정적 anon/service_role 키는 별개의 HS256 `supabase-demo` 데모키). 폴백 경로 `/auth/v1/jwks`는 404 — canonical은 `.well-known/jwks.json`. **OD-6 확정**: expected `iss` = `http://127.0.0.1:54321/auth/v1`(로컬 `jwt_issuer` 비어 있으므로 `<SUPABASE_URL>/auth/v1` 기본 issuer 관찰값), `aud` = `authenticated`(문자열), `sub` = Supabase user uuid. **M1 함의**: 로컬에서 ES256-JWKS 경로가 1차 테스트 가능 검증 경로다(HS256 폴백은 실제 HS256 토큰 전용으로 유지, prod은 ES256 JWKS — 로컬/prod 동일 경로). 가드는 `createRemoteJWKSet` + `jwtVerify({ algorithms:['ES256'], issuer:'http://127.0.0.1:54321/auth/v1', audience:'authenticated' })`로 로컬 종단 검증 가능.
 - 2026-06-02 (v0.2.0): security audit-driven revision — plan-auditor(security-weighted)의 CONDITIONAL PASS 결과 적용. 3 BLOCKER (B-1 alg pinning/`alg:none` 거부, B-2 `iss`/`aud`/`exp` 검증 normative화, B-3 가드 적용점 명시) + 6 MAJOR (M-1 global 가드 public 누수 방지, M-2 Bearer 토큰 위생, M-3 JWKS-fail fail-closed 다운그레이드 금지, M-4 redirect allowlist host/scheme 정합, M-5 profile 키 단일화 + mass-assignment 차단, M-6 웹 PKCE 음성 경로). 신규: R-A8(alg:none/비허용 alg 거부), R-A9(토큰 위생), R-A10(가드 적용점), OD-6(iss/aud 출처), OD-7(per-route vs global+@Public). 콜백 host를 `localhost`→`127.0.0.1`로 정정(GoTrue exact-match allowlist + `site_url` host 일치).
 - 2026-06-02 (v0.1.0): 최초 작성 (draft). 2라운드 사용자 인터뷰로 확정된 요구사항 기반. SPEC-ENV-SETUP-001이 남긴 Auth seam(no-op `SupabaseAuthGuard` + optional `SUPABASE_*` env placeholder)을 실제 인증으로 대체/확장한다. 범위 = 인증(authentication) ONLY. 핵심 결정: 웹 레이어가 세션 소유(`@supabase/ssr` 쿠키 세션 + PKCE 콜백), 소셜 OAuth는 시스템 브라우저(임베디드 webview 금지), RN은 웹앱을 WebView로 호스팅하며 세션 공유, 백엔드는 비대칭 ES256 JWKS로 JWT 검증(`jose`) + 레거시 HS256 폴백, 첫 Prisma 도메인 모델(`profile`) + 최초 인증 요청 시 UPSERT, 샘플 보호 라우트 `GET /me`. 버전(@supabase/ssr 0.10.3, @supabase/supabase-js 2.106.2, jose 6.2.3, expo-auth-session 56.0.13, expo-web-browser 56.0.5, expo-secure-store 56.0.4)은 npm registry로 검증(Sources 참조). 검증 불가한 버전 특이 동작은 "구현 시 검증(verify at implementation)"으로 표기.
@@ -307,3 +308,31 @@ OUT OF SCOPE (named follow-ups — 이 SPEC에서 만들지 않음):
 - 라이브러리 버전(npm registry 검증, 2026-06-02): `@supabase/ssr` 0.10.3, `@supabase/supabase-js` 2.106.2, `jose` 6.2.3(`createRemoteJWKSet`/`jwtVerify` 제공), `expo-auth-session` 56.0.13, `expo-web-browser` 56.0.5, `expo-secure-store` 56.0.4, `@react-native-async-storage/async-storage` 3.1.1.
 
 검증 불가(구현 시 검증): (1) 로컬 Supabase CLI 스택이 `/auth/v1/.well-known/jwks.json`(비대칭 키)을 노출하는지(OD-1, M1 스파이크), (2) Expo 56 deep-link OAuth의 정확한 redirect/세션 확립 시그니처(`expo-web-browser`/`expo-auth-session`/WebView 네비게이션, R-E3/OD-4), (3) `@supabase/ssr` 0.10.3 콜백 핸들러 정확 시그니처(OD-5), (4) 모바일 app scheme deep-link 정확 형태.
+
+---
+
+## Implementation Notes (v0.3.0, 2026-06-02)
+
+이 SPEC의 인증(authn-only) 범위가 `master`에 **구현 완료 + 품질 게이트 통과 + 독립 평가 PASS**되었다(커밋 `6ca29fd`, `87e74ea`, `841f35e`, `d54adb0`). 아래는 실제 구현 사실, AC 충족/연기 매핑, 평가 결과 요약이다.
+
+### 품질/평가 결과
+
+- **품질 게이트**: run-many 4개 프로젝트 전부 green. 백엔드 보안 테스트 53건. statement 커버리지 95.71%.
+- **독립 평가(evaluator-active) = PASS**: Functionality 0.95, **Security 0.97**(HARD gate 통과 — 14개 적대적 공격 토큰 전부 차단), Craft 0.78, Consistency 0.93. 평가 리포트: `.moai/specs/SPEC-AUTH-001/evaluation.md`.
+
+### 실제 구현 사실 (디스크 검증)
+
+- **M0 스파이크**: 로컬 GoTrue = ES256-JWKS(local==prod 경로). `iss = http://127.0.0.1:54321/auth/v1`, `aud = authenticated`. OD-1/OD-6 확정(HISTORY 기재).
+- **백엔드(NestJS)**: `SupabaseAuthGuard`(jose `createRemoteJWKSet` + `jwtVerify`, ES256 algorithms 고정, `alg:none`/alg-confusion은 서명 검증 전 거부, `iss`/`aud`/`exp`/`nbf` normative, HS256-only 토큰 전용 레거시 폴백, JWKS 실패 시 fail-closed 무다운그레이드, 토큰 위생). 가드는 **`/me`에 per-route `@UseGuards`**(global 아님). 부속: `TokenVerifierService`, `auth.config.ts`, `@CurrentUser()`. Prisma `Profile` 모델(`id = sub` PK, `createdAt`) — **첫 도메인 마이그레이션** `20260602095934_init_profile`. `ProfileService.upsertBySub`(검증된 sub만, mass-assignment 없음). `GET /me` 보호 / `/health` + `GET /` public. 필수 env `SUPABASE_URL`/`SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET`는 레거시 폴백.
+- **웹(Next 16)**: `@supabase/ssr` 0.10.3 + supabase-js 2.106.2. browser/server 클라이언트(`lib/supabase/`), `proxy.ts`의 updateSession(Next 16 미들웨어 컨벤션), `app/auth/callback/route.ts`(PKCE + 음성 경로 가드), `lib/auth/actions.ts`(signup/login/logout/OAuth 진입), `app/login` + `app/me`. `NEXT_PUBLIC_SUPABASE_*` env. `@moyura/api-client`에 optional `getToken`→Bearer(+`getMe`) 추가. LIVE e2e 검증: 웹 세션 ES256 토큰 → `GET /me` → 200 profile(`id === sub`).
+- **소셜/모바일 스캐폴드**: `supabase/config.toml` `[auth.external.google|kakao]`(+ apple 정규화) — `enabled = false`, `env()` 시크릿(평문 키 없음). `additional_redirect_urls = http://127.0.0.1:3000/auth/callback + moyura://auth-callback`. `apps/mobile`: app.json scheme `"moyura"`, `lib/auth/oauth.ts`(시스템 브라우저 OAuth 헬퍼), `EXPO_PUBLIC_SUPABASE_*` env. OD-4: 네이티브 토큰 저장소 미도입(webview가 웹 세션 공유). expo-web-browser/auth-session/linking 추가.
+
+### AC 충족 vs 연기
+
+- **충족(구현 + 검증)**: A 그룹 가드 전체(R-A1~A10), B 그룹 profile + UPSERT(R-B1~B5), C 그룹 `GET /me` + public 계약(R-C1~C4), D 그룹 웹 세션 + PKCE 콜백 + 음성 경로(R-D1~D5), F 그룹 소셜 config 스캐폴드(R-F1~F4 — 코드/설정), G 그룹 email/pw(R-G1~G5), H/I/J(로컬 GoTrue/env/CORS). email/pw 경로는 LIVE e2e로 종단 증명됨.
+- **설계상 연기(named follow-up — gap 아님)**: 실제 소셜 provider 키(R-F3), 모바일 런타임 OAuth 라운드트립(디바이스/시뮬레이터 필요 — 코드+config 스캐폴드만, R-E2~E4의 런타임 검증), 이메일 확인 + 비밀번호 재설정(R-G6), RBAC/인가, prod HTTPS 강제(평가 MINOR). 모두 Exclusions/Non-Goals에 명시된 의도적 연기.
+
+### Evaluator MAJOR follow-up (문서화된 후속 과제)
+
+- **프런트 자동 테스트 타겟 부재**: web/mobile/api-client에 자동화된 테스트 타겟이 없다. 테스트 가능한 순수 함수들(`resolveCallbackOutcome` PKCE 음성 경로, `resolveSupabaseConfig`, api-client Bearer 주입, `launchSocialOAuth` 분류)이 회귀 보호되지 않는다 — 빌드 시점 node sanity로만 검증되었고 자동화 테스트는 아니다. 별도 후속 SPEC/작업으로 프런트 테스트 타겟을 도입할 것(평가 MAJOR).
+- 그 외 beyond-plan 실질 차이 없음: `proxy.ts`는 Next 16의 올바른 미들웨어 컨벤션이며 이탈이 아니다.
