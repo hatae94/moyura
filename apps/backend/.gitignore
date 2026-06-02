@@ -398,3 +398,6 @@ Temporary Items
 dist
 .webpack
 .serverless/**/*.zip
+
+# Prisma 7 source-emitted client (regenerated via `prisma generate`)
+/src/generated/

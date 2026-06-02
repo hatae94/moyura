@@ -1,0 +1,16 @@
+// Prisma 7 schema for moyura backend.
+// D1 spike (SPEC-ENV-SETUP-001): prisma-client generator with cjs moduleFormat
+// for NestJS CommonJS build compatibility. Client is emitted into project src
+// (R-A3: compatible with node-linker=hoisted, no node_modules/.prisma symlink reliance).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+// Prisma 7: connection URLs live in prisma.config.ts (migrations = DIRECT_URL)
+// and the runtime PrismaClient receives a pg driver adapter (DATABASE_URL).
+datasource db {
+  provider = "postgresql"
+}

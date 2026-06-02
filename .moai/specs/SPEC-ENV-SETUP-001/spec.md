@@ -13,6 +13,7 @@ issue_number: null
 
 ## HISTORY
 
+- 2026-06-02 (D1 spike): Prisma 7 selected — prisma generate → nest build passed (Prisma 7.8.0 prisma-client generator, moduleFormat=cjs, source-emit client into apps/backend/src/generated/prisma, @prisma/adapter-pg driver adapter at runtime, URLs moved to prisma.config.ts since Prisma 7 dropped datasource url/directUrl in schema; generated client resolved under node-linker=hoisted via project-local require — R-A3 satisfied).
 - 2026-05-31 (v0.2.0): audit-driven revision — plan-auditor의 5개 MAJOR finding (M-1~M-5) 적용. M-1: 프론트 env가 build/bundle 시점 정적 인라인됨을 반영하여, base URL env 미설정 시 명시적 in-app startup assertion(throw)을 요구하도록 R-E4/AC-E4 재작성. M-2: 로컬 Supabase 스택이 6543 pooler를 노출하지 않을 수 있음(direct 5432 운영 허용, 이 경우 prepared-statement 비활성은 N/A)을 env 매트릭스·R-C2에 반영, 리스크 K8 추가. M-3: 6543 = Supavisor transaction-mode pooler 명시 + transaction-mode trade-off(prepared statement·session state 불가) 명문화. M-4: 추적성 보강 — AC-A1을 A1a(R-A1)/A1b(R-A4)로 분리, R-G4의 prod e2e proof를 deployment follow-up으로 연기하고 AC-G prod는 config 확인만으로 한정, env 매트릭스 SUPABASE_* 행에 seam placeholder 주석. M-5: D1 Prisma 7을 "권장하나 미확정 — M-spike 결과에 종속"으로 톤다운 + AC-A3b 폴백 게이트 추가, Background에 apps/mobile TypeScript ~6.0.3 사실 추가.
 - 2026-05-31 (v0.1.0): 최초 작성 (draft). 3라운드 사용자 인터뷰로 확정된 요구사항 기반. Prisma+Supabase 듀얼 URL 패턴, Supabase CLI 로컬 스택, NestJS OpenAPI 클라이언트 생성, Zod 환경검증, CORS, 헬스 엔드포인트, Auth seam, CI/EAS 스켈레톤 범위 확정. Prisma 7 / Postgres 17 / 포트(6543 pooled, 5432 direct) 사실은 공식 문서로 검증 (Sources 참조).
 
