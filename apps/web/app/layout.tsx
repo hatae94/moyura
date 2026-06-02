@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+// 환경변수 가드를 앱 부팅 경로(root layout)에서 실행한다.
+// NEXT_PUBLIC_API_BASE_URL 미설정 시 API_BASE_URL 평가 단계에서 throw 한다(R-E4).
+import "@/lib/env";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

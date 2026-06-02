@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 단, 커밋 대상인 .env.example 은 추적 제외에서 제외한다(SPEC-ENV-SETUP-001).
+!.env.example
 
 # vercel
 .vercel

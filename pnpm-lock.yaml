@@ -138,6 +138,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@moyura/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       expo:
         specifier: ~56.0.6
         version: 56.0.8(@babel/core@7.29.7)(@expo/dom-webview@56.0.5)(react-dom@19.2.4(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -160,6 +163,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@moyura/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       next:
         specifier: 16.2.6
         version: 16.2.6(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
