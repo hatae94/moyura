@@ -167,7 +167,7 @@ OUT OF SCOPE (named follow-ups — 이 SPEC에서 만들지 않음):
 - **R-F1 (Ubiquitous)**: The system shall scaffold `[auth.external.google]`, `[auth.external.apple]`, and `[auth.external.kakao]` blocks in `supabase/config.toml` with `enabled = false` and secrets referenced via environment substitution (`env(...)`), never committing real secrets. (`[auth.external.apple]` 블록은 이미 존재 — google/kakao 추가 + 일관 형태 정리.)
 - **R-F2 (Where, Optional)**: Where a social login is invoked, the system shall call `signInWithOAuth` with the provider string `'google'`, `'apple'`, or `'kakao'` and a `redirectTo` pointing at the web PKCE callback route (R-D2).
 - **R-F3 (Ubiquitous)**: The social flows shall be wired as flow + config scaffold only; the system shall not require real provider keys for this SPEC to be considered complete (keys are a named follow-up). The email/password path (group G) is the locally-testable proof path.
-- **R-F4 (Ubiquitous)**: The redirect/callback URIs documented for each provider shall use the canonical Supabase callback format (`<SUPABASE_URL>/auth/v1/callback`; local `http://localhost:54321/auth/v1/callback`) so a later key-wiring follow-up needs no flow changes.
+- **R-F4 (Ubiquitous)**: The redirect/callback URIs documented for each provider shall use the canonical Supabase callback format (`<SUPABASE_URL>/auth/v1/callback`; local `http://127.0.0.1:54321/auth/v1/callback`) so a later key-wiring follow-up needs no flow changes. (로컬 host 는 `site_url`/JWKS host 와 동일하게 `127.0.0.1` 로 통일 — M-4 정합, M6에서 `config.toml` 문서 주석으로 확정.)
 
 ### G. Email/Password Core Flows (로컬 GoTrue 동작)
 

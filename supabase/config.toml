@@ -160,7 +160,13 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# GoTrue redirect allowlist is EXACT-MATCH: localhost != 127.0.0.1 and http != https must align (R-H2/M-4).
+# - 웹 PKCE 콜백: host = site_url host(127.0.0.1), http scheme (apps/web/app/auth/callback/route.ts).
+# - 모바일 deep-link 복귀: app scheme(moyura://) — apps/mobile/app.json 의 "scheme" 와 일치 (R-E3).
+additional_redirect_urls = [
+  "http://127.0.0.1:3000/auth/callback",
+  "moyura://auth-callback",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -319,9 +325,17 @@ max_frequency = "5s"
 # Use an external OAuth provider. The full list of providers are: `apple`, `azure`, `bitbucket`,
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `x`, `slack`, `spotify`, `workos`, `zoom`.
+#
+# Social provider scaffold (SPEC-AUTH-001 group F / R-F1 / R-F3 / R-F4).
+# - enabled = false: provider 키는 named follow-up 으로 연기한다. 이 SPEC 은 flow + config 스캐폴드만 구축한다(R-F3).
+# - client_id / secret 은 env() 치환만 사용한다 — 실제 시크릿/클라이언트 ID 는 절대 커밋하지 않는다(R-F1).
+# - provider→Supabase canonical 콜백 URI(R-F4): <SUPABASE_URL>/auth/v1/callback
+#   (로컬 = http://127.0.0.1:54321/auth/v1/callback). 이후 키 발급 follow-up 은 flow 변경 없이
+#   enabled = true + env 시크릿 주입만으로 동작한다.
 [auth.external.apple]
 enabled = false
-client_id = ""
+# DO NOT commit your OAuth client id to git. Use environment variable substitution instead:
+client_id = "env(SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID)"
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
 secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
 # Overrides the default auth callback URL derived from auth.external_url.
@@ -332,6 +346,29 @@ url = ""
 # If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
+email_optional = false
+
+[auth.external.google]
+enabled = false
+# DO NOT commit your OAuth client id to git. Use environment variable substitution instead:
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+# DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+# If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
+skip_nonce_check = false
+email_optional = false
+
+[auth.external.kakao]
+enabled = false
+# DO NOT commit your OAuth client id to git. Use environment variable substitution instead:
+client_id = "env(SUPABASE_AUTH_EXTERNAL_KAKAO_CLIENT_ID)"
+# DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
+secret = "env(SUPABASE_AUTH_EXTERNAL_KAKAO_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = false
 email_optional = false
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.

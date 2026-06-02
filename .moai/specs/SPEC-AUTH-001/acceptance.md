@@ -193,7 +193,7 @@
 ### AC-F4 (R-F4) — canonical 콜백 URI 문서화
 - **Given** provider 콜백 설정
 - **When** 콜백 URI를 문서화한다
-- **Then** `<SUPABASE_URL>/auth/v1/callback`(로컬 `http://localhost:54321/auth/v1/callback`) canonical 형식을 사용해, 이후 키 배선 follow-up이 flow 변경 없이 동작 가능하다.
+- **Then** `<SUPABASE_URL>/auth/v1/callback`(로컬 `http://127.0.0.1:54321/auth/v1/callback`) canonical 형식을 사용해, 이후 키 배선 follow-up이 flow 변경 없이 동작 가능하다.
 
 ## G. Email/Password Core Flows
 
