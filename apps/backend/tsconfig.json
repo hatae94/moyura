@@ -17,5 +17,10 @@
     "incremental": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.live.mts"
+  ]
 }

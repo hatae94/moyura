@@ -11,6 +11,7 @@
     "build": {
       "executor": "nx:run-commands",
       "cache": true,
+      "dependsOn": ["api-client:generate"],
       "outputs": ["{projectRoot}/.next"],
       "options": { "command": "next build", "cwd": "apps/web" }
     },
@@ -26,6 +27,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "cache": true,
+      "dependsOn": ["api-client:generate"],
       "options": { "command": "tsc --noEmit", "cwd": "apps/web" }
     }
   }

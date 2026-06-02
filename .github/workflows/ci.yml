@@ -65,6 +65,13 @@ jobs:
         run: pnpm exec prisma generate
         working-directory: apps/backend
 
+      # gitignore 된 api-client 타입(schema.d.ts) 생성.
+      # 체인: api-client:generate → backend:openapi → backend:build → backend:prisma-generate.
+      # web/mobile/api-client 의 `./schema` import 가 clean checkout 에서 깨지지 않도록
+      # affected 타겟 실행 전에 미리 생성한다(nx dependsOn 배선과 함께 belt-and-suspenders).
+      - name: Generate api-client types
+        run: pnpm nx run api-client:generate
+
       # nx affected SHA 설정(PR/푸시 모두 대응).
       - name: Derive nx SHAs
         uses: nrwl/nx-set-shas@v4

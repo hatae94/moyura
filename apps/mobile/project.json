@@ -23,6 +23,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "cache": true,
+      "dependsOn": ["api-client:generate"],
       "options": { "command": "tsc --noEmit", "cwd": "apps/mobile" }
     }
   }
