@@ -14,3 +14,15 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// 첫 도메인 모델(SPEC-AUTH-001, R-B1/B2). app-owned profile.
+// id = Supabase auth user id(`sub`)를 PK로 직접 저장한다(단일 키 해석 — M-5).
+// 별도 userId/sub 컬럼이나 투기적 도메인 컬럼을 두지 않는다(R-B1, TRUST 5 Readable).
+// UPSERT는 id(= sub) PK 유일성에 의존하며 동시성 시 중복 row가 생기지 않는다(R-B4/B5).
+model Profile {
+  // Supabase user uuid(`sub`). 검증된 JWT의 sub만 이 값으로 들어온다(R-B3/M-5).
+  id        String   @id
+  createdAt DateTime @default(now())
+
+  @@map("profile")
+}

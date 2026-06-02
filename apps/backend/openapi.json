@@ -45,17 +45,53 @@
           "health"
         ]
       }
+    },
+    "/me": {
+      "get": {
+        "operationId": "MeController_getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "인증 사용자의 profile(최초 요청 시 자동 생성)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
     }
   },
   "info": {
     "title": "moyura API",
-    "description": "moyura 모노레포 백엔드 API (인프라 배선 단계)",
+    "description": "moyura 모노레포 백엔드 API (인증 단계)",
     "version": "1.0.0",
     "contact": {}
   },
   "tags": [],
   "servers": [],
   "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
     "schemas": {
       "HealthResponseDto": {
         "type": "object",
@@ -82,6 +118,25 @@
         "required": [
           "status",
           "db"
+        ]
+      },
+      "ProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Supabase auth user id(`sub`) — profile의 PK",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "profile 최초 생성 시각(ISO-8601)",
+            "example": "2026-06-02T09:59:34.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt"
         ]
       }
     }

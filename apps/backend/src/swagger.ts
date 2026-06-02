@@ -11,11 +11,19 @@ import {
 export const SWAGGER_PATH = 'api';
 
 function buildDocumentConfig() {
-  return new DocumentBuilder()
-    .setTitle('moyura API')
-    .setDescription('moyura 모노레포 백엔드 API (인프라 배선 단계)')
-    .setVersion('1.0.0')
-    .build();
+  return (
+    new DocumentBuilder()
+      .setTitle('moyura API')
+      .setDescription('moyura 모노레포 백엔드 API (인증 단계)')
+      .setVersion('1.0.0')
+      // Bearer JWT 인증(SPEC-AUTH-001 OD-3). 보호 라우트(/me)가 @ApiBearerAuth()로 참조하는
+      // 보안 스킴을 등록한다 — Supabase access_token을 Authorization: Bearer로 전달한다(R-A9/R-D4).
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        'bearer',
+      )
+      .build()
+  );
 }
 
 // app context에서 OpenAPI 문서 객체를 생성한다(HTTP listen 불필요 — R-D2 emit에서 사용).

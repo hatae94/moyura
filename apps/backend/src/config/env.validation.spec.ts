@@ -7,6 +7,9 @@ const baseValidEnv = {
   PORT: '3000',
   NODE_ENV: 'development',
   CORS_ORIGINS: 'http://localhost:3000,http://localhost:8081',
+  // SUPABASE_URL/ANON_KEY는 auth 런타임 required로 승격됨(R-I1).
+  SUPABASE_URL: 'http://127.0.0.1:54321',
+  SUPABASE_ANON_KEY: 'local-anon-key',
 };
 
 // 특정 키를 제외한 env 사본을 만든다(unused destructure 바인딩 없이 누락 케이스 구성).
@@ -38,11 +41,31 @@ describe('validateEnv (AC-B1 / AC-B2)', () => {
     expect(env.CORS_ORIGINS).toEqual(['http://a.com', 'http://b.com']);
   });
 
-  it('SUPABASE_* seam placeholder는 optional이며 미설정이어도 통과한다 (R-H2)', () => {
+  it('SUPABASE_URL/ANON_KEY는 auth 런타임 required로 승격됨 (R-I1/AC-I1)', () => {
     const env = validateEnv(baseValidEnv);
-    expect(env.SUPABASE_URL).toBeUndefined();
-    expect(env.SUPABASE_ANON_KEY).toBeUndefined();
+    expect(env.SUPABASE_URL).toBe('http://127.0.0.1:54321');
+    expect(env.SUPABASE_ANON_KEY).toBe('local-anon-key');
+  });
+
+  it('SUPABASE_JWT_SECRET은 레거시 폴백 전용으로 optional 유지 (R-A4/R-I1)', () => {
+    const env = validateEnv(baseValidEnv);
     expect(env.SUPABASE_JWT_SECRET).toBeUndefined();
+  });
+
+  it('SUPABASE_URL 누락 시 throw한다 (R-I1/R-I3 fail-fast)', () => {
+    const withoutSupabaseUrl = omitKey('SUPABASE_URL');
+    expect(() => validateEnv(withoutSupabaseUrl)).toThrow(/SUPABASE_URL/);
+  });
+
+  it('SUPABASE_URL이 유효 URL이 아니면 throw한다 (R-I3 fail-fast)', () => {
+    expect(() =>
+      validateEnv({ ...baseValidEnv, SUPABASE_URL: 'not-a-url' }),
+    ).toThrow(/SUPABASE_URL/);
+  });
+
+  it('SUPABASE_ANON_KEY 누락 시 throw한다 (R-I1/R-I3 fail-fast)', () => {
+    const withoutAnonKey = omitKey('SUPABASE_ANON_KEY');
+    expect(() => validateEnv(withoutAnonKey)).toThrow(/SUPABASE_ANON_KEY/);
   });
 
   it('DATABASE_URL 누락 시 설명 메시지와 함께 throw한다 (AC-B2 fail-fast)', () => {

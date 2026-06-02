@@ -19,8 +19,7 @@ const corsOriginsSchema = z
   });
 
 // 부팅 시 검증되는 환경변수 스키마 (R-B1).
-// 필수: DATABASE_URL, DIRECT_URL, PORT, NODE_ENV, CORS_ORIGINS.
-// seam placeholder(R-H2): SUPABASE_* 는 optional — 정의만 하고 런타임에서 사용하지 않는다.
+// 필수: DATABASE_URL, DIRECT_URL, PORT, NODE_ENV, CORS_ORIGINS, SUPABASE_URL, SUPABASE_ANON_KEY.
 export const envSchema = z.object({
   // 런타임 풀드 연결(prod 6543) / 로컬은 direct 54322 (R-B3/B4).
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -32,9 +31,14 @@ export const envSchema = z.object({
   // 콤마 구분 origin 허용 목록 → string[] (R-F1/F2).
   CORS_ORIGINS: corsOriginsSchema,
 
-  // --- Auth seam placeholder (R-H2): optional, 런타임 미사용 ---
-  SUPABASE_URL: z.string().optional(),
-  SUPABASE_ANON_KEY: z.string().optional(),
+  // --- Auth runtime (R-I1): seam placeholder에서 required로 승격 ---
+  // SUPABASE_URL: JWKS URL + expected issuer의 단일 진실 공급원(OD-2/OD-6, auth.config.ts에서 파생).
+  // url() 검증으로 JWKS/issuer 파생 시 잘못된 형식의 base를 부팅 단계에서 차단한다(R-I3 fail-fast).
+  SUPABASE_URL: z.url('SUPABASE_URL must be a valid URL'),
+  // SUPABASE_ANON_KEY: 프런트 공개 클라이언트 키(웹/모바일이 NEXT_PUBLIC_*/EXPO_PUBLIC_*로 소비).
+  // 백엔드는 직접 사용하지 않으나 인증 런타임 설정 일관성을 위해 required로 둔다(R-I1).
+  SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
+  // SUPABASE_JWT_SECRET: 레거시 HS256 폴백 전용(R-A4). JWKS-primary 운영 시 미설정 가능 → optional 유지.
   SUPABASE_JWT_SECRET: z.string().optional(),
 });
 
