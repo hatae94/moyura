@@ -13,6 +13,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# nx-set-shas 가 마지막 성공 워크플로우 run 을 API 로 조회하려면 actions:read 가 필요하다.
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -50,6 +55,9 @@ jobs:
       # nx affected SHA 설정(PR/푸시 모두 대응).
       - name: Derive nx SHAs
         uses: nrwl/nx-set-shas@v4
+        with:
+          # 이 저장소의 기본 브랜치는 master (nx-set-shas 기본값 main 아님).
+          main-branch-name: master
 
       # affected 프로젝트에 대해 build/lint/test/typecheck 실행.
       # test = 유닛 테스트만(jest rootDir=src). DB 의존 e2e 는 CI 에서 실행하지 않는다.
