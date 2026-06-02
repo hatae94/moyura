@@ -1,9 +1,9 @@
 ---
 id: SPEC-ENV-SETUP-001
-version: 0.2.0
-status: draft
+version: 0.3.0
+status: completed
 created: 2026-05-31
-updated: 2026-05-31
+updated: 2026-06-02
 author: hatae
 priority: high
 issue_number: null
@@ -13,6 +13,7 @@ issue_number: null
 
 ## HISTORY
 
+- 2026-06-02 (v0.3.0): implementation completed — M1~M9 env wiring; Prisma 7 + pg adapter; local Supabase direct :54322; quality gate green; prod deploy = follow-up. 구현 결과/계획 대비 차이/AC 충족 여부는 아래 "## Implementation Notes" 참조.
 - 2026-06-02 (D1 spike): Prisma 7 selected — prisma generate → nest build passed (Prisma 7.8.0 prisma-client generator, moduleFormat=cjs, source-emit client into apps/backend/src/generated/prisma, @prisma/adapter-pg driver adapter at runtime, URLs moved to prisma.config.ts since Prisma 7 dropped datasource url/directUrl in schema; generated client resolved under node-linker=hoisted via project-local require — R-A3 satisfied).
 - 2026-05-31 (v0.2.0): audit-driven revision — plan-auditor의 5개 MAJOR finding (M-1~M-5) 적용. M-1: 프론트 env가 build/bundle 시점 정적 인라인됨을 반영하여, base URL env 미설정 시 명시적 in-app startup assertion(throw)을 요구하도록 R-E4/AC-E4 재작성. M-2: 로컬 Supabase 스택이 6543 pooler를 노출하지 않을 수 있음(direct 5432 운영 허용, 이 경우 prepared-statement 비활성은 N/A)을 env 매트릭스·R-C2에 반영, 리스크 K8 추가. M-3: 6543 = Supavisor transaction-mode pooler 명시 + transaction-mode trade-off(prepared statement·session state 불가) 명문화. M-4: 추적성 보강 — AC-A1을 A1a(R-A1)/A1b(R-A4)로 분리, R-G4의 prod e2e proof를 deployment follow-up으로 연기하고 AC-G prod는 config 확인만으로 한정, env 매트릭스 SUPABASE_* 행에 seam placeholder 주석. M-5: D1 Prisma 7을 "권장하나 미확정 — M-spike 결과에 종속"으로 톤다운 + AC-A3b 폴백 게이트 추가, Background에 apps/mobile TypeScript ~6.0.3 사실 추가.
 - 2026-05-31 (v0.1.0): 최초 작성 (draft). 3라운드 사용자 인터뷰로 확정된 요구사항 기반. Prisma+Supabase 듀얼 URL 패턴, Supabase CLI 로컬 스택, NestJS OpenAPI 클라이언트 생성, Zod 환경검증, CORS, 헬스 엔드포인트, Auth seam, CI/EAS 스켈레톤 범위 확정. Prisma 7 / Postgres 17 / 포트(6543 pooled, 5432 direct) 사실은 공식 문서로 검증 (Sources 참조).
@@ -224,3 +225,34 @@ OUT OF SCOPE (이 SPEC에서 만들지 않음):
 - NestJS OpenAPI/Swagger introduction: https://docs.nestjs.com/openapi/introduction — `@nestjs/swagger` 사용(상세 셋업은 구현 시 문서 재참조).
 
 검증 불가 항목: Supabase가 신규 프로젝트에 할당하는 정확한 PG 마이너 버전 → "구현 시 검증". NestJS Swagger의 구체 setup 코드 → 구현 시 공식 문서 재참조.
+
+---
+
+## Implementation Notes (구현 노트 — v0.3.0, 2026-06-02)
+
+M1~M9 환경/인프라 배선 구현이 완료되어 `master`에 머지되었다(커밋 `7362e2a..1895e05`). 품질 게이트는 green이다: `nx run-many`로 api-client/backend/mobile/web의 build/lint/test/typecheck 통과, 백엔드 단위 테스트 15개 통과, 로컬 Supabase 스택 대상 `GET /health` 실제 요청에서 `db: up` 확인.
+
+### 실제 구현 요약 (Actual Implementation)
+
+- **Prisma 7.8.0** (D1 스파이크 통과로 선택지 A 확정): `prisma-client` 제너레이터, `moduleFormat = "cjs"`, 클라이언트를 `apps/backend/src/generated/prisma`로 source-emit(gitignore, 재생성 대상). Prisma 7는 driver adapter가 **필수**이므로 `@prisma/adapter-pg` + `pg`를 추가했다. Prisma 7가 schema `datasource`에서 `url`/`directUrl`을 제거했으므로 연결 URL은 `apps/backend/prisma.config.ts`로 이동했다. 듀얼 URL: 런타임은 pg adapter를 통한 pooled `DATABASE_URL`, 마이그레이션은 `DIRECT_URL`.
+- **로컬 Supabase CLI 스택** = direct Postgres `:54322`(로컬에는 6543 pooler 없음 — pooler는 prod 전용). `supabase/config.toml` + `supabase/README.md`(start/stop 워크플로).
+- **백엔드(NestJS 11)**: `@nestjs/config` + **Zod 4.4.3** fail-fast env 검증; `PORT`를 config에서 읽음; `PrismaService.pingDatabase()` `SELECT 1` 프로브(도메인 모델 없음); `GET /health`(200 ok/up, 503 degraded/down); `CORS_ORIGINS` 기반 CORS allowlist(와일드카드 없음); `@nestjs/swagger` OpenAPI를 `/api`에 노출 + `openapi.ts` emit 스크립트 → `apps/backend/openapi.json`; no-op `SupabaseAuthGuard` seam(인증 로직 없음).
+- **`packages/api-client`(`@moyura/api-client`)**: openapi-typescript 7.13.0 타입(gitignore, 재생성) + 얇은 타입드 fetch 클라이언트(`createApiClient`, `getHealth`).
+- **Nx 타겟**: `backend:prisma-generate`, `backend:prisma-migrate`, `backend:openapi`, `backend:typecheck`, `api-client:generate`(캐시, build→openapi→generate 체인, 멱등).
+- **web(Next 16)**: `NEXT_PUBLIC_API_BASE_URL` + `apps/web/lib/env.ts` in-app 가드(미설정 시 throw, 루트 레이아웃에서 실행); api-client `transpilePackages`; `.env.example`.
+- **mobile(Expo 56, TS 6)**: `EXPO_PUBLIC_API_BASE_URL` + `apps/mobile/lib/env.ts` 가드(`index.ts`에서 실행); api-client 소비; `.env.example`.
+- **CI** `.github/workflows/ci.yml`(install → prisma generate → nx affected build/lint/test/typecheck; migrate/deploy 없음); `apps/mobile/eas.json` local/prod 스켈레톤; `docs/deploy-render.md`(build `pnpm nx build backend`, start `node dist/src/main.js`, health `/health`).
+
+### 계획(plan.md) 대비 차이 (Divergence) — 모두 의도된 설계 결정, 스코프 준수
+
+- **plan을 넘어 추가된 것 (Prisma 7 강제 사항, 스코프 크리프 아님)**: `@prisma/adapter-pg` + `pg`(Prisma 7의 mandatory driver adapter), `prisma.config.ts`(Prisma 7의 URL 위치), `openapi.json` 산출물 커밋. 세 가지 모두 Prisma 7 채택에서 파생된 필수 사항이다.
+- **의도적으로 연기된 것 (gap이 아닌 설계 결정)**:
+  - prod e2e 증명(R-G4 prod): 실제 Render/Supabase 배포가 없으므로 prod에서는 Render health check path가 `/health`로 설정/존재함만 확인. **named follow-up**.
+  - 풀 배포 파이프라인(자동 migrate + deploy): Non-Goal로 명시됨. **named follow-up**.
+  - 인증 구현(R-H): seam(no-op Guard + optional env placeholder)만. 검증 로직 없음(R-H3 준수).
+  - 제품 비전 구체화: product.md에서 여전히 TBD(이 SPEC 범위 밖).
+
+### AC 충족 vs 연기 (Acceptance Criteria 상태)
+
+- **충족(satisfied)**: A(모노레포 배선 — Nx 타겟, api-client 워크스페이스 패키지, hoisted 호환 source-emit 클라이언트), B(config/Prisma/Supabase — Zod fail-fast, 듀얼 URL, PORT config화, 도메인 모델 없음), C(로컬 Supabase 스택 — direct :54322 운영, R-C2/K8 경로), D(OpenAPI 클라이언트 — swagger 노출, openapi.json emit, 멱등 생성), E(프런트 env 주입 + 미설정 시 throw 가드), F(CORS allowlist, 와일드카드 금지), G **local 한정**(`/health` ok/up, degraded/down, 로컬 e2e 증명), H(Auth seam만), I(CI/EAS 스켈레톤 — migrate/deploy 없음).
+- **연기(deferred by design)**: G의 **prod** e2e 증명(R-G4 prod) → deployment follow-up에서 검증. 자동 migrate/deploy → named follow-up.

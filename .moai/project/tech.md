@@ -1,14 +1,15 @@
 # Tech — moyura
 
 > 본 문서는 **구현됨(IMPLEMENTED)** 과 **계획됨(PLANNED)** 을 명확히 구분한다.
-> 계획 항목은 모두 [`SPEC-ENV-SETUP-001`](../specs/SPEC-ENV-SETUP-001/spec.md)(status: `draft`)에서 정의되며, 아직 코드로 구현되지 않았다.
+> 환경/인프라 배선은 [`SPEC-ENV-SETUP-001`](../specs/SPEC-ENV-SETUP-001/spec.md)(status: `completed`, v0.3.0)에서 정의되었고 **구현 완료**되었다(`master`, 커밋 `7362e2a..1895e05`). 남은 PLANNED 항목은 prod 배포 파이프라인과 인증 구현뿐이다.
 
 ## 구현됨 vs 계획됨 (요약)
 
 | 구분 | 내용 |
 |------|------|
-| **IMPLEMENTED** | 모노레포 골격(pnpm + Nx), 3개 앱 스캐폴드(mobile/web/backend), `@moyura/config` 스텁, 루트/앱별 Nx 타겟, hoisted node_modules |
-| **PLANNED** (SPEC-ENV-SETUP-001, draft, 미구현) | Supabase PostgreSQL, Prisma ORM(듀얼 URL), Zod 환경검증, NestJS OpenAPI → `packages/api-client` 클라이언트 생성, Supabase CLI 로컬 스택, Render 호스팅, CORS allowlist, `/health` 엔드포인트, Supabase Auth seam |
+| **IMPLEMENTED (골격)** | 모노레포 골격(pnpm + Nx), 3개 앱 스캐폴드(mobile/web/backend), `@moyura/config` 스텁, 루트/앱별 Nx 타겟, hoisted node_modules |
+| **IMPLEMENTED (SPEC-ENV-SETUP-001, completed)** | Supabase PostgreSQL 연결(Prisma 7 + `@prisma/adapter-pg` 듀얼 URL), Zod 4 환경검증(fail-fast), NestJS `@nestjs/swagger` OpenAPI → `packages/api-client`(`@moyura/api-client`) 타입드 클라이언트 생성, Supabase CLI 로컬 스택(direct `:54322`), CORS allowlist, `GET /health` 엔드포인트, Supabase Auth seam(no-op Guard), CI/EAS 스켈레톤, 프런트 env 가드(web/mobile) |
+| **PLANNED (follow-up, 미구현)** | prod 배포 파이프라인(자동 Prisma migrate + deploy, Render/Supabase 실 배포 및 prod e2e 증명), Supabase Auth **실제 인증 로직**(JWT 검증) — 현재는 seam만 |
 
 ---
 
@@ -42,26 +43,33 @@
   - `onlyBuiltDependencies`: `@nestjs/core`, `@swc/core`, `nx`, `msgpackr-extract` (설치 시 빌드 스크립트 허용).
   - `ignoredBuiltDependencies`: `sharp`, `unrs-resolver`.
 
-## 4. 데이터 / 백엔드 스택 (PLANNED — SPEC-ENV-SETUP-001, draft, 미구현)
+## 4. 데이터 / 백엔드 스택 (IMPLEMENTED — SPEC-ENV-SETUP-001, completed v0.3.0)
 
-아래 항목은 전부 **계획**이며 현재 코드/의존성에 존재하지 않는다. 근거는 SPEC 결정 표/요구사항.
+아래 항목은 **구현 완료**되어 `master`에 존재한다(품질 게이트 green). 버전은 실제 설치된 의존성 기준.
 
-- **DB (prod)**: Supabase 관리형 **PostgreSQL** (현재 PG `17.x` stable — 마이너는 구현 시 검증). SPEC 결정 #2.
-- **ORM**: **Prisma** — 듀얼 URL 패턴 (SPEC 결정 #3, R-B3~R-B5):
-  - `DATABASE_URL` = pooled (포트 `6543`, Supavisor **transaction-mode** pooler, `?pgbouncer=true`, prepared statements 비활성) → 런타임 Client.
-  - `DIRECT_URL` = direct (포트 `5432`) → 마이그레이션 CLI.
-  - **버전 미확정(Open Decision D1)**: Prisma 7(권장, `moduleFormat = "cjs"`) vs Prisma 6.x — **M2 스파이크(`prisma generate` → `nest build`)** 결과로 게이트. 실패 시 6.x로 폴백.
-- **config 검증**: `@nestjs/config` + **Zod** 부팅 시 검증, 누락/불일치 시 fail-fast(non-zero exit). SPEC 결정 #5, R-B1/R-B2.
-- **API 계약**: NestJS `@nestjs/swagger`로 OpenAPI 노출 → `apps/backend/openapi.json` emit → `packages/api-client`에 타입드 클라이언트 생성.
-  - **생성 도구 권장(Open Decision D2)**: `openapi-typescript` + 얇은 fetch 래퍼(최소 의존). 대안: `swagger-typescript-api`, `@openapitools/openapi-generator-cli`.
-- **로컬 DB**: **Supabase CLI 로컬 스택**(Docker: Postgres + Auth/GoTrue + Studio), `supabase/config.toml` + `supabase start/stop`. canonical 로컬 DB. SPEC 결정 #9, R-C1~R-C4.
-  - 주의: 로컬 스택이 `6543` pooler를 노출하지 않을 수 있음 → 로컬은 direct(5432) 운영 허용, 이 경우 prepared-statement 비활성은 N/A(R-C2, K8).
-- **백엔드 prod 호스팅**: **Render** (Web Service). build `pnpm nx build backend`, health check path `/health`, env는 Render secrets 주입. SPEC 결정 #4.
-- **CORS**: 환경별 web + mobile origin allowlist, validated config 출처(하드코딩 금지). R-F1~R-F3.
-- **헬스 엔드포인트**: `GET /health` — status + DB 연결 확인(`SELECT 1` 수준). end-to-end 배선 증명용. R-G1~R-G4.
-- **프런트 env 주입**: web `NEXT_PUBLIC_API_BASE_URL`, mobile `EXPO_PUBLIC_API_BASE_URL`. 미설정 시 앱 부팅 경로에서 명시적 throw 가드(R-E4 — `NEXT_PUBLIC_*`/`EXPO_PUBLIC_*`는 build/bundle 시점 정적 인라인되므로).
-- **Auth**: 구현 OUT OF SCOPE. 미래 = **Supabase Auth**. 이 SPEC은 NestJS Guard **seam**(no-op/pass-through) + `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_JWT_SECRET` env 플레이스홀더(optional, 검증 로직 없음)만 남김. R-H1~R-H3.
-- **CI / EAS**: GitHub Actions(install/build/lint/test/typecheck on `nx affected`) + EAS `local`/`prod` 프로파일은 **스켈레톤만**. 자동 마이그레이션/배포 잡은 named follow-up. R-I1~R-I3.
+- **DB (prod)**: Supabase 관리형 **PostgreSQL** (PG `17.x` stable — 마이너는 Supabase 고정). SPEC 결정 #2.
+- **ORM**: **Prisma `7.8.0`** — D1 스파이크 통과로 Prisma 7 확정 (선택지 A). 듀얼 URL 패턴 (R-B3~R-B5):
+  - `prisma-client` 제너레이터, `moduleFormat = "cjs"`(NestJS CommonJS), 클라이언트를 `apps/backend/src/generated/prisma`로 **source-emit**(gitignore — `prisma generate`로 재생성). hoisted 레이아웃에서 심링크 의존 없음(R-A3 충족).
+  - Prisma 7는 **driver adapter 필수** → `@prisma/adapter-pg 7.8.0` + `pg 8.21.0` 사용.
+  - 연결 URL은 schema가 아닌 **`apps/backend/prisma.config.ts`**에 위치 (Prisma 7가 schema `datasource`에서 `url`/`directUrl` 제거).
+  - `DATABASE_URL` = 런타임 pooled (prod: 포트 `6543`, Supavisor transaction-mode, `?pgbouncer=true`, prepared statements 비활성) → pg adapter 경유 Client.
+  - `DIRECT_URL` = direct (포트 `5432`) → 마이그레이션 CLI(`prisma migrate`, 양 환경 공통).
+- **config 검증**: `@nestjs/config 4.0.4` + **Zod `4.4.3`** 부팅 시 검증, 누락/불일치 시 fail-fast(non-zero exit). R-B1/R-B2.
+- **API 계약**: `@nestjs/swagger 11.4.4`로 OpenAPI를 `/api`에 노출 → `apps/backend/openapi.ts` emit 스크립트가 `apps/backend/openapi.json` 생성(서버 미기동) → `packages/api-client`에 타입드 클라이언트 생성.
+  - **생성 도구(D2 확정)**: `openapi-typescript 7.13.0` 타입 생성(`src/schema.d.ts`, gitignore — 재생성) + 얇은 타입드 fetch 래퍼(`createApiClient`, `getHealth`). openapi.json 계약 산출물은 커밋된다.
+- **로컬 DB**: **Supabase CLI `2.104.0` 로컬 스택**(Docker: Postgres + Auth/GoTrue + Studio), `supabase/config.toml` + `supabase/README.md`(start/stop). canonical 로컬 DB. R-C1~R-C4.
+  - 로컬 스택은 `6543` pooler를 노출하지 않음 → 로컬은 **direct Postgres `:54322`** 운영(pooler는 prod 전용). 이 경우 prepared-statement 비활성은 N/A(R-C2, K8). prod에서만 pooled(6543) 적용.
+- **백엔드 prod 호스팅**: **Render** (Web Service). build `pnpm nx build backend`, start `node dist/src/main.js`, health check path `/health`, env는 Render secrets 주입. 가이드: `docs/deploy-render.md`. SPEC 결정 #4.
+- **CORS**: 환경별 web + mobile origin allowlist를 `CORS_ORIGINS`(validated config)에서 로드, 와일드카드(`*`) 금지. R-F1~R-F3.
+- **헬스 엔드포인트**: `GET /health` — `PrismaService.pingDatabase()`(`SELECT 1`)로 DB 연결 확인. 200(`ok`/`up`) / 503(`degraded`/`down`). end-to-end 배선 증명용(로컬 e2e 검증 완료). R-G1~R-G4.
+- **프런트 env 주입**: web `NEXT_PUBLIC_API_BASE_URL`(`apps/web/lib/env.ts` 가드, 루트 레이아웃에서 실행), mobile `EXPO_PUBLIC_API_BASE_URL`(`apps/mobile/lib/env.ts` 가드, `index.ts`에서 실행). 미설정 시 명시적 throw(R-E4 — `NEXT_PUBLIC_*`/`EXPO_PUBLIC_*`는 build/bundle 시점 정적 인라인). web은 api-client를 `transpilePackages`로 처리.
+- **Auth**: **seam만 구현**(미래 = Supabase Auth). NestJS no-op `SupabaseAuthGuard`(pass-through) + `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_JWT_SECRET` env 플레이스홀더(optional, 검증 로직 없음). R-H1~R-H3.
+- **CI / EAS**: `.github/workflows/ci.yml`(install → prisma generate → `nx affected` build/lint/test/typecheck; **migrate/deploy 없음**) + `apps/mobile/eas.json` `local`/`prod` 프로파일 **스켈레톤**. R-I1~R-I3.
+
+### follow-up (PLANNED — 이 SPEC에서 의도적으로 연기)
+
+- **prod 배포 파이프라인**: 자동 Prisma migrate + deploy, Render/Supabase 실 배포, prod e2e 증명(R-G4 prod — 현재는 Render health check path가 `/health`임만 확인). named follow-up.
+- **인증 실제 구현**: Supabase JWT 검증 로직. 현재는 seam(no-op Guard + optional env)만 존재.
 
 ## 5. 품질 / 테스트
 
@@ -98,7 +106,14 @@
 | `apps/backend/nest-cli.json`, `.prettierrc`, `eslint.config.mjs` | backend 빌드/포맷/린트 |
 | `apps/mobile/app.json` | Expo 앱 config |
 | `.moai/config/sections/quality.yaml` | 품질/방법론(TDD, 85%) 설정 |
-| (계획) `apps/backend/prisma/schema.prisma`, `prisma.config.ts`, `supabase/config.toml`, `eas.json`, `.github/workflows/*` | SPEC-ENV-SETUP-001에서 생성 예정 |
+| `apps/backend/prisma/schema.prisma` | Prisma 7 스키마(`prisma-client` 제너레이터, source-emit) |
+| `apps/backend/prisma.config.ts` | Prisma 7 연결 URL(`DATABASE_URL`/`DIRECT_URL`) 위치 |
+| `apps/backend/openapi.ts`, `openapi.json` | OpenAPI emit 스크립트 + 커밋된 계약 산출물 |
+| `supabase/config.toml`, `supabase/README.md` | 로컬 Supabase CLI 스택(direct `:54322`) |
+| `apps/web/lib/env.ts`, `apps/mobile/lib/env.ts` | 프런트 env 가드(미설정 시 throw) |
+| `apps/mobile/eas.json` | EAS `local`/`prod` 프로파일 스켈레톤 |
+| `.github/workflows/ci.yml` | CI(install/build/lint/test/typecheck, migrate/deploy 없음) |
+| `docs/deploy-render.md` | Render 배포 가이드 |
 
 ## 참조
 
