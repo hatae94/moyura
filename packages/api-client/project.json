@@ -1,0 +1,28 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "api-client",
+  "projectType": "library",
+  "sourceRoot": "packages/api-client/src",
+  "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["{workspaceRoot}/apps/backend/openapi.json"],
+      "outputs": ["{projectRoot}/src/schema.d.ts"],
+      "dependsOn": ["backend:openapi"],
+      "options": {
+        "command": "openapi-typescript ../../apps/backend/openapi.json -o src/schema.d.ts",
+        "cwd": "packages/api-client"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": ["generate"],
+      "options": {
+        "command": "tsc --noEmit",
+        "cwd": "packages/api-client"
+      }
+    }
+  }
+}

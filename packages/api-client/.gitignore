@@ -1,0 +1,2 @@
+# openapi-typescript 가 생성하는 타입 파일 — `nx run api-client:generate` 로 재생성되므로 추적 제외(R-D4).
+src/schema.d.ts

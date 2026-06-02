@@ -4,11 +4,30 @@
   "projectType": "application",
   "sourceRoot": "apps/backend/src",
   "targets": {
+    "prisma-generate": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["{projectRoot}/prisma/schema.prisma", "{projectRoot}/prisma.config.ts"],
+      "outputs": ["{projectRoot}/src/generated"],
+      "options": { "command": "prisma generate", "cwd": "apps/backend" }
+    },
+    "prisma-migrate": {
+      "executor": "nx:run-commands",
+      "options": { "command": "prisma migrate dev", "cwd": "apps/backend" }
+    },
     "build": {
       "executor": "nx:run-commands",
       "cache": true,
+      "dependsOn": ["prisma-generate"],
       "outputs": ["{projectRoot}/dist"],
       "options": { "command": "nest build", "cwd": "apps/backend" }
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": ["build"],
+      "outputs": ["{projectRoot}/openapi.json"],
+      "options": { "command": "node dist/src/openapi.js", "cwd": "apps/backend" }
     },
     "start": {
       "executor": "nx:run-commands",
@@ -23,9 +42,16 @@
       "cache": true,
       "options": { "command": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix", "cwd": "apps/backend" }
     },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": ["prisma-generate"],
+      "options": { "command": "tsc --noEmit -p tsconfig.json", "cwd": "apps/backend" }
+    },
     "test": {
       "executor": "nx:run-commands",
       "cache": true,
+      "dependsOn": ["prisma-generate"],
       "options": { "command": "jest", "cwd": "apps/backend" }
     }
   }
