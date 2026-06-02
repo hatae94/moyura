@@ -26,6 +26,19 @@ jobs:
       # 클라이언트 생성 자체는 DB 접속을 하지 않으므로 더미 값으로 충분하다(실제 연결 없음).
       DIRECT_URL: postgresql://ci:ci@127.0.0.1:5432/ci
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+      # 빌드/검증용 더미 env (실제 시크릿 아님). web 빌드는 NEXT_PUBLIC_* 부팅 가드를
+      # 통과해야 하고(SPEC-AUTH-001 R-I4/R-E4), backend Zod 는 SUPABASE_URL/ANON_KEY 를 요구한다.
+      NODE_ENV: test
+      PORT: "3001"
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8081
+      SUPABASE_URL: http://127.0.0.1:54321
+      SUPABASE_ANON_KEY: ci-dummy-anon-key
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+      EXPO_PUBLIC_API_BASE_URL: http://localhost:3001
+      EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
     steps:
       - name: Checkout
         uses: actions/checkout@v4
