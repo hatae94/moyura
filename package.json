@@ -10,7 +10,13 @@
     "lint": "nx run-many -t lint",
     "test": "nx run-many -t test",
     "typecheck": "nx run-many -t typecheck",
-    "graph": "nx graph"
+    "graph": "nx graph",
+    "dev:backend": "pnpm --filter @moyura/backend prisma:generate && pnpm --filter @moyura/backend start:dev",
+    "dev:web": "pnpm --filter @moyura/web dev",
+    "dev:mobile": "pnpm --filter @moyura/mobile start",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:status": "supabase status"
   },
   "devDependencies": {
     "nx": "21.6.7",
