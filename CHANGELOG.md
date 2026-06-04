@@ -25,6 +25,12 @@
   - **보호 라우트 `GET /me`**: 인증 사용자의 profile 반환 — 가드 + upsert 종단 증명.
   - **웹 세션(`@supabase/ssr` 0.10.3)**: browser/server 클라이언트, `proxy.ts` updateSession(Next 16 미들웨어), email/pw signup/login/logout, PKCE 콜백 라우트(`app/auth/callback`, 음성 경로 가드), `app/login`·`app/me`.
   - **소셜/모바일 OAuth 스캐폴드**: `supabase/config.toml` `[auth.external.google|apple|kakao]`(enabled=false, `env()` 시크릿), `apps/mobile` app scheme `"moyura"` + 시스템 브라우저 OAuth 헬퍼, deep-link redirect(`moyura://auth-callback`). 실제 provider 키·런타임 OAuth는 named follow-up.
+- **로그인 화면 디자인 이식** (SPEC-LOGIN-UI-001): Figma Make "Meetup" LoginScreen 디자인을 `apps/web` 로그인 화면(`app/login`)에 그대로 이식하고 기존 SPEC-AUTH-001 server action에 배선. 신규 인증 로직 없이 UI만 교체.
+  - **2뷰 LoginScreen**: 소셜 랜딩(로고/타이틀 "Meetup", Google/Apple/Email 버튼, "또는" 디바이더, 약관 푸터)과 이메일 폼(로그인/회원가입 토글, 이름 필드 조건부)을 client component 로컬 state(`showEmailForm`/`isSignUp`)로 전환.
+  - **기존 액션 배선**: Google/Apple은 form+hidden `provider` 패턴으로 `signInWithOAuthAction`, 이메일/비번은 `useActionState`로 `signInAction`/`signUpAction` 호출, 성공 시 기존 `/me` 리다이렉트. `supabase.auth` 직접 호출·edge-function·`alert`·`console.log` 미사용.
+  - **에러 통합**: `useActionState` 에러와 서버 `?error=` 초기값을 폼 상단 에러 박스에 통합 표시(OAuth 실패 시 이메일 폼 자동 오픈).
+  - **의존성**: `lucide-react`(`Mail`/`Apple`) 런타임 추가, `GoogleIcon`은 인라인 SVG. Kakao 버튼 미노출.
+  - 검증: SPEC 기준(테스트 하네스 미설치) — `next build`/`tsc --noEmit`/`eslint` 통과 + 금지패턴 grep 0건. RN WebView 풀스크린·Figma 픽셀 일치는 미검증(시각 확인 권고).
 
 ### Changed
 
