@@ -14,6 +14,7 @@ issue_number: null
 ## HISTORY
 
 - 2026-06-05 (v0.1.0): 최초 작성 (draft). SPEC-AUTH-001(completed)이 남긴 소셜 OAuth flow + config 스캐폴드(`[auth.external.google]`/`[auth.external.apple]` `enabled = false`, `env()` 치환만 배선)와 SPEC-LOGIN-UI-001(completed)이 만든 Google/Apple 버튼(`<form action={signInWithOAuthAction}>` + hidden `provider`)을 입력으로 받아, **실제 provider 키를 로컬 스택에 배선**해 두 버튼이 진짜 IdP authorize URL 로 진입하게 만든다. 범위 = **설정 + 시크릿 배선 + 종단 검증**(신규 코드 경로 없음). **로컬 개발 우선** — 로컬 Supabase CLI 스택(127.0.0.1) 대상. prod 키/배포 redirect 도메인은 범위 밖(follow-up). 핵심 사실: 로컬 GoTrue provider 콜백 = `http://127.0.0.1:54321/auth/v1/callback`(config.toml `[api] port = 54321`, SPEC-AUTH-001 spike 관찰값). Google 은 실제 Google Cloud OAuth 2.0 Web Client(client_id + secret) 필요 — "test" provider 없음. Apple 은 Apple Developer Program 멤버십 + Services ID(client_id) + Team ID + Key ID + `.p8` 키로 ES256 서명한 **client secret JWT**(6개월 만료) 필요. 로컬 CLI `[auth.external.apple]` 가 정적 JWT 를 받는지/키파일 기반 생성을 지원하는지는 공식 문서 미명시 → 구현 시 검증(OD-3).
+- 2026-06-05 (v0.1.0): **Google-only iteration 진행**. Apple Developer Program 구매 불가로 Apple(Module A)은 follow-up 으로 연기. 이번 run 은 `[auth.external.google]` `enabled = true` + `skip_nonce_check = true`(OD-5) 활성화 + Google env 스캐폴딩(`supabase/.env.example`) + README 절차만 구현. `[auth.external.apple]` 는 `enabled = false` 유지(R-A2 미충족, 의도된 연기), Kakao 불변. Apple 활성화/검증(R-A1~R-A4, R-V3 Apple)은 후속 iteration.
 
 ---
 

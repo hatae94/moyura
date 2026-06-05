@@ -349,7 +349,7 @@ skip_nonce_check = false
 email_optional = false
 
 [auth.external.google]
-enabled = false
+enabled = true
 # DO NOT commit your OAuth client id to git. Use environment variable substitution instead:
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
@@ -357,7 +357,7 @@ secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 redirect_uri = ""
 url = ""
 # If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
-skip_nonce_check = false
+skip_nonce_check = true
 email_optional = false
 
 [auth.external.kakao]
