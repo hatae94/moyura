@@ -10,8 +10,8 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 
-// 소셜 OAuth redirectTo 의 로컬 host 리터럴(M-4: site_url host = 127.0.0.1, http scheme).
-const CALLBACK_URL = "http://127.0.0.1:3000/auth/callback";
+// 소셜 OAuth redirectTo 의 로컬 host 리터럴(site_url host = localhost, http scheme).
+const CALLBACK_URL = "http://localhost:3000/auth/callback";
 
 /** 인증 결과 상태(useActionState 등에서 소비). */
 export type AuthActionState = { error?: string } | undefined;
@@ -85,7 +85,8 @@ export async function signInWithOAuthAction(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: CALLBACK_URL },
+    // 소셜 로그인 성공 후 도착지를 /me 로 고정한다(콜백이 ?next= 를 읽어 redirect — 비번 로그인과 일관).
+    options: { redirectTo: `${CALLBACK_URL}?next=/me` },
   });
 
   if (error || !data?.url) {
