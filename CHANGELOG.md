@@ -31,6 +31,10 @@
   - **에러 통합**: `useActionState` 에러와 서버 `?error=` 초기값을 폼 상단 에러 박스에 통합 표시(OAuth 실패 시 이메일 폼 자동 오픈).
   - **의존성**: `lucide-react`(`Mail`/`Apple`) 런타임 추가, `GoogleIcon`은 인라인 SVG. Kakao 버튼 미노출.
   - 검증: SPEC 기준(테스트 하네스 미설치) — `next build`/`tsc --noEmit`/`eslint` 통과 + 금지패턴 grep 0건. RN WebView 풀스크린·Figma 픽셀 일치는 미검증(시각 확인 권고).
+- **로컬 소셜 로그인(Google)** (SPEC-AUTH-002): 로컬 Supabase 스택에 실제 Google OAuth 키를 배선해 로그인 화면 Google 버튼이 종단 동작(동의 → 세션 → `/me`). Apple은 follow-up.
+  - **provider 활성화**: `supabase/config.toml` `[auth.external.google]` `enabled=true` + `skip_nonce_check=true`(로컬 전용), client_id/secret은 `env()` 치환만(시크릿 비커밋). `supabase/.env.example` + README 절차 추가.
+  - **호스트 통일(localhost)**: PKCE `code_verifier` 쿠키 호스트 바인딩으로 인한 `exchange_failed` 해결 — 웹 앱(포트 3000) `site_url`/`additional_redirect_urls`/`CALLBACK_URL`을 `http://localhost:3000`으로 통일. GoTrue(54321)는 `127.0.0.1` 유지(Google 콘솔 redirect URI 불변).
+  - **소셜 로그인 성공 → `/me`**: `signInWithOAuthAction` `redirectTo`에 `?next=/me` 추가(비번 로그인과 일관).
 
 ### Changed
 

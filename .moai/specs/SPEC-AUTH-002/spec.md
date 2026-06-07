@@ -1,9 +1,9 @@
 ---
 id: SPEC-AUTH-002
 version: 0.1.0
-status: draft
+status: completed
 created: 2026-06-05
-updated: 2026-06-05
+updated: 2026-06-08
 author: hatae
 priority: medium
 issue_number: null
@@ -15,6 +15,7 @@ issue_number: null
 
 - 2026-06-05 (v0.1.0): 최초 작성 (draft). SPEC-AUTH-001(completed)이 남긴 소셜 OAuth flow + config 스캐폴드(`[auth.external.google]`/`[auth.external.apple]` `enabled = false`, `env()` 치환만 배선)와 SPEC-LOGIN-UI-001(completed)이 만든 Google/Apple 버튼(`<form action={signInWithOAuthAction}>` + hidden `provider`)을 입력으로 받아, **실제 provider 키를 로컬 스택에 배선**해 두 버튼이 진짜 IdP authorize URL 로 진입하게 만든다. 범위 = **설정 + 시크릿 배선 + 종단 검증**(신규 코드 경로 없음). **로컬 개발 우선** — 로컬 Supabase CLI 스택(127.0.0.1) 대상. prod 키/배포 redirect 도메인은 범위 밖(follow-up). 핵심 사실: 로컬 GoTrue provider 콜백 = `http://127.0.0.1:54321/auth/v1/callback`(config.toml `[api] port = 54321`, SPEC-AUTH-001 spike 관찰값). Google 은 실제 Google Cloud OAuth 2.0 Web Client(client_id + secret) 필요 — "test" provider 없음. Apple 은 Apple Developer Program 멤버십 + Services ID(client_id) + Team ID + Key ID + `.p8` 키로 ES256 서명한 **client secret JWT**(6개월 만료) 필요. 로컬 CLI `[auth.external.apple]` 가 정적 JWT 를 받는지/키파일 기반 생성을 지원하는지는 공식 문서 미명시 → 구현 시 검증(OD-3).
 - 2026-06-05 (v0.1.0): **Google-only iteration 진행**. Apple Developer Program 구매 불가로 Apple(Module A)은 follow-up 으로 연기. 이번 run 은 `[auth.external.google]` `enabled = true` + `skip_nonce_check = true`(OD-5) 활성화 + Google env 스캐폴딩(`supabase/.env.example`) + README 절차만 구현. `[auth.external.apple]` 는 `enabled = false` 유지(R-A2 미충족, 의도된 연기), Kakao 불변. Apple 활성화/검증(R-A1~R-A4, R-V3 Apple)은 후속 iteration.
+- 2026-06-08 (sync): Google 로컬 OAuth **종단 동작 확인(사용자 검증)** — 동의 → 세션 → `/me`. 구현 중 PKCE `code_verifier` 쿠키 호스트 바인딩 문제로 `exchange_failed` 발생 → 웹 앱(포트 3000)을 `127.0.0.1`→`localhost`로 통일(GoTrue 54321은 `127.0.0.1` 유지, Google 콘솔 redirect URI 불변). 소셜 로그인 성공 시 `/me` 리다이렉트(`?next=/me`) 추가. status → **completed**(Google 스코프 전달 완료). Apple(R-A1~A4, R-V3 Apple)·prod OAuth(OD-4)는 별도 follow-up SPEC으로 carve-out. 상세는 하단 Implementation Notes 참조.
 
 ---
 
@@ -128,3 +129,13 @@ OUT OF SCOPE (이 SPEC 에서 제외 — Exclusions):
 - SPEC-AUTH-001 spec.md HISTORY(L17): 로컬 GoTrue API 54321 + provider 콜백 `127.0.0.1:54321/auth/v1/callback` 관찰값, `site_url` host = 127.0.0.1.
 - Supabase 로컬 config 문서: env() 치환은 프로젝트 루트 `.env` 자동 감지(`supabase.com/docs/guides/local-development/managing-config`) — 정확 경로는 OD-1 에서 구현 시 검증.
 - Supabase Apple social login 문서: `secret` = `.p8` 로 생성한 JWT(Team ID + Key ID + Services ID), **6개월 만료**, 회전 필요(`supabase.com/docs/guides/auth/social-login/auth-apple`) — 로컬 CLI 입력 형식은 OD-3 에서 구현 시 검증.
+
+## Implementation Notes
+
+- 2026-06-08 완료(status: completed). **범위 = Google 로컬 OAuth.** Apple(R-A1~A4, R-V3 Apple)은 의도적으로 별도 follow-up SPEC으로 carve-out(Apple Developer Program 미가입).
+- 커밋: `ae47152`(google `enabled=true`+`skip_nonce_check`+env 스캐폴드/README), `9e47bb6`(localhost 호스트 통일 + 소셜 성공 `/me`).
+- **호스트 변경 — 본문의 웹 호스트 `127.0.0.1:3000` 서술을 `localhost:3000`으로 대체**: PKCE `code_verifier` 쿠키는 웹 앱(포트 3000) 호스트에 바인딩되는데 dev 서버가 `localhost`를 advertise → 콜백이 `127.0.0.1`로 도착해 verifier 누락 → `exchange_failed`. 해결: 웹 앱 호스트(포트 3000)를 `localhost`로 통일 — `config.toml` `site_url`/`additional_redirect_urls`, `actions.ts` `CALLBACK_URL` = `http://localhost:3000`. **GoTrue(54321)는 `127.0.0.1` 유지** → `NEXT_PUBLIC_SUPABASE_URL` 및 Google 콘솔 authorized redirect(`http://127.0.0.1:54321/auth/v1/callback`)는 불변.
+- 소셜 로그인 성공 도착지: `signInWithOAuthAction`의 `redirectTo`에 `?next=/me` 추가 → 비번 로그인과 동일하게 `/me`.
+- 검증: 로컬에서 Google 동의 → GoTrue 콜백 → 웹 PKCE 콜백 → 쿠키 세션 → `/me` 종단 동작 확인(사용자). R-V1/R-V2/R-V3(Google) 충족.
+- follow-up: Apple OAuth, prod OAuth(redirect 도메인/HTTPS/키 vault, OD-4), prod nonce 분리(OD-5). 모바일 확장은 SPEC-MOBILE-001(WebView 셸이 이 흐름을 시스템 브라우저로 브리지).
+- 잔여 문서 드리프트(범위 밖): `apps/web/app/auth/callback/route.ts:4` 주석이 아직 `127.0.0.1` — 별도 정정 대상(SPEC-MOBILE-001 OD-3).
