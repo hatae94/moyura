@@ -35,6 +35,11 @@
   - **provider 활성화**: `supabase/config.toml` `[auth.external.google]` `enabled=true` + `skip_nonce_check=true`(로컬 전용), client_id/secret은 `env()` 치환만(시크릿 비커밋). `supabase/.env.example` + README 절차 추가.
   - **호스트 통일(localhost)**: PKCE `code_verifier` 쿠키 호스트 바인딩으로 인한 `exchange_failed` 해결 — 웹 앱(포트 3000) `site_url`/`additional_redirect_urls`/`CALLBACK_URL`을 `http://localhost:3000`으로 통일. GoTrue(54321)는 `127.0.0.1` 유지(Google 콘솔 redirect URI 불변).
   - **소셜 로그인 성공 → `/me`**: `signInWithOAuthAction` `redirectTo`에 `?next=/me` 추가(비번 로그인과 일관).
+- **모바일 WebView 셸 + Google OAuth 브리지** (SPEC-MOBILE-001, M1~M3 구현 / 디바이스 종단 검증 대기): `apps/mobile`(Expo 56)가 `apps/web`을 풀스크린 WebView로 호스팅하는 씬 셸 + WebView 안 웹 로그인의 Google OAuth를 시스템 브라우저로 브리지.
+  - **풀스크린 WebView 셸**: `react-native-webview@13.16.1`(Expo 56 핀), `App.tsx` 단일 WebView(SafeAreaView, 로딩 인디케이터, 복구 가능 에러+재시도, Android 하드웨어 백). `EXPO_PUBLIC_WEB_URL` env 가드(`lib/web-url.ts`, `lib/env.ts` 패턴, 미설정 시 부팅 throw) + 환경별 호스트 매핑(Android emu `10.0.2.2`, iOS sim `localhost`, 실기기 LAN IP).
+  - **Google OAuth 브리지**: `onShouldStartLoadWithRequest`로 GoTrue authorize URL 인터셉트(임베디드 로드 차단 — Google의 webview OAuth 차단 회피) → `redirect_to`를 `moyura://auth-callback`로 재작성(브라우저 쿠키 half-auth 회피, OD-5) → `openAuthSessionAsync` 시스템 브라우저 → deep-link 복귀 → WebView가 웹 콜백(`?code=`) 로드 → WebView 쿠키 컨텍스트로 세션 확립. **웹 코드 변경 0**(기존 `signInWithOAuthAction`/`auth/callback` 재사용). 순수 URL 로직은 `lib/auth/oauth-bridge.ts`로 분리.
+  - **모바일 테스트 하네스 도입**: vitest(node-env) — `resolveWebUrl` + oauth-bridge 헬퍼 순수 함수 12 테스트. nx `test` 타겟 추가.
+  - 검증: typecheck 0 / vitest 12/12 / expo export 번들 OK. **디바이스 종단(R-P2)·에뮬레이터 호스트↔OAuth 허용목록(OD-2)은 미검증** — Android 우선 수동 검증 follow-up. SPEC-LOGIN-UI-001 OD-5/AC-H1(WebView 풀스크린 렌더)은 디바이스 검증 시 닫힘.
 
 ### Changed
 

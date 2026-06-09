@@ -71,9 +71,9 @@
 - **iOS 주의(OD-6)**: iOS 시뮬레이터/디바이스 검증은 **macOS + Xcode 필요**. Mac 부재 시 Android 만으로 종단 증명.
 
 ### Definition of Done
-- [ ] M1~M3 의 모든 자동화 Quality Gate 통과(typecheck/lint/build/단위 테스트).
-- [ ] `react-native-webview` `13.16.1` 핀이 `package.json` 에 반영.
-- [ ] `web-url.ts` env 가드 + 환경별 호스트 매핑 문서화.
-- [ ] R-P2 수동 종단 1회 이상 통과(최소 Android) — SPEC-LOGIN-UI-001 OD-5/AC-H1 닫음 기록.
-- [ ] OD-2(에뮬레이터 호스트 ↔ OAuth 허용목록) 실측 결과를 spec.md OD-2 에 확정 기록.
-- [ ] 신규 웹 server action/세션/콜백 코드 0(Non-Goal 준수) — 웹 변경은 (선택) 브리지 훅으로 한정.
+- [x] M1~M3 의 모든 자동화 Quality Gate 통과(typecheck 0 / build = expo export 번들 OK / 단위 테스트 vitest 12/12; 모바일 린터 미구성으로 lint 항목은 N/A).
+- [x] `react-native-webview` `13.16.1` 핀이 `package.json` 에 반영.
+- [x] `web-url.ts` env 가드 + 환경별 호스트 매핑 문서화(.env.example).
+- [ ] R-P2 수동 종단 1회 이상 통과(최소 Android) — SPEC-LOGIN-UI-001 OD-5/AC-H1 닫음 기록. (디바이스 필요 — 미완)
+- [ ] OD-2(에뮬레이터 호스트 ↔ OAuth 허용목록) 실측 결과를 spec.md OD-2 에 확정 기록. (디바이스 필요 — 미완)
+- [x] 신규 웹 server action/세션/콜백 코드 0(Non-Goal 준수) — 인터셉트 방식 채택으로 웹 변경 0(브리지 훅도 불필요).

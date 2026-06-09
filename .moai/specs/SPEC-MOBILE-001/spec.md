@@ -1,9 +1,9 @@
 ---
 id: SPEC-MOBILE-001
-version: 0.1.0
-status: draft
+version: 0.2.0
+status: in-progress
 created: 2026-06-05
-updated: 2026-06-05
+updated: 2026-06-09
 author: hatae
 priority: medium
 issue_number: null
@@ -14,6 +14,8 @@ issue_number: null
 ## HISTORY
 
 - 2026-06-05 (v0.1.0): 최초 작성 (draft). `apps/mobile`(Expo ~56.0.6, RN 0.85.3, React 19.2.3)가 `apps/web`(Next.js)을 풀스크린 WebView 로 호스팅하는 **씬 셸(thin shell)**을 만들고, 웹 로그인 화면에서 시작되는 Google 소셜 OAuth 를 **시스템 브라우저로 브리지**한다(임베디드 WebView OAuth 는 Google 이 차단 — `oauth.ts` R-E2). 입력 자산: (1) `apps/mobile/lib/auth/oauth.ts` — `launchSocialOAuth(authorizeUrl)`/`buildReturnUrl()` 스캐폴드(SPEC-AUTH-001), `authorizeUrl` 산출은 R-F3 으로 연기됨; (2) SPEC-AUTH-002 — 로컬 Google 키 배선 완료(`signInWithOAuthAction` 이 진짜 IdP authorize URL 을 반환); (3) SPEC-LOGIN-UI-001 — 웹 로그인 UI(Google/Apple 버튼), OD-5(RN WebView 풀스크린 렌더 미검증). 이 SPEC 은 oauth.ts 의 **연기된 `authorizeUrl` 산출(R-F3)을 Google 한정으로 완성**하고, SPEC-LOGIN-UI-001 **OD-5/AC-H1(WebView 풀스크린 렌더)을 종단 검증으로 닫는다**. 범위 = 셸 + WebView UX + Google OAuth 브리지(로컬/dev 우선). prod URL/HTTPS/배포는 follow-up.
+
+- 2026-06-09 (v0.2.0): M1~M3 구현 완료 (status: draft → in-progress). 브랜치 `feature/SPEC-MOBILE-001` 커밋 `6e59272`. `react-native-webview` 13.16.1(Expo56 핀) + 풀스크린 WebView 셸(`App.tsx`: SafeAreaView/로딩/에러+재시도/Android 백), `lib/web-url.ts` env 가드(`WEB_URL` @MX:ANCHOR, `lib/env.ts` 패턴). Google OAuth 브리지: `onShouldStartLoadWithRequest`로 GoTrue authorize URL 인터셉트 → `redirect_to`를 `moyura://auth-callback`로 재작성(OD-5 브라우저 쿠키 half-auth 회피) → 시스템 브라우저 → deep-link 복귀 → WebView가 웹 콜백 로드(WebView 쿠키 컨텍스트 세션, R-O1~O6). 테스트 가능 순수 로직은 `lib/auth/oauth-bridge.ts`로 분리(vitest node-env, 12 테스트). 자동 게이트 통과: typecheck 0 / vitest 12/12 / expo export 번들 OK. 웹 코드 변경 0(Non-Goal 준수). **미완(디바이스 필요): R-P2 종단, OD-2(에뮬레이터 호스트 ↔ GoTrue/Google 허용목록) — status=in-progress 유지, 디바이스 검증 후 completed.**
 
 ---
 
