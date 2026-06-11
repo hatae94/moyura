@@ -1,0 +1,24 @@
+# SPEC-MOBILE-003 Progress
+
+- Started: 2026-06-11 17:53
+- Execution mode: sub-agent (user-selected), current branch (feature/SPEC-MOBILE-001)
+- Development mode: tdd (quality.yaml)
+- Harness level: standard (evaluator final-pass; auth surfaces are preserved MOBILE-002 assets — escalate to thorough on CRITICAL)
+- Phase 0.5 complete: memory_guard=disabled, skipped
+- Phase 0.9 complete: detected_language_skills=[moai-lang-typescript]
+- Phase 0.95 complete: Scale-based mode: Full Pipeline (files: 20+, domains: 2 — web frontend + mobile RN), sub-agent sequential
+- UltraThink: activated for strategy phase (2 domains, 8+ files, user keyword)
+- Lessons loading: lessons.md absent, skipped
+- Phase 1 complete: manager-strategy execution plan approved (Decision Point 1). T-001~T-010, web-first, OD-1~4 all recommended options. CRITICAL finding: real vitest baseline = 94/94 (SPEC docs say 89/89, stale — fix at sync)
+- Phase 1.5 complete: tasks.md generated (10 tasks)
+- Phase 1.6 complete: 8 acceptance criteria registered as pending tasks
+- Phase 1.7 SKIPPED: file-based routing — file existence IS behavior; empty stubs break next build. Files created within TDD cycles instead
+- Phase 1.8 complete: MX context map empty (no existing @MX tags in modify targets) — tags to be ADDED per plan
+- Phase 2 start: parallel tracks — Track A (T-001~004 web+destination), Track B (T-005~007 pure core TDD); then sequential T-008~010. Worktree isolation NOT used: required uncommitted/untracked MOBILE-001/002 files (apps/mobile/lib, hooks, components) do not exist in HEAD — a worktree would lack them
+- Track A complete (T-001~004): web (main) group + BottomTabBar + HomeTab + placeholders + Figma tokens + shell-mode detection (html[data-shell="native"] + WebViewShell marker prepend) + /me→/home switch. Gates: web tsc 0, next build OK, eslint 0, targeted vitest 16/16. Divergence: +HomeTab.tsx, +_components/PlaceholderTab.tsx (in-scope supporting files)
+- Track B complete (T-005~007): route-map-core (17 tests), auth-state-core (10), crossroute dispatch (10), native-back (+3). Full mobile suite 134/134 (baseline 94 + 40 new). tsc 0. decideWebViewLoad widened via TS overloads (legacy callers unchanged). MX: 4 ANCHOR (route-map), 1 ANCHOR + NOTE (auth-state). Drift: 0 unplanned files beyond in-scope supports
+- Baseline note: drift guard — planned 10 tasks, T-001~007 actual files match tasks.md + 2 in-scope supporting components (drift < 20%, informational)
+- Track C complete (T-008~010): expo-router ~56.2.10 installed (lockfile patch integrity intact: expo-modules-jsi@56.0.7/expo@56.0.8/RN 0.85.3 unchanged), custom entry (env guard first → expo-router/entry last), app/ tree complete ((auth)+(tabs)+index/+not-found), App.tsx removed, BridgedWebView shared seam, AuthContext (@MX:ANCHOR), declarative Redirect guards (Protected fallback documented). Gates: vitest 134/134, tsc 0 (mobile+web), next build OK, expo export OK, AC-8 greps all PASS
+- Track C divergences: @expo/vector-icons absent in hoisted layout → emoji glyph tab icons (no new dep); typedRoutes left disabled (R-RT6 Optional — tsconfig lacks .expo/types so it would not enforce; hrefs cast); +BridgedWebView.tsx/TabWebView in-scope supports. Cumulative drift < 20% (informational)
+- AC status: AC-2/3/4/8 automated PASS. AC-1/5b/6/7 + R-PR2 OAuth roundtrip = device-gated pending (mobile-spec-device-gated policy)
+- Phase 2.75 (pre-review gate): covered by track gates (tsc/eslint/build) — PASS
