@@ -23,6 +23,16 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-splash-screen"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "697c7705-0f5f-48f0-bd71-0ae76c22c8e4"
+      }
+    },
+    "owner": "hatae94"
   }
 }

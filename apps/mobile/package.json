@@ -4,9 +4,12 @@
   "main": "index.ts",
   "dependencies": {
     "@moyura/api-client": "workspace:*",
+    "@react-native-cookies/cookies": "^6.2.1",
     "expo": "~56.0.6",
     "expo-auth-session": "~56.0.13",
     "expo-linking": "~56.0.13",
+    "expo-secure-store": "~56.0.4",
+    "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
     "expo-web-browser": "~56.0.5",
     "react": "19.2.3",
