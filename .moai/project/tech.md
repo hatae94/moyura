@@ -29,7 +29,7 @@
 
 | 앱 | 프레임워크 | 핵심 버전 | 특이사항(검증됨) |
 |----|------------|-----------|------------------|
-| mobile | Expo (React Native) | expo `~56.0.6`, react `19.2.3`, react-native `0.85.3`, `react-native-webview 13.16.1`(Expo56 핀) | `app.json` slug `app`, scheme `moyura`. `App.tsx` = `apps/web`을 호스팅하는 풀스크린 WebView 씬 셸 + Google OAuth 시스템 브라우저 브리지(SPEC-MOBILE-001, 코드 구현 / 디바이스 종단 검증 대기) |
+| mobile | Expo (React Native) | expo `~56.0.6`, react `19.2.3`, react-native `0.85.3`, `react-native-webview 13.16.1`(Expo56 핀), `expo-secure-store ~56.0.4`, `expo-splash-screen ~56.0.10` | `app.json` slug `app`, scheme `moyura`. `App.tsx`가 `WebViewShell` + 오버레이 + 훅을 합성하는 씬 셸; `expo-secure-store` 기반 토큰 캐시 + nonce 인증 postMessage 브리지(SPEC-WEBVIEW-SHELL-001 + SPEC-MOBILE-002, 코드 구현 / 디바이스 종단 검증 대기) |
 | web | Next.js | `16.2.6`, react/react-dom `19.2.4` | App Router(`app/`), Tailwind v4(`@tailwindcss/postcss`), `reactCompiler: true`, `turbopack.root`를 모노레포 루트로 고정(stray lockfile 워크스페이스 오탐 방지) |
 | backend | NestJS | `@nestjs/common ^11`, `@nestjs/core ^11`, platform-express `^11` | 현재 기본 `app.controller`/`app.service`만 존재. `main.ts` 포트 `3000` 하드코딩(SPEC에서 config화 예정) |
 

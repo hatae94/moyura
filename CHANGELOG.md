@@ -9,6 +9,20 @@
 
 ### Added
 
+- **WebView 셸 컴포넌트화** (SPEC-WEBVIEW-SHELL-001 — 자동 게이트 통과 / 디바이스 검증 대기): 모놀리식 `App.tsx`를 재사용 가능한 컴포넌트·훅으로 행위 보존 추출(회귀 0).
+  - `components/WebViewShell.tsx`: source URL prop + 이벤트 핸들러 prop을 받는 재사용 가능 WebView 셸 컴포넌트.
+  - `components/LoadingOverlay.tsx`, `components/WebViewErrorOverlay.tsx`: 분리된 오버레이 presentational 컴포넌트.
+  - `hooks/useAppLifecycle.ts`: Android 하드웨어 백/네비 이력 관리 훅.
+  - `hooks/useAuthBridge.ts`: OAuth 인터셉트→시스템 브라우저 브리지 훅 (SPEC-MOBILE-002 토큰 브리지 확장 지점).
+  - 검증: typecheck 0 / vitest(훅 특성화 테스트 포함) 통과 / expo export OK. 디바이스 종단(AC-S3) 수동 검증 대기.
+- **토큰 기반 느슨한 결합 세션 + 보안 강화 네이티브↔웹 브리지** (SPEC-MOBILE-002 — 자동 게이트 통과 / 디바이스 검증 대기): 세션 권위는 웹에 두고 네이티브가 토큰을 캐시하는 느슨한 결합 파운데이션 + 보안 강화.
+  - `apps/mobile/lib/auth/token-store.ts` + `token-store-core.ts`: `expo-secure-store`(`WHEN_UNLOCKED_THIS_DEVICE_ONLY`) 기반 access+refresh 토큰 캐시.
+  - `apps/mobile/lib/auth/bridge-protocol.ts` + `nonce-core.ts`: 버전드 postMessage 스키마(v1), per-session nonce 인증, 콜드스타트/resume/로그아웃/clear 5종 메시지 타입.
+  - `apps/mobile/lib/auth/auth-bridge-core.ts` + `app-lifecycle-core.ts`: 콜드스타트 핸드셰이크(SecureStore 토큰 → 웹 `setSession()` 검증/갱신 → synced/none 회신 → SecureStore 갱신) + resume 재검증 + 스플래시 타임아웃 폴백(R-N6).
+  - `apps/web/lib/native-bridge/`: `NativeBridgeProvider.tsx`(인바운드 메시지 수신 + origin/nonce 검증), `bridge-protocol.ts`(웹 측 브리지 스키마), `bridge-client.ts`(setSession 배선), `LogoutBridgeNotifier.tsx`(로그아웃 시 `session:cleared` emit).
+  - 보안: WebView `originWhitelist` + `onShouldStartLoadWithRequest` origin 잠금, specific `targetOrigin`(NOT `"*"`), per-request CSP(`proxy.ts`/`middleware.ts`). expert-security re-review CRITICAL/HIGH 모두 closed.
+  - 검증: mobile vitest 89/89 pass / web typecheck 0 + `next build` pass. 디바이스 종단 OAuth/핸드셰이크 검증(AC-V3) 수동 검증 대기.
+
 - **환경/인프라 배선** (SPEC-ENV-SETUP-001): mobile/web/backend 세 앱과 Supabase PostgreSQL 사이의 환경/인프라 wiring을 완성하여 "프런트엔드 → 백엔드 → DB" end-to-end 동작을 `GET /health`로 증명.
   - **Prisma 7.8.0 + Supabase 연결**: `prisma-client` 제너레이터(source-emit, `moduleFormat=cjs`), `@prisma/adapter-pg` driver adapter, `pg`. 듀얼 URL 패턴(런타임 pooled `DATABASE_URL` / 마이그레이션 `DIRECT_URL`)을 `prisma.config.ts`에 구성.
   - **로컬 Supabase CLI 스택**: `supabase/config.toml` + `README.md`. direct Postgres `:54322`(로컬은 pooler 미노출, pooler는 prod 전용).
