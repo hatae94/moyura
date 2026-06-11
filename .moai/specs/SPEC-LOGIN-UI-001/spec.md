@@ -1,7 +1,7 @@
 ---
 id: SPEC-LOGIN-UI-001
 version: 0.1.0
-status: draft
+status: completed
 created: 2026-06-04
 updated: 2026-06-04
 author: hatae
@@ -15,6 +15,9 @@ issue_number: null
 
 - 2026-06-04 (v0.1.0): 최초 작성(draft). 사용자의 Figma Make "Meetup" LoginScreen 디자인을
   `apps/web` 로그인 화면에 그대로 이식하고, 기존 SPEC-AUTH-001 인증 액션에 배선하는 SPEC.
+- 2026-06-04 (v0.1.0): 구현 완료(status: completed). M1~M6를 expert-frontend에 위임 구현 후
+  typecheck/lint/build 통과 + 금지패턴 grep 0건으로 검증. `feature/SPEC-LOGIN-UI-001 @ 4aba164`.
+  상세는 하단 Implementation Notes 참조.
 
 ## Background
 
@@ -196,3 +199,23 @@ Figma Make "Meetup" LoginScreen의 두 뷰(소셜 랜딩 / 이메일 폼)를 브
   컴포넌트. Figma MCP를 통해 확인.
 - Auth wiring source: `apps/web/lib/auth/actions.ts`, `apps/web/app/login/page.tsx`,
   `apps/web/app/login/login-form.tsx` (SPEC-AUTH-001).
+
+## Implementation Notes
+
+- 2026-06-04 구현 완료(status: completed). 검증 전략: **SPEC 기준**(테스트 하네스 미설치) — 사용자 승인.
+- 구현 커밋 `feature/SPEC-LOGIN-UI-001 @ 4aba164`. 문서 동기화는 별도 `docs(sync)` 커밋.
+- 변경 파일(계획과 동일 — divergence 없음):
+  - `apps/web/package.json`: `lucide-react ^1.17.0` 런타임 의존성 추가(major 1.x).
+  - `apps/web/app/login/login-form.tsx`: "Meetup" LoginScreen client component(소셜 랜딩 + 이메일 폼 2뷰)로
+    전면 재작성, 인라인 `GoogleIcon` SVG.
+  - `apps/web/app/login/page.tsx`: server component가 `searchParams.error`를 `initialError`로 전달,
+    기존 Kakao 포함 소셜 스캐폴드·`<h1>moyura 로그인</h1>` 제거.
+- 주요 구현 결정:
+  - OD-1: Google/Apple은 `<form action={signInWithOAuthAction}>` + hidden `provider` 패턴으로 배선(문자열 인자 아님).
+  - OD-2: `useActionState` 에러와 서버 `?error=` 초기값을 폼 상단 에러 박스에 통합. `initialError`가 있으면
+    `showEmailForm`을 true로 초기화해 OAuth 실패 메시지를 노출(EC-2/AC-E3).
+  - R-A3에서 미명시된 소셜 버튼 클래스는 디자인 설명에 맞춰 재구성(outline/solid) — 색상·카피 변경 없음.
+- 검증 결과: `tsc --noEmit` 0 errors · `eslint` 0 findings · `next build` 성공(`/login` ƒ 라우트 생성).
+  금지패턴 grep: `supabase.auth`/`alert(`/`console.log`/`functions.invoke` 실호출 0건(설명 주석 1줄만 매치),
+  `kakao` 0건.
+- 미검증(시각 확인 권고): AC-H1 RN WebView 풀스크린 렌더(OD-5), Figma 픽셀 단위 일치 — 클래스·카피 일치까지만 확인.

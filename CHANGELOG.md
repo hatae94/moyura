@@ -9,6 +9,20 @@
 
 ### Added
 
+- **WebView 셸 컴포넌트화** (SPEC-WEBVIEW-SHELL-001 — 자동 게이트 통과 / 디바이스 검증 대기): 모놀리식 `App.tsx`를 재사용 가능한 컴포넌트·훅으로 행위 보존 추출(회귀 0).
+  - `components/WebViewShell.tsx`: source URL prop + 이벤트 핸들러 prop을 받는 재사용 가능 WebView 셸 컴포넌트.
+  - `components/LoadingOverlay.tsx`, `components/WebViewErrorOverlay.tsx`: 분리된 오버레이 presentational 컴포넌트.
+  - `hooks/useAppLifecycle.ts`: Android 하드웨어 백/네비 이력 관리 훅.
+  - `hooks/useAuthBridge.ts`: OAuth 인터셉트→시스템 브라우저 브리지 훅 (SPEC-MOBILE-002 토큰 브리지 확장 지점).
+  - 검증: typecheck 0 / vitest(훅 특성화 테스트 포함) 통과 / expo export OK. 디바이스 종단(AC-S3) 수동 검증 대기.
+- **토큰 기반 느슨한 결합 세션 + 보안 강화 네이티브↔웹 브리지** (SPEC-MOBILE-002 — 자동 게이트 통과 / 디바이스 검증 대기): 세션 권위는 웹에 두고 네이티브가 토큰을 캐시하는 느슨한 결합 파운데이션 + 보안 강화.
+  - `apps/mobile/lib/auth/token-store.ts` + `token-store-core.ts`: `expo-secure-store`(`WHEN_UNLOCKED_THIS_DEVICE_ONLY`) 기반 access+refresh 토큰 캐시.
+  - `apps/mobile/lib/auth/bridge-protocol.ts` + `nonce-core.ts`: 버전드 postMessage 스키마(v1), per-session nonce 인증, 콜드스타트/resume/로그아웃/clear 5종 메시지 타입.
+  - `apps/mobile/lib/auth/auth-bridge-core.ts` + `app-lifecycle-core.ts`: 콜드스타트 핸드셰이크(SecureStore 토큰 → 웹 `setSession()` 검증/갱신 → synced/none 회신 → SecureStore 갱신) + resume 재검증 + 스플래시 타임아웃 폴백(R-N6).
+  - `apps/web/lib/native-bridge/`: `NativeBridgeProvider.tsx`(인바운드 메시지 수신 + origin/nonce 검증), `bridge-protocol.ts`(웹 측 브리지 스키마), `bridge-client.ts`(setSession 배선), `LogoutBridgeNotifier.tsx`(로그아웃 시 `session:cleared` emit).
+  - 보안: WebView `originWhitelist` + `onShouldStartLoadWithRequest` origin 잠금, specific `targetOrigin`(NOT `"*"`), per-request CSP(`proxy.ts`/`middleware.ts`). expert-security re-review CRITICAL/HIGH 모두 closed.
+  - 검증: mobile vitest 89/89 pass / web typecheck 0 + `next build` pass. 디바이스 종단 OAuth/핸드셰이크 검증(AC-V3) 수동 검증 대기.
+
 - **환경/인프라 배선** (SPEC-ENV-SETUP-001): mobile/web/backend 세 앱과 Supabase PostgreSQL 사이의 환경/인프라 wiring을 완성하여 "프런트엔드 → 백엔드 → DB" end-to-end 동작을 `GET /health`로 증명.
   - **Prisma 7.8.0 + Supabase 연결**: `prisma-client` 제너레이터(source-emit, `moduleFormat=cjs`), `@prisma/adapter-pg` driver adapter, `pg`. 듀얼 URL 패턴(런타임 pooled `DATABASE_URL` / 마이그레이션 `DIRECT_URL`)을 `prisma.config.ts`에 구성.
   - **로컬 Supabase CLI 스택**: `supabase/config.toml` + `README.md`. direct Postgres `:54322`(로컬은 pooler 미노출, pooler는 prod 전용).
@@ -25,6 +39,21 @@
   - **보호 라우트 `GET /me`**: 인증 사용자의 profile 반환 — 가드 + upsert 종단 증명.
   - **웹 세션(`@supabase/ssr` 0.10.3)**: browser/server 클라이언트, `proxy.ts` updateSession(Next 16 미들웨어), email/pw signup/login/logout, PKCE 콜백 라우트(`app/auth/callback`, 음성 경로 가드), `app/login`·`app/me`.
   - **소셜/모바일 OAuth 스캐폴드**: `supabase/config.toml` `[auth.external.google|apple|kakao]`(enabled=false, `env()` 시크릿), `apps/mobile` app scheme `"moyura"` + 시스템 브라우저 OAuth 헬퍼, deep-link redirect(`moyura://auth-callback`). 실제 provider 키·런타임 OAuth는 named follow-up.
+- **로그인 화면 디자인 이식** (SPEC-LOGIN-UI-001): Figma Make "Meetup" LoginScreen 디자인을 `apps/web` 로그인 화면(`app/login`)에 그대로 이식하고 기존 SPEC-AUTH-001 server action에 배선. 신규 인증 로직 없이 UI만 교체.
+  - **2뷰 LoginScreen**: 소셜 랜딩(로고/타이틀 "Meetup", Google/Apple/Email 버튼, "또는" 디바이더, 약관 푸터)과 이메일 폼(로그인/회원가입 토글, 이름 필드 조건부)을 client component 로컬 state(`showEmailForm`/`isSignUp`)로 전환.
+  - **기존 액션 배선**: Google/Apple은 form+hidden `provider` 패턴으로 `signInWithOAuthAction`, 이메일/비번은 `useActionState`로 `signInAction`/`signUpAction` 호출, 성공 시 기존 `/me` 리다이렉트. `supabase.auth` 직접 호출·edge-function·`alert`·`console.log` 미사용.
+  - **에러 통합**: `useActionState` 에러와 서버 `?error=` 초기값을 폼 상단 에러 박스에 통합 표시(OAuth 실패 시 이메일 폼 자동 오픈).
+  - **의존성**: `lucide-react`(`Mail`/`Apple`) 런타임 추가, `GoogleIcon`은 인라인 SVG. Kakao 버튼 미노출.
+  - 검증: SPEC 기준(테스트 하네스 미설치) — `next build`/`tsc --noEmit`/`eslint` 통과 + 금지패턴 grep 0건. RN WebView 풀스크린·Figma 픽셀 일치는 미검증(시각 확인 권고).
+- **로컬 소셜 로그인(Google)** (SPEC-AUTH-002): 로컬 Supabase 스택에 실제 Google OAuth 키를 배선해 로그인 화면 Google 버튼이 종단 동작(동의 → 세션 → `/me`). Apple은 follow-up.
+  - **provider 활성화**: `supabase/config.toml` `[auth.external.google]` `enabled=true` + `skip_nonce_check=true`(로컬 전용), client_id/secret은 `env()` 치환만(시크릿 비커밋). `supabase/.env.example` + README 절차 추가.
+  - **호스트 통일(localhost)**: PKCE `code_verifier` 쿠키 호스트 바인딩으로 인한 `exchange_failed` 해결 — 웹 앱(포트 3000) `site_url`/`additional_redirect_urls`/`CALLBACK_URL`을 `http://localhost:3000`으로 통일. GoTrue(54321)는 `127.0.0.1` 유지(Google 콘솔 redirect URI 불변).
+  - **소셜 로그인 성공 → `/me`**: `signInWithOAuthAction` `redirectTo`에 `?next=/me` 추가(비번 로그인과 일관).
+- **모바일 WebView 셸 + Google OAuth 브리지** (SPEC-MOBILE-001, M1~M3 구현 / 디바이스 종단 검증 대기): `apps/mobile`(Expo 56)가 `apps/web`을 풀스크린 WebView로 호스팅하는 씬 셸 + WebView 안 웹 로그인의 Google OAuth를 시스템 브라우저로 브리지.
+  - **풀스크린 WebView 셸**: `react-native-webview@13.16.1`(Expo 56 핀), `App.tsx` 단일 WebView(SafeAreaView, 로딩 인디케이터, 복구 가능 에러+재시도, Android 하드웨어 백). `EXPO_PUBLIC_WEB_URL` env 가드(`lib/web-url.ts`, `lib/env.ts` 패턴, 미설정 시 부팅 throw) + 환경별 호스트 매핑(Android emu `10.0.2.2`, iOS sim `localhost`, 실기기 LAN IP).
+  - **Google OAuth 브리지**: `onShouldStartLoadWithRequest`로 GoTrue authorize URL 인터셉트(임베디드 로드 차단 — Google의 webview OAuth 차단 회피) → `redirect_to`를 `moyura://auth-callback`로 재작성(브라우저 쿠키 half-auth 회피, OD-5) → `openAuthSessionAsync` 시스템 브라우저 → deep-link 복귀 → WebView가 웹 콜백(`?code=`) 로드 → WebView 쿠키 컨텍스트로 세션 확립. **웹 코드 변경 0**(기존 `signInWithOAuthAction`/`auth/callback` 재사용). 순수 URL 로직은 `lib/auth/oauth-bridge.ts`로 분리.
+  - **모바일 테스트 하네스 도입**: vitest(node-env) — `resolveWebUrl` + oauth-bridge 헬퍼 순수 함수 12 테스트. nx `test` 타겟 추가.
+  - 검증: typecheck 0 / vitest 12/12 / expo export 번들 OK. **디바이스 종단(R-P2)·에뮬레이터 호스트↔OAuth 허용목록(OD-2)은 미검증** — Android 우선 수동 검증 follow-up. SPEC-LOGIN-UI-001 OD-5/AC-H1(WebView 풀스크린 렌더)은 디바이스 검증 시 닫힘.
 
 ### Changed
 

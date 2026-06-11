@@ -4,23 +4,29 @@
   "main": "index.ts",
   "dependencies": {
     "@moyura/api-client": "workspace:*",
+    "@react-native-cookies/cookies": "^6.2.1",
     "expo": "~56.0.6",
     "expo-auth-session": "~56.0.13",
     "expo-linking": "~56.0.13",
+    "expo-secure-store": "~56.0.4",
+    "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
     "expo-web-browser": "~56.0.5",
     "react": "19.2.3",
-    "react-native": "0.85.3"
+    "react-native": "0.85.3",
+    "react-native-webview": "13.16.1"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "test": "vitest run"
   },
   "private": true
 }

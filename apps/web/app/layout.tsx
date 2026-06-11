@@ -4,6 +4,9 @@ import "./globals.css";
 // 환경변수 가드를 앱 부팅 경로(root layout)에서 실행한다.
 // NEXT_PUBLIC_API_BASE_URL 미설정 시 API_BASE_URL 평가 단계에서 throw 한다(R-E4).
 import "@/lib/env";
+// SPEC-MOBILE-002 R-T3/R-T4: 네이티브 셸(WebView) 안에서만 토큰 동기화 리스너를 설치한다.
+// 일반 브라우저에서는 no-op 이라 순수 웹 동작에 영향이 없다(window.ReactNativeWebView 가드).
+import { NativeBridgeProvider } from "@/lib/native-bridge/NativeBridgeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,7 +33,11 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {/* SPEC-MOBILE-002: 네이티브 토큰 동기화 브리지(WebView 안에서만 동작, 일반 브라우저 no-op). */}
+        <NativeBridgeProvider />
+        {children}
+      </body>
     </html>
   );
 }

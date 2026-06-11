@@ -1,6 +1,13 @@
 import Image from "next/image";
+import { connection } from "next/server";
 
-export default function Home() {
+// SPEC-MOBILE-002 R-T8 (N-1 수정): nonce 기반 CSP 가 동작하려면 페이지가 *동적 렌더링*이어야 한다.
+// Next 는 SSR 시 요청 헤더의 CSP nonce 를 자기 스크립트에 주입하는데, 정적(static) 페이지는 build
+// 시점에 생성되어 요청 헤더가 없어 nonce 가 주입되지 않는다 → prod 의 `'strict-dynamic'` CSP 아래에서
+// 부트스트랩/hydration 스크립트가 차단된다. connection() 으로 요청을 기다려 동적 렌더링을 강제한다.
+// (login/me/auth-callback 은 cookies()/searchParams 로 이미 동적이라 별도 조치 불필요.)
+export default async function Home() {
+  await connection();
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">

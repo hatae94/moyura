@@ -25,6 +25,11 @@
       "cache": true,
       "dependsOn": ["api-client:generate"],
       "options": { "command": "tsc --noEmit", "cwd": "apps/mobile" }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "options": { "command": "vitest run", "cwd": "apps/mobile" }
     }
   }
 }

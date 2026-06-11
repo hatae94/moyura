@@ -29,7 +29,7 @@
 
 | 앱 | 프레임워크 | 핵심 버전 | 특이사항(검증됨) |
 |----|------------|-----------|------------------|
-| mobile | Expo (React Native) | expo `~56.0.6`, react `19.2.3`, react-native `0.85.3` | `app.json` slug `app`, 기본 Expo 스캐폴드(App.tsx/index.ts) |
+| mobile | Expo (React Native) | expo `~56.0.6`, react `19.2.3`, react-native `0.85.3`, `react-native-webview 13.16.1`(Expo56 핀), `expo-secure-store ~56.0.4`, `expo-splash-screen ~56.0.10` | `app.json` slug `app`, scheme `moyura`. `App.tsx`가 `WebViewShell` + 오버레이 + 훅을 합성하는 씬 셸; `expo-secure-store` 기반 토큰 캐시 + nonce 인증 postMessage 브리지(SPEC-WEBVIEW-SHELL-001 + SPEC-MOBILE-002, 코드 구현 / 디바이스 종단 검증 대기) |
 | web | Next.js | `16.2.6`, react/react-dom `19.2.4` | App Router(`app/`), Tailwind v4(`@tailwindcss/postcss`), `reactCompiler: true`, `turbopack.root`를 모노레포 루트로 고정(stray lockfile 워크스페이스 오탐 방지) |
 | backend | NestJS | `@nestjs/common ^11`, `@nestjs/core ^11`, platform-express `^11` | 현재 기본 `app.controller`/`app.service`만 존재. `main.ts` 포트 `3000` 하드코딩(SPEC에서 config화 예정) |
 
@@ -97,9 +97,9 @@
 
 - `apps/backend`: **Jest**(`jest`, `ts-jest`), e2e(`supertest`, `jest-e2e.json`), 커버리지 타겟 설정 존재. lint = ESLint 9 flat config + Prettier.
 - `apps/web`: ESLint 9(`eslint-config-next`), `babel-plugin-react-compiler`.
-- `apps/mobile`: 테스트 러너 미구성(기본 스캐폴드). typecheck = `tsc --noEmit`.
+- `apps/mobile`: **vitest**(node-env, SPEC-MOBILE-001 도입) — 순수 함수 단위 테스트(`resolveWebUrl`, oauth-bridge 헬퍼)만 대상(RN/expo import 없는 모듈). nx `test` 타겟. typecheck = `tsc --noEmit`. 린터 미구성(품질 게이트는 strict tsc).
 
-> 참고: 사용자 글로벌 선호(vitest/oxlint 등)는 다른 프로젝트 기준이며, 본 저장소는 위 도구 구성을 그대로 사용한다.
+> 참고: 사용자 글로벌 선호(vitest/oxlint 등)는 다른 프로젝트 기준이나, mobile은 SPEC-MOBILE-001에서 순수 로직 회귀 보호를 위해 vitest를 도입했다(web/backend 도구 구성은 불변).
 
 ## 6. 주요 설정 파일 위치
 
@@ -119,7 +119,10 @@
 | `apps/backend/prisma/migrations/20260602095934_init_profile/` | 첫 도메인 마이그레이션(`Profile`) |
 | `apps/backend/src/auth/`, `apps/backend/src/profile/` | 인증 가드/검증/config + profile 모듈·서비스·`GET /me` |
 | `apps/web/lib/supabase/`, `apps/web/lib/auth/`, `apps/web/proxy.ts` | 웹 `@supabase/ssr` 클라이언트·세션 미들웨어·auth 액션·PKCE 콜백 |
-| `apps/mobile/lib/auth/oauth.ts` | 모바일 시스템 브라우저 OAuth 헬퍼 |
+| `apps/mobile/App.tsx` | 풀스크린 WebView 셸 + Google OAuth 인터셉트/복귀(SPEC-MOBILE-001) |
+| `apps/mobile/lib/web-url.ts` | `EXPO_PUBLIC_WEB_URL` 가드 + `WEB_URL`(@MX:ANCHOR) — WebView source·OAuth 콜백 호스트 단일 출처 |
+| `apps/mobile/lib/auth/oauth.ts` | 모바일 시스템 브라우저 OAuth 헬퍼 + Google authorizeUrl 브리지 배선(R-F3 완성) |
+| `apps/mobile/lib/auth/oauth-bridge.ts` | OAuth 브리지 순수 URL 헬퍼(인터셉트 판별/redirect_to 재작성/콜백 조립) — vitest 단위 테스트 |
 | `apps/backend/prisma.config.ts` | Prisma 7 연결 URL(`DATABASE_URL`/`DIRECT_URL`) 위치 |
 | `apps/backend/openapi.ts`, `openapi.json` | OpenAPI emit 스크립트 + 커밋된 계약 산출물 |
 | `supabase/config.toml`, `supabase/README.md` | 로컬 Supabase CLI 스택(direct `:54322`) |
