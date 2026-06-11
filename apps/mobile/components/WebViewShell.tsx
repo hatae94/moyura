@@ -74,6 +74,13 @@ export const WebViewShell = forwardRef<WebView, WebViewShellProps>(function WebV
   },
   ref,
 ) {
+  // SPEC-MOBILE-003 R-WB3/R-WB4: 셸 모드 마커를 *콘텐츠 로드 전* 항상 주입한다(컴포넌트 레벨 보장).
+  // 웹 (main)/layout 의 인라인 스크립트가 이 전역으로 하단 탭바를 flash 없이 숨긴다(이중 탭바 금지).
+  // 호출부가 nonce 등 다른 pre-content JS 를 넘기면 마커를 앞에 붙여 둘 다 실행되게 한다(기존 행위 보존).
+  const beforeContentJs = `window.__MOYURA_NATIVE_SHELL__=true;${
+    injectedJavaScriptBeforeContentLoaded ?? ""
+  }`;
+
   return (
     <WebView
       ref={ref}
@@ -86,7 +93,8 @@ export const WebViewShell = forwardRef<WebView, WebViewShellProps>(function WebV
       // Android: 신뢰 origin 잠금을 우회하는 새 창(window.open) 차단(C-2 보강).
       setSupportMultipleWindows={false}
       // R-T8/OD-11: 컨텐츠 로드 전 per-session nonce 를 신뢰 origin 채널로 확립한다.
-      injectedJavaScriptBeforeContentLoaded={injectedJavaScriptBeforeContentLoaded}
+      // SPEC-MOBILE-003 R-WB3/R-WB4: 셸 모드 마커(__MOYURA_NATIVE_SHELL__)를 항상 선행 주입한다.
+      injectedJavaScriptBeforeContentLoaded={beforeContentJs}
       // R-O5: OAuth 왕복/앱 재시작을 가로질러 @supabase/ssr 세션 쿠키를 보존한다.
       sharedCookiesEnabled // iOS
       thirdPartyCookiesEnabled // Android

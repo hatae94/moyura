@@ -6,7 +6,7 @@
 //
 // ── 브리지 설계 (OD-5 해소) ────────────────────────────────────────────────────
 // 웹 흐름: WebView 가 웹 로그인 → "Google" 클릭 → signInWithOAuthAction 이
-//   signInWithOAuth({ redirectTo: "http://localhost:3000/auth/callback?next=/me" }) 호출 →
+//   signInWithOAuth({ redirectTo: "http://localhost:3000/auth/callback?next=/home" }) 호출 →
 //   data.url = GoTrue authorize URL(host = EXPO_PUBLIC_SUPABASE_URL host, path /auth/v1/authorize,
 //   쿼리에 redirect_to=웹콜백) → 서버 redirect(data.url) → WebView 가 그 authorize URL 로 top-level 네비게이트.
 //
@@ -18,15 +18,15 @@
 // 해결(R-F3 Google 한정 완성): 인터셉트한 authorize URL 의 redirect_to 를 moyura://auth-callback 으로
 //   재작성해 시스템 브라우저에 넘긴다 → GoTrue authorize → Google 동의 → GoTrue 콜백 →
 //   moyura://auth-callback?code=... 로 복귀 → openAuthSessionAsync 가 {kind:"authenticated"} 반환.
-//   그 후 WebView 를 ${WEB_URL}/auth/callback?code=...&next=/me 로 네비게이트하면, WebView 안에서
+//   그 후 WebView 를 ${WEB_URL}/auth/callback?code=...&next=/home 로 네비게이트하면, WebView 안에서
 //   exchangeCodeForSession 이 (signInWithOAuth 시점에 WebView 에 설정된 PKCE code-verifier 쿠키와)
-//   같은 WebView 쿠키 컨텍스트로 교환 → 세션 쿠키가 WebView 저장소에 안착 → /me 렌더(R-O3).
+//   같은 WebView 쿠키 컨텍스트로 교환 → 세션 쿠키가 WebView 저장소에 안착 → /home 렌더(R-O3 / R-PR3).
 
 /** 웹 콜백 경로 — apps/web/app/auth/callback/route.ts 와 일치. */
 const WEB_CALLBACK_PATH = "/auth/callback";
 
-/** 소셜 로그인 성공 후 도착지 — 웹 signInWithOAuthAction 의 next 와 일관(R-O3). */
-const DEFAULT_NEXT = "/me";
+/** 소셜 로그인 성공 후 도착지 — 웹 signInWithOAuthAction 의 next 와 일관(R-O3 / SPEC-MOBILE-003 R-PR3). */
+const DEFAULT_NEXT = "/home";
 
 /**
  * 주어진 값을 URL 로 안전하게 파싱한다(실패 시 null). 정상 네비게이션을 실수로
@@ -78,14 +78,14 @@ export function rewriteAuthorizeRedirect(authorizeUrl: string, returnUrl: string
 
 /**
  * deep-link 복귀 URL 에서 code 를 추출해 WebView 가 로드할 웹 콜백 URL
- * (${webUrl}/auth/callback?code=...&next=/me)을 조립한다(R-O3).
+ * (${webUrl}/auth/callback?code=...&next=/home)을 조립한다(R-O3 / SPEC-MOBILE-003 R-PR3).
  *
  * code 가 없거나(예: error=access_denied) 복귀 URL 파싱이 불가하면 null 을 반환한다 —
  * code 없는 콜백 로드로 half-auth 가 되는 것을 막고, 호출부가 미인증 유지(R-O4)로 처리하게 한다.
  *
  * @param returnUrl openAuthSessionAsync 가 돌려준 deep-link 복귀 URL
  * @param webUrl 셸이 호스팅하는 웹 URL(WEB_URL)
- * @param next 콜백 후 도착 경로(기본 /me)
+ * @param next 콜백 후 도착 경로(기본 /home)
  * @returns 웹 콜백 URL 문자열, code 없거나 파싱 실패면 null
  */
 export function buildWebCallbackUrl(

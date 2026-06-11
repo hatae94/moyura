@@ -15,6 +15,7 @@
 
 import { isOAuthAuthorizeUrl, buildWebCallbackUrl } from "../lib/auth/oauth-bridge";
 import { constantTimeEquals } from "../lib/auth/bridge-protocol";
+import { isCrossRoute, routeForUrl, type AppRoute } from "../lib/route-map-core";
 // 타입 전용 import — 컴파일 시 erase 되어 런타임에 oauth.ts(expo import)를 끌어오지 않는다
 // (vitest node 환경의 순수성 유지 — AC-S6). OAuthLaunchResult 는 oauth.ts 의 공개 타입이다.
 import type { OAuthLaunchResult } from "../lib/auth/oauth";
@@ -166,29 +167,62 @@ export interface WebViewLoadContext {
   trustedWebUrl: string;
   /** GoTrue 호스트 base(SUPABASE_URL) — OAuth authorize 인터셉트 판별용. */
   supabaseBaseUrl: string;
+  /**
+   * (SPEC-MOBILE-003 R-NC2) WebView 의 현재 navigation URL. 주어지면 교차 라우트 디스패치 판정을
+   * 활성화한다 — 부재 시(undefined) SHELL-001/MOBILE-002 동작 그대로(회귀 0).
+   */
+  currentUrl?: string;
 }
 
+/** (SPEC-MOBILE-003 R-NC2) 교차 라우트 로드를 네이티브 라우트 전환으로 재디스패치하라는 결정. */
+export interface WebViewDispatch {
+  action: "dispatch";
+  route: AppRoute;
+}
+
+/** decideWebViewLoad 의 결정 — 기존 3분기 + (MOBILE-003) 교차 라우트 디스패치 변형. */
+export type WebViewLoadDecision =
+  | "oauth-intercept"
+  | "trusted-load"
+  | "deny"
+  | WebViewDispatch;
+
 /**
- * onShouldStartLoadWithRequest 의 in-WebView 로드 결정(R-T9 — WebView origin 잠금, C-2).
+ * onShouldStartLoadWithRequest 의 in-WebView 로드 결정(R-T9 — WebView origin 잠금, C-2 +
+ * SPEC-MOBILE-003 R-NC2 교차 라우트 디스패치).
  *
- * 3분기:
- *   - `"oauth-intercept"`: GoTrue authorize URL — 시스템 브라우저 브리지로 인터셉트(R-V1 보존).
+ * 분기(우선순위 순):
+ *   - `"oauth-intercept"`: GoTrue authorize URL — 시스템 브라우저 브리지로 인터셉트(R-V1/R-NC3 보존).
+ *   - `{ action: "dispatch", route }`: (R-NC2) currentUrl 이 주어지고, 타깃이 신뢰 origin 의 교차 앱
+ *     라우트면 in-WebView 로드 deny + 네이티브 라우트 디스패치. ctx.currentUrl 부재 시 비활성(회귀 0).
  *   - `"trusted-load"`: 신뢰 WEB_URL origin 의 http(s) 로드 — in-WebView 허용.
  *   - `"deny"`: 비신뢰 top-level http(s) origin — in-WebView 로드 거부(외부 브라우저 위임).
  *
- * 우선순위: OAuth 인터셉트 > origin 판정. supabase 호스트는 신뢰 origin 이 아니어도 authorize URL 이면
- * intercept(deny 아님)다. 비-http scheme/파싱 불가 URL(about:blank, data: 등 프레임워크 내부 요청)은
- * `"trusted-load"`(허용)로 처리해 SHELL-001 동작을 회귀시키지 않는다.
+ * 우선순위: OAuth 인터셉트 > 교차 라우트 디스패치 > origin 판정. OAuth/인증 플로우 내부(authorize,
+ * /login, /auth/callback)는 디스패치보다 우선·보존된다(R-NC3 예외 — 인증 플로우 기존 허용 규칙).
+ * supabase 호스트는 신뢰 origin 이 아니어도 authorize URL 이면 intercept(deny 아님)다. 비-http scheme/
+ * 파싱 불가 URL(about:blank, data: 등 프레임워크 내부 요청)은 `"trusted-load"`(허용)로 처리해 무회귀.
  *
  * @param url WebView 가 로드하려는 네비게이션 URL
- * @param ctx 신뢰 WEB_URL + supabase base
- * @returns "oauth-intercept" | "trusted-load" | "deny"
+ * @param ctx 신뢰 WEB_URL + supabase base (+ optional currentUrl)
+ * @returns "oauth-intercept" | "trusted-load" | "deny" | { action: "dispatch", route }
  */
+// 오버로드: currentUrl 부재(기존 호출부)면 결정은 디스패치 변형이 없는 3분기로 좁혀진다 — 기존
+// 소비자(useAuthBridge 의 exhaustive switch)가 타입 회귀 없이 그대로 컴파일된다(type-backward-compat).
+export function decideWebViewLoad(
+  url: string,
+  ctx: WebViewLoadContext & { currentUrl?: undefined },
+): "oauth-intercept" | "trusted-load" | "deny";
+// 오버로드: currentUrl 이 주어지면 교차 라우트 디스패치 변형을 포함한 넓은 결정을 반환한다(R-NC2).
 export function decideWebViewLoad(
   url: string,
   ctx: WebViewLoadContext,
-): "oauth-intercept" | "trusted-load" | "deny" {
-  // OAuth authorize URL 은 origin 판정보다 우선해 인터셉트한다(R-V1 보존).
+): WebViewLoadDecision;
+export function decideWebViewLoad(
+  url: string,
+  ctx: WebViewLoadContext,
+): WebViewLoadDecision {
+  // OAuth authorize URL 은 origin/디스패치 판정보다 우선해 인터셉트한다(R-V1/R-NC3 보존).
   if (isOAuthAuthorizeUrl(url, ctx.supabaseBaseUrl)) {
     return "oauth-intercept";
   }
@@ -197,6 +231,16 @@ export function decideWebViewLoad(
   if (origin === null || !(origin.startsWith("http://") || origin.startsWith("https://"))) {
     return "trusted-load";
   }
+  const trusted = isTrustedOrigin(url, ctx.trustedWebUrl);
+  // (R-NC2) 교차 라우트 디스패치: currentUrl 이 주어졌고 신뢰 origin 의 교차 앱 라우트면 deny + 디스패치.
+  // currentUrl 부재면 이 분기를 건너뛰어 기존 동작 그대로(회귀 0).
+  if (ctx.currentUrl !== undefined && trusted && isCrossRoute(ctx.currentUrl, url)) {
+    const route = routeForUrl(url);
+    // isCrossRoute(...)===true 면 routeForUrl(url)!==null 이 보장되지만, 타입 내로잉 위해 확인한다.
+    if (route !== null) {
+      return { action: "dispatch", route };
+    }
+  }
   // http(s) top-level: 신뢰 origin 이면 허용, 그 외 거부(외부 브라우저 위임).
-  return isTrustedOrigin(url, ctx.trustedWebUrl) ? "trusted-load" : "deny";
+  return trusted ? "trusted-load" : "deny";
 }

@@ -3,6 +3,24 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* SPEC-MOBILE-003 R-WB2: Figma Make "One-time-Event-App" light-mode 토큰(theme.css 발췌). */
+  --card: #ffffff;
+  --card-foreground: #1a1714;
+  --primary: #ff6b35;
+  --primary-foreground: #ffffff;
+  --secondary: #fff4ef;
+  --secondary-foreground: #c44a1a;
+  --muted: #f0ede8;
+  --muted-foreground: #8a8074;
+  --accent: #fff4ef;
+  --accent-foreground: #ff6b35;
+  --destructive: #e53935;
+  --destructive-foreground: #ffffff;
+  --border: rgba(26, 23, 20, 0.08);
+  --input-background: #f0ede8;
+  --ring: #ff6b35;
+  --radius: 1rem;
 }
 
 @theme inline {
@@ -10,6 +28,27 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* SPEC-MOBILE-003 R-WB2: Figma 토큰을 Tailwind v4 유틸로 노출(bg-card, text-primary 등). */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input-background: var(--input-background);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +62,10 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* SPEC-MOBILE-003 R-WB3/R-WB4: 셸 모드(네이티브 WebView)에서 웹 하단 탭바를 숨긴다(이중 탭바 금지).
+   data-shell 은 (main)/layout.tsx 의 인라인 스크립트가 콘텐츠 페인트 전 동기 세팅한다(flash 없음). */
+html[data-shell="native"] [data-bottom-tab-bar] {
+  display: none;
 }

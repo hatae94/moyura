@@ -43,7 +43,7 @@ export async function signUpAction(
     return { error: error.message };
   }
 
-  redirect("/me");
+  redirect("/home");
 }
 
 /** 로그인(R-G2). signInWithPassword 로 세션을 확립하고 쿠키에 저장한다(group D). */
@@ -62,7 +62,7 @@ export async function signInAction(
     return { error: error.message };
   }
 
-  redirect("/me");
+  redirect("/home");
 }
 
 /** 로그아웃(R-G3/R-D5). signOut 으로 세션 쿠키를 제거한다 → 이후 백엔드 호출은 미인증. */
@@ -85,8 +85,8 @@ export async function signInWithOAuthAction(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
-    // 소셜 로그인 성공 후 도착지를 /me 로 고정한다(콜백이 ?next= 를 읽어 redirect — 비번 로그인과 일관).
-    options: { redirectTo: `${CALLBACK_URL}?next=/me` },
+    // 소셜 로그인 성공 후 도착지를 /home 으로 고정한다(콜백이 ?next= 를 읽어 redirect — 비번 로그인과 일관, R-PR3).
+    options: { redirectTo: `${CALLBACK_URL}?next=/home` },
   });
 
   if (error || !data?.url) {

@@ -35,6 +35,12 @@ export interface UseAppLifecycleArgs {
    * useAuthBridge.injectRevalidate 를 실행한다(R-R1). 토큰 보유 여부는 tokensRef 로 판단.
    */
   onResumeRevalidate: (tokens: SessionTokens, currentUrl: string) => void;
+  /**
+   * (SPEC-MOBILE-003 R-NC4, optional) 현재 라우트 그룹 컨텍스트. `"(tabs)"` 면 Android 하드웨어 백을
+   * expo-router 네이티브 네비게이션에 위임한다(WebView 히스토리 back 소비 안 함). 부재/`"(auth)"` 면
+   * 기존 동작 보존((auth)/login WebView back). decideBackPress 에 그대로 전달된다.
+   */
+  routeContext?: "(tabs)" | "(auth)";
 }
 
 /** useAppLifecycle 리턴. */
@@ -63,6 +69,7 @@ const HANDSHAKE_TIMEOUT_MS = 8000;
 export function useAppLifecycle({
   webViewRef,
   onResumeRevalidate,
+  routeContext,
 }: UseAppLifecycleArgs): UseAppLifecycleResult {
   // R-U1: Android 하드웨어 백 분기용 네비게이션 히스토리.
   const canGoBackRef = useRef<boolean>(false);
@@ -74,16 +81,20 @@ export function useAppLifecycle({
   const handshakeResolvedRef = useRef<boolean>(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // R-U1: Android 하드웨어 백 — 히스토리가 있으면 WebView.goBack(), 없으면 기본 종료(보존).
+  // R-U1/R-NC4: Android 하드웨어 백 — routeContext 별 분기(decideBackPress).
+  //   - "(tabs)" → "native-back": 소비하지 않고 false 반환 → expo-router 네이티브 네비게이션 위임.
+  //   - 미지정/"(auth)" → 기존 동작 보존: 히스토리 있으면 WebView.goBack()(소비), 없으면 기본 종료.
   useEffect(() => {
     if (Platform.OS !== "android") {
       return;
     }
     const onBackPress = (): boolean => {
-      if (decideBackPress(canGoBackRef.current) === "goBack") {
+      const decision = decideBackPress(canGoBackRef.current, routeContext);
+      if (decision === "goBack") {
         webViewRef.current?.goBack();
         return true;
       }
+      // "native-back"((tabs) — expo-router 위임) | "exit"(히스토리 없음) — 소비하지 않는다.
       return false;
     };
     const subscription: NativeEventSubscription = BackHandler.addEventListener(
@@ -91,7 +102,7 @@ export function useAppLifecycle({
       onBackPress,
     );
     return () => subscription.remove();
-  }, [webViewRef]);
+  }, [webViewRef, routeContext]);
 
   // R-R1: AppState 구독 — active 전이 + 토큰 보유 + debounce 통과 시 resume 재검증을 호출부에 위임.
   useEffect(() => {

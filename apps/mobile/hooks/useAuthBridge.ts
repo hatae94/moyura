@@ -42,6 +42,8 @@ import {
   buildTargetOrigin,
   MAX_INJECTION_RETRIES,
 } from "./auth-bridge-core";
+import type { AppRoute } from "../lib/route-map-core";
+import type { AuthBridgeSignal } from "../lib/auth/auth-state-core";
 
 /** useAuthBridge 인자. */
 export interface UseAuthBridgeArgs {
@@ -61,6 +63,23 @@ export interface UseAuthBridgeArgs {
    * 메시지가 이 nonce 를 싣고(주입), 수신 메시지의 nonce 를 이 값과 상수시간 비교해 인증한다(위조 거부).
    */
   nonce: string;
+  /**
+   * (SPEC-MOBILE-003 R-AS2/R-NC5/R-PR5, optional) web→native 상태 신호를 호출부에 보고한다.
+   * 부재 시(SHELL-001/MOBILE-002 호출부) onMessage 동작은 그대로다 — 회귀 0. AuthContext(T-009)가
+   * synced/none/cleared 를 받아 isSignedIn 을 갱신하고 가드가 전환을 수행한다(선언적 Redirect).
+   */
+  onAuthSignal?: (signal: AuthBridgeSignal, tokens?: SessionTokens | null) => void;
+  /**
+   * (SPEC-MOBILE-003 R-NC2, optional) WebView 의 현재 navigation URL 을 돌려준다. 주어지면
+   * onShouldStartLoadWithRequest 가 교차 라우트 디스패치 변형을 활성화한다(decideWebViewLoad 의
+   * currentUrl 오버로드). 부재 시 기존 3분기 동작 그대로(회귀 0).
+   */
+  getCurrentUrl?: () => string;
+  /**
+   * (SPEC-MOBILE-003 R-NC2/R-NC3, optional) 교차 라우트 로드 차단 시 네이티브 라우트로 디스패치한다
+   * (router.replace). getCurrentUrl 와 함께 주어질 때만 디스패치 분기가 동작한다.
+   */
+  onCrossRouteDispatch?: (route: AppRoute) => void;
 }
 
 /** useAuthBridge 리턴. */
@@ -112,6 +131,9 @@ export function useAuthBridge({
   webViewRef,
   onHandshakeResolved,
   nonce,
+  onAuthSignal,
+  getCurrentUrl,
+  onCrossRouteDispatch,
 }: UseAuthBridgeArgs): UseAuthBridgeResult {
   // R-T7: 진행 중인 주입의 재시도 타이머·시도 횟수·ack 여부를 추적한다.
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -132,19 +154,27 @@ export function useAuthBridge({
     [onNavigateToCallback],
   );
 
-  // R-O1/R-T9: in-WebView 로드 게이트 — OAuth 인터셉트 보존 + WebView origin 잠금(비신뢰 origin 거부).
+  // R-O1/R-T9/R-NC2: in-WebView 로드 게이트 — OAuth 인터셉트 보존 + WebView origin 잠금(비신뢰 거부)
+  //   + (MOBILE-003) 교차 라우트 차단 → 네이티브 라우트 디스패치.
   const onShouldStartLoadWithRequest = useCallback(
     (request: ShouldStartLoadRequest): boolean => {
+      // R-NC2: getCurrentUrl 가 주어지면 currentUrl 을 넘겨 디스패치 변형을 활성화한다(부재 시 회귀 0).
       const decision = decideWebViewLoad(request.url, {
         trustedWebUrl: WEB_URL,
         supabaseBaseUrl: SUPABASE_URL,
+        currentUrl: getCurrentUrl?.(),
       });
+      // R-NC2/R-NC3: 교차 앱 라우트 — in-WebView 로드 차단 후 네이티브 라우트로 디스패치(WebView 자체 이동 금지).
+      if (typeof decision === "object") {
+        onCrossRouteDispatch?.(decision.route);
+        return false;
+      }
       switch (decision) {
         case "trusted-load":
           // 신뢰 origin / 프레임워크 내부 요청 — in-WebView 로드 허용(R-V1 무회귀).
           return true;
         case "oauth-intercept":
-          // GoTrue authorize URL — 시스템 브라우저 브리지로 인터셉트(보존).
+          // GoTrue authorize URL — 시스템 브라우저 브리지로 인터셉트(보존, R-NC3 인증 플로우 예외).
           void runOAuthBridge(request.url);
           return false;
         case "deny":
@@ -152,8 +182,10 @@ export function useAuthBridge({
           void Linking.openURL(request.url).catch(() => undefined);
           return false;
       }
+      // 위 switch 는 3분기를 전수 커버한다(decision 은 string union 으로 좁혀짐) — 도달 불가 방어 반환.
+      return false;
     },
-    [runOAuthBridge],
+    [runOAuthBridge, getCurrentUrl, onCrossRouteDispatch],
   );
 
   // 진행 중인 주입 재시도 타이머를 정리한다(핸드셰이크 해결/언마운트 시).
@@ -180,6 +212,8 @@ export function useAuthBridge({
           clearRetryTimer();
           void saveTokens(action.tokens);
           onHandshakeResolved();
+          // R-AS2/R-NC5: 갱신 토큰과 함께 synced 신호 보고 → AuthContext isSignedIn=true → 가드 전환.
+          onAuthSignal?.("session:synced", action.tokens);
           break;
         case "clear":
           // R-R3/R-R4/M-3: SecureStore 클리어(로그아웃 cleared, 또는 none → stale refresh 제거).
@@ -195,14 +229,18 @@ export function useAuthBridge({
             ackedRef.current = true;
             clearRetryTimer();
             onHandshakeResolved();
+            // R-AS2: none(또는 synced-불완전) — AuthContext 미로그인 처리(콜드스타트/세션 만료).
+            onAuthSignal?.("session:none");
+          } else {
+            // R-PR5: cleared(로그아웃) — 콜드스타트 결과 아님(M-1). AuthContext 미로그인 → (auth)/login 전환.
+            onAuthSignal?.("session:cleared");
           }
-          // cleared(로그아웃) — 콜드스타트 결과 아님(M-1), 스플래시 해제 호출 안 함.
           break;
         case "ignore":
           break;
       }
     },
-    [clearRetryTimer, onHandshakeResolved, nonce],
+    [clearRetryTimer, onHandshakeResolved, nonce, onAuthSignal],
   );
 
   // R-T2/R-T7: 콜드스타트 토큰 주입 — origin allowlist 선통과 후 bounded 재시도로 주입.

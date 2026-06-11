@@ -8,15 +8,26 @@
 // SPEC-MOBILE-002 가 채울 자리다 — 여기서는 비워둔다.
 
 /**
- * Android 하드웨어 백 분기 결정(R-U1)을 순수 함수로 추출한다. App.tsx 의 onBackPress 분기를 담는다.
+ * Android 하드웨어 백 분기 결정(R-U1 + SPEC-MOBILE-003 R-NC4)을 순수 함수로 추출한다.
+ * App.tsx 의 onBackPress 분기를 담는다.
  *
- * - 히스토리가 있으면(canGoBack) WebView 를 뒤로 보낸다 → `"goBack"`.
- * - 히스토리가 없으면 기본 종료 동작을 허용한다 → `"exit"`.
+ * - `routeContext === "(tabs)"` → `"native-back"` (canGoBack 무관). (tabs) 의 하드웨어 백은
+ *   expo-router 네이티브 네비게이션에 위임한다(R-NC4) — WebView 히스토리 back 이 아니다.
+ * - routeContext 미지정 또는 `"(auth)"` → 기존 동작 보존((auth)/login WebView back 유지, R-NC4):
+ *     · 히스토리가 있으면(canGoBack) WebView 를 뒤로 보낸다 → `"goBack"`.
+ *     · 히스토리가 없으면 기본 종료 동작을 허용한다 → `"exit"`.
  *
  * @param canGoBack WebView 네비게이션 히스토리 존재 여부(onNavigationStateChange 로 추적)
- * @returns `"goBack"` (WebView.goBack 호출 + 이벤트 소비) 또는 `"exit"` (기본 종료 허용)
+ * @param routeContext (optional) 현재 라우트 그룹 — "(tabs)" 면 네이티브 back 위임
+ * @returns `"native-back"` ((tabs) — expo-router 위임) | `"goBack"` (WebView.goBack + 소비) | `"exit"`
  */
-export function decideBackPress(canGoBack: boolean): "goBack" | "exit" {
+export function decideBackPress(
+  canGoBack: boolean,
+  routeContext?: "(tabs)" | "(auth)",
+): "goBack" | "exit" | "native-back" {
+  if (routeContext === "(tabs)") {
+    return "native-back"; // (R-NC4) expo-router 네이티브 back 으로 일원화.
+  }
   return canGoBack ? "goBack" : "exit";
 }
 

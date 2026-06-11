@@ -15,3 +15,21 @@ describe("decideBackPress (R-U1 / AC-S6: Android 백 핸들러 분기)", () => {
     expect(decideBackPress(false)).toBe("exit");
   });
 });
+
+// ── SPEC-MOBILE-003 route-context 확장 (R-NC4 / AC-6) — additive ────────────────────
+describe("decideBackPress — route-context 확장 (R-NC4 / AC-6: (tabs) 네이티브 back)", () => {
+  it("(tabs) 컨텍스트면 native-back (canGoBack 무관 — expo-router 네이티브 네비게이션 위임)", () => {
+    expect(decideBackPress(true, "(tabs)")).toBe("native-back");
+    expect(decideBackPress(false, "(tabs)")).toBe("native-back");
+  });
+
+  it("(auth) 컨텍스트는 기존 동작 보존 ((auth)/login WebView back 유지)", () => {
+    expect(decideBackPress(true, "(auth)")).toBe("goBack");
+    expect(decideBackPress(false, "(auth)")).toBe("exit");
+  });
+
+  it("routeContext 미지정(undefined)은 기존 동작 그대로 (회귀 0)", () => {
+    expect(decideBackPress(true)).toBe("goBack");
+    expect(decideBackPress(false)).toBe("exit");
+  });
+});

@@ -45,7 +45,7 @@ describe("resolveBridgeNavigation (R-O3/R-O4 / AC-S6: runOAuthBridge 콜백 경�
     expect(`${parsed.protocol}//${parsed.host}`).toBe(WEB_BASE);
     expect(parsed.pathname).toBe("/auth/callback");
     expect(parsed.searchParams.get("code")).toBe("pkce-code-123");
-    expect(parsed.searchParams.get("next")).toBe("/me");
+    expect(parsed.searchParams.get("next")).toBe("/home");
   });
 
   it("authenticated 이지만 code 누락이면 no-op (null — half-auth 방지, 미인증 유지)", () => {

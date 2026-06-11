@@ -60,7 +60,7 @@ describe("rewriteAuthorizeRedirect (R-O1/OD-5)", () => {
 });
 
 describe("buildWebCallbackUrl (R-O3/AC-O3)", () => {
-  it("deep-link 복귀 URL 의 code 를 웹 콜백 URL(?code=...&next=/me)로 조립한다", () => {
+  it("deep-link 복귀 URL 의 code 를 웹 콜백 URL(?code=...&next=/home)로 조립한다", () => {
     const returnUrl = "moyura://auth-callback?code=pkce-code-123";
     const webCallback = buildWebCallbackUrl(returnUrl, WEB_BASE);
 
@@ -69,7 +69,7 @@ describe("buildWebCallbackUrl (R-O3/AC-O3)", () => {
     expect(`${parsed.protocol}//${parsed.host}`).toBe(WEB_BASE);
     expect(parsed.pathname).toBe("/auth/callback");
     expect(parsed.searchParams.get("code")).toBe("pkce-code-123");
-    expect(parsed.searchParams.get("next")).toBe("/me");
+    expect(parsed.searchParams.get("next")).toBe("/home");
   });
 
   it("code 가 없으면 null 을 반환한다 (복구 가능 — half-auth 방지)", () => {
