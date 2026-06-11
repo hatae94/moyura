@@ -1,14 +1,68 @@
-// Next 16 Proxy — 매 요청 전에 Supabase 세션을 갱신한다(SPEC-AUTH-001 R-D3).
+// Next 16 Proxy — 매 요청 전에 Supabase 세션을 갱신한다(SPEC-AUTH-001 R-D3) +
+// per-request nonce 기반 Content-Security-Policy 를 적용한다(SPEC-MOBILE-002 R-T8/R-V2 — XSS 표면 축소).
 //
 // Next 16 부터 미들웨어 파일 컨벤션은 `proxy.ts`(export `proxy`)로 변경되었다(기능 동일,
 // `middleware.ts`/export `middleware` 는 deprecated). AGENTS.md 의 "heed deprecation notices"
 // 지침에 따라 현재 컨벤션을 사용한다. 정적 자산/이미지/파비콘은 세션 갱신이 불필요하므로 제외한다.
+//
+// CSP(R-T8 병행 보강): `script-src 'self' 'nonce-...' 'strict-dynamic'`(prod)로 인라인/서드파티
+// 스크립트 surface 를 축소해, 브리지 nonce(window.__MOYURA_BRIDGE_NONCE__)를 읽을 수 있는 XSS/공급망
+// 표면을 줄인다.
+//
+// [HARD] Next 공식 nonce 패턴(node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md):
+//   Next.js 는 *요청 헤더*의 `Content-Security-Policy` 에서 `'nonce-{value}'` 를 파싱해, 자신의
+//   프레임워크/hydration/chunk 스크립트에 그 nonce 를 자동 부여한다. 따라서 CSP 는 응답 헤더(브라우저용)뿐
+//   아니라 *요청 헤더에도* 반드시 설정해야 한다. 응답 헤더에만 두면 hydration 스크립트가 nonce 를 못 받아
+//   prod 에서 차단되거나(`'unsafe-inline'` 폴백 강제 → nonce 무력화) hydration 이 깨진다(N-1 결함).
+//   여기서는 nonce + CSP 문자열을 만들어 updateSession 에 넘기고, updateSession 이 supabase 세션 쿠키를
+//   보존한 채 요청 헤더에 CSP/x-nonce 를 주입(NextResponse.next({ request: { headers } }))한다.
 import type { NextRequest } from "next/server";
 
 import { updateSession } from "@/lib/supabase/middleware";
 
+/** Web Crypto 로 per-request CSP nonce(base64)를 생성한다(Edge 런타임 호환, CSPRNG). */
+function generateCspNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+/**
+ * per-request nonce 기반 CSP 정책 문자열을 만든다(R-T8 병행 — XSS 표면 축소).
+ *
+ * - prod: `script-src 'self' 'nonce-...' 'strict-dynamic'`. `'strict-dynamic'` 은 nonce 로
+ *   신뢰된 스크립트가 동적으로 주입하는 후속 스크립트(Next 의 chunk loader 등)까지 신뢰를 전파해,
+ *   host 화이트리스트 없이도 프레임워크 코드 스플리팅이 동작하게 한다(Next 공식 권장).
+ * - dev: HMR/React eval 디버깅을 위해 `'unsafe-eval' 'unsafe-inline'` 을 추가한다(prod 미적용).
+ * - style-src: Tailwind/Next 폰트(next/font)·인라인 스타일 변수가 인라인 <style>/style 속성을 내보내므로
+ *   `'unsafe-inline'` 을 유지한다(잔여 caveat — 토큰 exfiltration 벡터로는 약함, 보고서 참조).
+ */
+function buildCsp(nonce: string): string {
+  const isDev = process.env.NODE_ENV !== "production";
+  const scriptSrc = isDev
+    ? `'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval' 'unsafe-inline'`
+    : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
+  return [
+    `default-src 'self'`,
+    `script-src ${scriptSrc}`,
+    `style-src 'self' 'unsafe-inline'`,
+    `img-src 'self' data: blob: https:`,
+    `font-src 'self' data:`,
+    `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}`.trim(),
+    `frame-ancestors 'self'`,
+    `base-uri 'self'`,
+    `form-action 'self'`,
+    `object-src 'none'`,
+  ].join("; ");
+}
+
 export async function proxy(request: NextRequest) {
-  return updateSession(request);
+  // R-T8/R-V2: per-request nonce + CSP 를 만들어 updateSession 에 넘긴다.
+  // updateSession 이 (1) 요청 헤더에 CSP/x-nonce 주입(Next 가 nonce 를 자기 스크립트에 적용),
+  // (2) supabase 세션 쿠키 보존, (3) 응답 헤더에 CSP 부착을 모두 수행한다.
+  const nonce = generateCspNonce();
+  const csp = buildCsp(nonce);
+  return updateSession(request, { nonce, csp });
 }
 
 export const config = {
