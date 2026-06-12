@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@react-native-cookies/cookies':
+    hash: ec064f4a202698a202758abc5b5d8deafb70ffb31585c78608d257295d731b9a
+    path: patches/@react-native-cookies__cookies.patch
   expo-modules-jsi:
     hash: 52a908e62cb192f28be34308f64dc3d233d07a51e81d7d6307a53ad1cf90043e
     path: patches/expo-modules-jsi.patch
@@ -157,7 +160,7 @@ importers:
         version: link:../../packages/api-client
       '@react-native-cookies/cookies':
         specifier: ^6.2.1
-        version: 6.2.1(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))
+        version: 6.2.1(patch_hash=ec064f4a202698a202758abc5b5d8deafb70ffb31585c78608d257295d731b9a)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))
       expo:
         specifier: ~56.0.6
         version: 56.0.8(@babel/core@7.29.7)(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.15)(expo-router@56.2.10)(react-dom@19.2.4(react@19.2.3))(react-native-webview@13.16.1(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(react-native-worklets@0.9.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -10108,7 +10111,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.15
 
-  '@react-native-cookies/cookies@6.2.1(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))':
+  '@react-native-cookies/cookies@6.2.1(patch_hash=ec064f4a202698a202758abc5b5d8deafb70ffb31585c78608d257295d731b9a)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))':
     dependencies:
       invariant: 2.2.4
       react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3)
@@ -10262,9 +10265,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 

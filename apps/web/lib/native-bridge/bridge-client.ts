@@ -165,6 +165,135 @@ export function installNativeTokenBridge(): () => void {
   return () => window.removeEventListener("message", onMessage);
 }
 
+// 직전에 announce 한 access_token 을 모듈 스코프에 기억해 중복 발신을 줄인다(F1/F1' 공용).
+// 네이티브 save 분기는 멱등이므로 이는 *정확성*이 아니라 *노이즈 감소*다 — onAuthStateChange announcer 와
+// (main) mount announcer 두 경로가 동일 토큰으로 중복 announce 하는 것을 막는다(예: 갱신 없는 라우트 재방문).
+let lastAnnouncedAccessToken: string | null = null;
+
+/**
+ * 셸 모드 한정 — 토큰을 네이티브로 session:synced push 한다(F1/F1' 공용 헬퍼).
+ *
+ * 보안 HARD 제약(약화 금지): v1 프로토콜만(serializeSyncedMessage), nonce 필수(미확립 시 silent skip),
+ *   토큰 값 미로깅, ReactNativeWebView 채널로만 post. dedupe(lastAnnouncedAccessToken)로 중복 억제.
+ *
+ * @param bridge 네이티브 브리지(getNativeBridge 가 셸 모드에서만 반환).
+ * @param access 회신할 access token.
+ * @param refresh 회신할 refresh token.
+ */
+function announceTokens(
+  bridge: ReactNativeWebViewBridge,
+  access: string,
+  refresh: string,
+): void {
+  const nonce = getExpectedNonce();
+  if (!nonce) {
+    return; // nonce 미확립 — skip(네이티브 restore/타임아웃 경로가 콜드스타트를 여전히 커버).
+  }
+  if (access === lastAnnouncedAccessToken) {
+    return; // 이미 동일 토큰을 announce 함 — 중복 억제(멱등이라 노이즈 감소 목적).
+  }
+  lastAnnouncedAccessToken = access;
+  // 기존 v1 직렬화 + nonce 동봉(토큰 값 미로깅). 네이티브가 SecureStore 시딩 + isSignedIn 전환.
+  postToNative(bridge, serializeSyncedMessage({ access, refresh }, nonce));
+}
+
+/**
+ * 셸 모드(WebView) 한정 웹→네이티브 로그인 announcement 를 설치한다(SPEC-MOBILE-003 F1 — D-V2 수정).
+ * 일반 브라우저에서는 no-op(R-T4).
+ *
+ * 적용 범위(중요): 이 onAuthStateChange 경로는 *클라이언트 측* auth state 전이(TOKEN_REFRESHED 자동 갱신,
+ *   향후 client-side signInWithPassword 등)를 커버한다. 단, 이메일 로그인은 SERVER ACTION 으로 서버에서
+ *   세션을 확립하므로 브라우저 클라이언트가 SIGNED_IN 을 발생시키지 않는다 — 그 경로는 announceSessionFromCookies
+ *   ((main) mount)가 보강한다(F1'). 둘은 additive 이며 dedupe 를 공유한다.
+ *
+ * 보안(SPEC-MOBILE-002 surface — 약화 금지):
+ *   - 프로토콜 v1 빌더 재사용(serializeSyncedMessage) — 신규 메시지 type/버전 없음.
+ *   - per-session nonce 동봉(미확립이면 skip — 네이티브 decideInboundAction 은 nonce 불일치 시 거부).
+ *   - 토큰 값 미로깅(postMessage 로만 전달).
+ *   - ReactNativeWebView 채널로만 post(데스크톱은 getNativeBridge null → no-op).
+ *
+ * 멱등성(duplicate-synced 분석): 네이티브 onMessage 의 save 분기(useAuthBridge.ts)는
+ *   ack 세팅·재시도타이머 정리·saveTokens(동일 토큰 덮어쓰기)·핸드셰이크 해제·onAuthSignal(synced) 로
+ *   전부 멱등하다. 따라서 announcement 의 synced 와 (콜드스타트) restore-응답의 synced 가 모두 도착해도
+ *   무해하다 — 두 번째는 동일 토큰 재저장·isSignedIn=true 재확정일 뿐이다.
+ *
+ * @returns 구독 해제 함수(컴포넌트 unmount cleanup). 브리지 없으면 no-op cleanup.
+ */
+export function installSessionAnnouncer(): () => void {
+  const bridge = getNativeBridge();
+  if (!bridge) {
+    return () => undefined; // 일반 브라우저 — 미설치(순수 웹 무영향, R-T4).
+  }
+
+  const supabase = createClient();
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    // 로그인 확립/토큰 갱신 시점에만 announce(SIGNED_OUT/INITIAL_SESSION 등은 무시 — 토큰 누설 방지).
+    if (event !== "SIGNED_IN" && event !== "TOKEN_REFRESHED") {
+      return;
+    }
+    const access = session?.access_token;
+    const refresh = session?.refresh_token;
+    if (!access || !refresh) {
+      return; // 이벤트에 토큰 부재 — skip(불완전 synced 미발신).
+    }
+    announceTokens(bridge, access, refresh);
+  });
+
+  return () => subscription.unsubscribe();
+}
+
+/**
+ * 셸 모드 한정 — 쿠키 세션을 읽어 네이티브로 session:synced 를 push 한다(SPEC-MOBILE-003 F1' — D-V2 재수정).
+ * 일반 브라우저면 no-op(R-T4).
+ *
+ * 배경(F1 의 onAuthStateChange announcer 가 안 먹은 이유): 이메일 로그인은 SERVER ACTION(signInAction)
+ *   으로 *서버에서* signInWithPassword → 쿠키 세션을 확립한다. 브라우저 supabase 클라이언트는 로그인을
+ *   수행하지 않으므로 WebView 안에서 onAuthStateChange 가 SIGNED_IN 을 발생시키지 않는다 → F1 announcer
+ *   미발화 → 네이티브가 토큰을 못 받아 (tabs) 미마운트. (main) 진입 = 서버 검증 세션 보장((main) 가드가
+ *   세션 없으면 /login redirect)이므로, (main) mount 시 쿠키 세션을 읽어 직접 핸드오버한다.
+ *
+ * 동작: getNativeBridge() 셸 가드 → supabase 브라우저 클라이언트 getSession()(@supabase/ssr 가
+ *   document.cookie 폴백으로 쿠키 세션을 읽음) → access/refresh 보유 시 announceTokens 로 push.
+ *   (main) mount/soft-nav 마다 재실행되어도 dedupe 로 중복 발신은 억제된다.
+ *
+ * 보안(F1 과 동일 HARD 제약 — announceTokens 가 강제): v1 프로토콜만, nonce 필수(미확립 시 silent skip),
+ *   토큰 값 미로깅, ReactNativeWebView 채널로만 post, 데스크톱 no-op.
+ *
+ * @returns cleanup(in-flight 무시용). 브리지 없으면 no-op cleanup.
+ */
+export function announceSessionFromCookies(): () => void {
+  const bridge = getNativeBridge();
+  if (!bridge) {
+    return () => undefined; // 일반 브라우저 — no-op(R-T4).
+  }
+
+  let cancelled = false;
+  void (async () => {
+    try {
+      const supabase = createClient();
+      // @supabase/ssr 브라우저 클라이언트는 document.cookie 폴백으로 서버가 세팅한 쿠키 세션을 읽는다.
+      const { data, error } = await supabase.auth.getSession();
+      if (cancelled || error) {
+        return;
+      }
+      const access = data.session?.access_token;
+      const refresh = data.session?.refresh_token;
+      if (!access || !refresh) {
+        return; // 세션/토큰 부재 — skip((main) 가드가 정상이면 도달하기 어렵다).
+      }
+      announceTokens(bridge, access, refresh);
+    } catch {
+      // getSession 네트워크/런타임 예외 — silent(announce 생략). 토큰/에러 내용 미노출(R-V2).
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}
+
 /**
  * 로그아웃 시 네이티브에 session:cleared 를 1회 post 한다(R-R2/OD-10). 일반 브라우저면 no-op(R-T4).
  *

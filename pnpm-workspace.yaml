@@ -13,4 +13,5 @@ onlyBuiltDependencies:
   - msgpackr-extract
 
 patchedDependencies:
+  '@react-native-cookies/cookies': patches/@react-native-cookies__cookies.patch
   expo-modules-jsi: patches/expo-modules-jsi.patch
