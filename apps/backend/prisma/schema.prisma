@@ -36,8 +36,33 @@ model Moim {
   createdBy String       @map("created_by")
   createdAt DateTime     @default(now()) @map("created_at")
   members   MoimMember[]
+  // SPEC-MOIM-002 X-3: 초대 역참조(additive). moim 테이블 자체는 무변경 — moim_invite만 신규 CREATE.
+  invites   MoimInvite[]
 
   @@map("moim")
+}
+
+// SPEC-MOIM-002 초대 링크(REQ-INV-001~006). 모임당 다중 초대 + 만료(기본 7일/상한 30일) + 선택적 max_uses + revoke.
+// token은 추측 불가(≥128-bit, crypto.randomBytes(32)=256-bit) @unique — 수락은 token으로만 조회한다.
+// 상태 = (revokedAt null? + expiresAt > now? + usedCount < maxUses?) 조합으로 service가 판정한다(404/410/409).
+model MoimInvite {
+  id        String    @id @default(uuid())
+  moimId    String    @map("moim_id")
+  // 추측 불가 초대 토큰(base64url(32 bytes)). 수락 경로의 유일한 조회 키.
+  token     String    @unique
+  // 만료 시각(필수). 발급 시 기본 now+7d, owner 조정 가능하되 상한 now+30d(REQ-INV-001).
+  expiresAt DateTime  @map("expires_at")
+  // 선택적 사용 횟수 제한. null이면 무제한. 초과 수락은 409(REQ-INV-006).
+  maxUses   Int?      @map("max_uses")
+  // 수락 성공 시마다 1 증가(조건부 원자 증가로 maxUses 초과 방지).
+  usedCount Int       @default(0) @map("used_count")
+  // 폐기 시각. 설정되면 이후 수락은 410(REQ-INV-003 / AC-3c).
+  revokedAt DateTime? @map("revoked_at")
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  moim      Moim      @relation(fields: [moimId], references: [id], onDelete: Cascade)
+
+  @@map("moim_invite")
 }
 
 // 멤버십 데이터(누가 어느 모임의 멤버인가) + 모임별 표시 이름(nickname).

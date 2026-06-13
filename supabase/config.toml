@@ -181,7 +181,9 @@ refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
 enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
-enable_anonymous_sign_ins = false
+# SPEC-MOIM-002 REQ-INV-007: 게스트가 회원가입 없이 익명 로그인(signInAnonymously)으로 실제 sub를 받아
+# 초대 수락 가입 경로를 사용한다. 가드/profile/FK/RLS는 모두 무수정으로 동작한다.
+enable_anonymous_sign_ins = true
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.

@@ -306,6 +306,214 @@
           "moims"
         ]
       }
+    },
+    "/moims/{moimId}/invites": {
+      "post": {
+        "operationId": "MoimInviteController_create",
+        "parameters": [
+          {
+            "name": "moimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInviteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "초대 발급(owner 전용)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 owner가 아님 — 403"
+          },
+          "404": {
+            "description": "존재하지 않는 모임 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invites"
+        ]
+      },
+      "get": {
+        "operationId": "MoimInviteController_list",
+        "parameters": [
+          {
+            "name": "moimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "초대 목록(owner 전용, live 토큰 포함)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InviteResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 owner가 아님 — 403"
+          },
+          "404": {
+            "description": "존재하지 않는 모임 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invites"
+        ]
+      }
+    },
+    "/moims/{moimId}/invites/{inviteId}": {
+      "delete": {
+        "operationId": "MoimInviteController_revoke",
+        "parameters": [
+          {
+            "name": "moimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "inviteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "초대 폐기(owner 전용)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 owner가 아님 — 403"
+          },
+          "404": {
+            "description": "존재하지 않는 모임/초대 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invites"
+        ]
+      }
+    },
+    "/invites/{token}/accept": {
+      "post": {
+        "operationId": "InviteAcceptController_accept",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInviteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "초대 수락 + 멤버십 생성(멱등)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptInviteResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "404": {
+            "description": "미지 토큰 — 404"
+          },
+          "409": {
+            "description": "사용 횟수 초과 — 409"
+          },
+          "410": {
+            "description": "만료·폐기 토큰 — 410"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invites"
+        ]
+      }
     }
   },
   "info": {
@@ -450,6 +658,104 @@
           "nickname",
           "role",
           "joinedAt"
+        ]
+      },
+      "CreateInviteDto": {
+        "type": "object",
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "description": "만료 시각(ISO-8601). 미지정 시 발급 시점 +7일. 상한 +30일(초과 400).",
+            "example": "2026-06-21T00:00:00.000Z"
+          },
+          "maxUses": {
+            "type": "number",
+            "description": "선택적 사용 횟수 제한(1 이상의 정수). 미지정 시 무제한.",
+            "example": 5
+          }
+        }
+      },
+      "InviteResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "초대 id(uuid)",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          },
+          "moimId": {
+            "type": "string",
+            "description": "대상 모임 id",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          },
+          "token": {
+            "type": "string",
+            "description": "추측 불가 초대 토큰(base64url, ≥128-bit). 수락 링크에 사용한다.",
+            "example": "k3J9_aZ...base64url43chars"
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "만료 시각(ISO-8601)",
+            "example": "2026-06-21T00:00:00.000Z"
+          },
+          "maxUses": {
+            "type": "number",
+            "description": "사용 횟수 제한(null이면 무제한)",
+            "example": 5,
+            "nullable": true
+          },
+          "usedCount": {
+            "type": "number",
+            "description": "현재 사용 횟수",
+            "example": 0
+          },
+          "revokedAt": {
+            "type": "string",
+            "description": "폐기 시각(ISO-8601). null이면 미폐기(유효).",
+            "example": null,
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "발급 시각(ISO-8601)",
+            "example": "2026-06-14T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "moimId",
+          "token",
+          "expiresAt",
+          "maxUses",
+          "usedCount",
+          "revokedAt",
+          "createdAt"
+        ]
+      },
+      "AcceptInviteDto": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "description": "수락자의 모임별 표시 이름(비어 있을 수 없음)",
+            "example": "게스트1"
+          }
+        },
+        "required": [
+          "nickname"
+        ]
+      },
+      "AcceptInviteResponseDto": {
+        "type": "object",
+        "properties": {
+          "moimId": {
+            "type": "string",
+            "description": "가입한 모임 id(웹 랜딩이 /moims/:id/chat 리다이렉트에 사용)",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          }
+        },
+        "required": [
+          "moimId"
         ]
       }
     }

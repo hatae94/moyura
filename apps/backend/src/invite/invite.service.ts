@@ -1,0 +1,226 @@
+import { randomBytes } from 'node:crypto';
+import {
+  BadRequestException,
+  ConflictException,
+  GoneException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '../generated/prisma/client';
+import type { MoimInvite } from '../generated/prisma/client';
+import { MoimService } from '../moim/moim.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+// 수락자에게 부여되는 멤버십 role(REQ-INV-005 — 항상 member, per-invite 역할은 비범위).
+const ROLE_MEMBER = 'member';
+// Prisma 고유 제약 위반 코드 — 동시 same-sub 수락 경합 시 두 번째 멤버십 create가 복합 PK 중복으로 던진다.
+const PRISMA_UNIQUE_VIOLATION = 'P2002';
+// 초대 토큰 엔트로피: 32바이트 = 256-bit(가정 ≥128-bit를 상회). base64url 인코딩.
+const TOKEN_BYTES = 32;
+const DAY_MS = 24 * 60 * 60 * 1000;
+// 기본 만료(발급 시점 +7일) / 만료 상한(발급 시점 +30일, 무기한 금지 — 토큰 노출 창 제한, REQ-INV-001).
+const DEFAULT_EXPIRY_DAYS = 7;
+const MAX_EXPIRY_DAYS = 30;
+
+// create() 입력(컨트롤러가 가드-검증 sub와 함께 전달). expiresAt/maxUses는 선택적.
+export interface CreateInviteInput {
+  expiresAt?: string;
+  maxUses?: number;
+}
+
+@Injectable()
+export class InviteService {
+  constructor(
+    private readonly prisma: PrismaService,
+    // @MX:NOTE: [AUTO] owner 인가는 MOIM-001 MoimService.assertOwner 단일 출처를 재사용한다(재구현 금지).
+    // "모임 없음 → 404, owner 아님 → 403" 판정이 한 곳에 모여 드리프트를 막는다. 발급/목록/폐기 3개 관리
+    // 경로가 모두 이 계약에 의존한다. 목록(list)은 live 토큰을 응답에 담으므로 owner 전용이어야 한다(REQ-INV-004).
+    private readonly moim: MoimService,
+  ) {}
+
+  // 초대 발급(REQ-INV-001 / AC-1). owner 전용 — assertOwner가 비-owner를 403으로 거른다.
+  async create(
+    sub: string,
+    moimId: string,
+    input: CreateInviteInput,
+  ): Promise<MoimInvite> {
+    // owner 인가 단일 출처 재사용(비-owner/없는 모임은 여기서 403/404).
+    await this.moim.assertOwner(sub, moimId);
+
+    const now = Date.now();
+    const expiresAt = this.resolveExpiry(input.expiresAt, now);
+    const maxUses = this.resolveMaxUses(input.maxUses);
+
+    return this.prisma.moimInvite.create({
+      data: {
+        moimId,
+        token: generateToken(),
+        expiresAt,
+        maxUses,
+        usedCount: 0,
+        revokedAt: null,
+        createdBy: sub,
+      },
+    });
+  }
+
+  // 초대 목록 조회(REQ-INV-002 / AC-6). owner 전용 — 응답이 live 토큰을 담으므로 비-owner는 403(REQ-INV-004).
+  async list(sub: string, moimId: string): Promise<MoimInvite[]> {
+    await this.moim.assertOwner(sub, moimId);
+    return this.prisma.moimInvite.findMany({ where: { moimId } });
+  }
+
+  // 초대 폐기(REQ-INV-003 / AC-4). owner 전용 — revokedAt를 설정한다. 이후 수락은 410(AC-3c).
+  async revoke(
+    sub: string,
+    moimId: string,
+    inviteId: string,
+  ): Promise<MoimInvite> {
+    // owner 인가(없는 모임 404 / 비-owner 403)를 먼저 판정한다.
+    await this.moim.assertOwner(sub, moimId);
+    // 초대가 해당 모임 소속인지 확인 — 없거나 다른 모임이면 404(모임-초대 불일치 노출 방지).
+    const invite = await this.prisma.moimInvite.findUnique({
+      where: { id: inviteId },
+    });
+    if (!invite || invite.moimId !== moimId) {
+      throw new NotFoundException();
+    }
+    // 이미 폐기된 초대 재폐기도 멱등하게 허용(revokedAt 갱신).
+    return this.prisma.moimInvite.update({
+      where: { id: inviteId },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  // @MX:ANCHOR: [AUTO] 게스트 가입의 단일 진입점(REQ-INV-005/006). 웹 랜딩(T-009)이 이 계약에 의존하며,
+  // 토큰 검증·멱등·고정 실패 코드(404/410/409)·usedCount 원자 증가가 모두 여기서 결정된다(fan_in: 컨트롤러+웹).
+  // @MX:REASON: "유효 토큰만 멤버십을 만들고 usedCount를 정확히 1 증가시킨다"는 불변식의 유일한 출처.
+  // 멤버십 create와 usedCount 증가는 한 $transaction에 묶여 원자적이며, 조건부 updateMany(count==0 → 롤백)로
+  // max_uses 경계 동시 수락을 초과 없이 거른다(409). 이미 멤버면 증가/생성 없이 200(멱등) — usedCount 불변.
+  async accept(
+    sub: string,
+    token: string,
+    nickname: string,
+  ): Promise<MoimInvite> {
+    // 입력 검증(ValidationPipe 부재 — MOIM-001 requireNonEmpty 패턴). nickname 비어 있으면 400, 부작용 없음.
+    const trimmed = requireNonEmpty(nickname);
+
+    const invite = await this.prisma.moimInvite.findUnique({
+      where: { token },
+    });
+    // 미지 토큰 → 404(존재 여부만 노출, 모임 정보는 노출하지 않음).
+    if (!invite) {
+      throw new NotFoundException();
+    }
+    const now = Date.now();
+    // 폐기/만료는 초대 자체가 죽은 상태 → 멤버 여부와 무관하게 410(REQ-INV-006).
+    if (invite.revokedAt !== null) {
+      throw new GoneException('폐기된 초대입니다');
+    }
+    if (invite.expiresAt.getTime() <= now) {
+      throw new GoneException('만료된 초대입니다');
+    }
+
+    // 멱등 선검사: 이미 멤버면 중복 생성·usedCount 증가 없이 200 반환(AC-7).
+    // usedCount 초과(409) 검사보다 먼저 둔다 — 한도 소진 초대로 기존 멤버가 재수락해도 409가 아니라 200.
+    const existing = await this.prisma.moimMember.findUnique({
+      where: { moimId_userId: { moimId: invite.moimId, userId: sub } },
+    });
+    if (existing) {
+      return invite;
+    }
+
+    // 신규 가입에 한해 usedCount 초과면 409 + 멤버십 미생성 + usedCount 불변(REQ-INV-006 / AC-3d).
+    if (invite.maxUses !== null && invite.usedCount >= invite.maxUses) {
+      throw new ConflictException('초대 사용 횟수를 초과했습니다');
+    }
+
+    // 멤버십 create + usedCount 조건부 원자 증가를 한 트랜잭션으로 묶는다.
+    return this.prisma.$transaction(async (tx) => {
+      try {
+        await tx.moimMember.create({
+          data: {
+            moimId: invite.moimId,
+            userId: sub,
+            nickname: trimmed,
+            role: ROLE_MEMBER,
+          },
+        });
+      } catch (err) {
+        // 동시 same-sub 수락 경합: 두 사용자가 멱등 선검사를 동시에 통과한 뒤 두 번째 create가
+        // 복합 PK(moimId,userId) 유일성 위반(P2002)으로 던진다 → 멱등 성공으로 처리한다(AC-7 의도).
+        // usedCount는 증가시키지 않고(중복은 슬롯 소비 아님) 원본 invite를 반환한다.
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === PRISMA_UNIQUE_VIOLATION
+        ) {
+          return invite;
+        }
+        throw err;
+      }
+      // 조건부 증가: revokedAt null + (maxUses null OR usedCount < maxUses)일 때만 count=1.
+      // 동시 수락이 먼저 한도를 채웠다면 count=0 → 트랜잭션을 롤백하고 409(초과)로 거른다.
+      const limit = invite.maxUses;
+      const updated = await tx.moimInvite.updateMany({
+        where: {
+          id: invite.id,
+          revokedAt: null,
+          OR:
+            limit === null
+              ? [{ maxUses: null }]
+              : [{ maxUses: null }, { usedCount: { lt: limit } }],
+        },
+        data: { usedCount: { increment: 1 } },
+      });
+      if (updated.count === 0) {
+        // 동시 경합으로 한도 소진 → 멤버십 create 롤백 + 409(AC-3d 경계 동시성).
+        throw new ConflictException('초대 사용 횟수를 초과했습니다');
+      }
+      return { ...invite, usedCount: invite.usedCount + 1 };
+    });
+  }
+
+  // 만료 시각 해석: 미지정 시 now+7d, 지정 시 상한(now+30d) 검사(초과 400).
+  private resolveExpiry(raw: string | undefined, now: number): Date {
+    if (raw === undefined) {
+      return new Date(now + DEFAULT_EXPIRY_DAYS * DAY_MS);
+    }
+    const at = new Date(raw);
+    if (Number.isNaN(at.getTime())) {
+      throw new BadRequestException('expiresAt 형식이 올바르지 않습니다');
+    }
+    if (at.getTime() > now + MAX_EXPIRY_DAYS * DAY_MS) {
+      // 무기한 금지 — 토큰 노출 창을 30일로 제한한다(REQ-INV-001 상한).
+      throw new BadRequestException(
+        'expiresAt 상한(30일)을 초과할 수 없습니다',
+      );
+    }
+    return at;
+  }
+
+  // maxUses 해석: 미지정 시 null(무제한), 지정 시 양의 정수만 허용(아니면 400).
+  private resolveMaxUses(raw: number | undefined): number | null {
+    if (raw === undefined) {
+      return null;
+    }
+    if (!Number.isInteger(raw) || raw < 1) {
+      throw new BadRequestException('maxUses는 1 이상의 정수여야 합니다');
+    }
+    return raw;
+  }
+}
+
+// @MX:WARN: [AUTO] 초대 토큰 생성 — 반드시 CSPRNG(crypto.randomBytes)만 사용한다.
+// @MX:REASON: 토큰은 가입의 유일한 자격증명이므로 Math.random 등 약한 RNG로 교체하면 추측·열거가 가능해져
+// 무단 가입으로 직결된다. 32바이트(256-bit) base64url로 ≥128-bit 엔트로피 가정(REQ-INV-001)을 보장한다.
+function generateToken(): string {
+  return randomBytes(TOKEN_BYTES).toString('base64url');
+}
+
+// nickname이 trim 후 비어 있으면 400(ValidationPipe 부재 보완 — MOIM-001 controller 패턴 동일).
+function requireNonEmpty(value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new BadRequestException('nickname은(는) 비어 있을 수 없습니다');
+  }
+  return value.trim();
+}
