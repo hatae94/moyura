@@ -13,6 +13,20 @@
 | `20260602095934_init_profile` | 2026-06-02 | `profile` 테이블 생성 — Supabase sub PK, SPEC-AUTH-001 |
 | `20260613155202_add_moim` | 2026-06-13 | `moim` + `moim_member` 테이블 생성, moim_member → moim FK onDelete Cascade, SPEC-MOIM-001 |
 | `20260613171209_add_moim_invite` | 2026-06-13 | `moim_invite` 테이블 생성 — token PK, moim_id FK onDelete Cascade, @@index(moimId), SPEC-MOIM-002 |
+| `20260613175232_add_chat` | 2026-06-14 | `chat_message` 테이블(BigInt PK, moim_id FK Cascade, @@index(moimId, id desc)) + **수동 SQL**: content CHECK(1..2000), chat_message RLS enable(default deny), `broadcast_chat_message()` security-definer 함수, `chat_message_broadcast` AFTER INSERT 트리거, `realtime.messages` SELECT 정책(멤버십 게이트). SPEC-CHAT-001 |
+
+### SPEC-CHAT-001 수동 SQL 주의 (R-6 드리프트)
+
+`20260613175232_add_chat/migration.sql`은 Prisma 스키마로 표현 불가한 수동 SQL을 포함한다(트리거/RLS/CHECK). `prisma migrate diff`에 잡히지 않으므로 스키마 변경 시 수동으로 동기화한다:
+
+- **content CHECK**: `chat_message_content_length` — `char_length(content) BETWEEN 1 AND 2000`. DTO 400 검증과 이중 강제(최종 방어선).
+- **chat_message RLS**: `ENABLE ROW LEVEL SECURITY` + 정책 없음 = default deny. Prisma는 postgres 롤로 직접 연결되어 영향 없음(쓰기 인가 = NestJS 서비스 레이어). 용도: anon/authenticated PostgREST 직접 접근 차단.
+- **broadcast_chat_message()**: `SECURITY DEFINER`, `realtime.broadcast_changes('moim:'||moim_id, 'INSERT','INSERT','chat_message','public', NEW, NULL)` 7-arg 호출. private 토픽으로 메시지 레코드만 전파(nickname 미포함 — thin trigger).
+- **chat_message_broadcast**: `AFTER INSERT FOR EACH ROW` 트리거.
+- **realtime.messages SELECT 정책**: `moim_member` 조회로 구독 인가(토픽 `moim:`||moim_id 일치 + `auth.uid()` 멤버). 비멤버 구독 거부(AC-4).
+- **shadow DB 가드**: `realtime`/`auth` 스키마는 Supabase 스택 DB에만 존재하고 Prisma shadow DB(vanilla Postgres)에는 없다. `realtime.messages` 정책은 `to_regnamespace('realtime')` 가드 DO 블록으로 감싸 shadow 검증을 통과시킨다(실 DB에서만 생성).
+
+검증(psql 존재 단언): `broadcast_chat_message` 함수, `chat_message_broadcast` 트리거, `realtime.messages` SELECT 정책, `chat_message.relrowsecurity=true`, `chat_message_content_length` CHECK 모두 존재 확인(2026-06-14).
 
 ---
 
@@ -24,6 +38,7 @@
 |----------|-----------|-------------|-----------|
 | `20260613155202_add_moim` | 2026-06-13 | prod DB에 모임 테이블 추가 필요 | Yes (prod 배포 시) |
 | `20260613171209_add_moim_invite` | 2026-06-13 | prod DB에 초대 테이블 추가 필요 | Yes (prod 배포 시) |
+| `20260613175232_add_chat` | 2026-06-14 | prod DB에 채팅 테이블 + 트리거/RLS 추가 필요 (prod realtime/auth 스키마 존재 전제) | Yes (prod 배포 시) |
 
 ---
 
@@ -31,6 +46,7 @@
 
 | Migration | Risk Level | Rollback Steps | Data Loss? |
 |-----------|-----------|----------------|------------|
+| `20260613175232_add_chat` | Low | `DROP TRIGGER chat_message_broadcast ON chat_message; DROP FUNCTION broadcast_chat_message(); DROP POLICY "members can receive moim broadcasts" ON realtime.messages; DROP TABLE chat_message;` | chat_message 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260613171209_add_moim_invite` | Low | `DROP TABLE moim_invite;` | moim_invite 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260613155202_add_moim` | Low | `DROP TABLE moim_member; DROP TABLE moim;` | moim/moim_member 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260602095934_init_profile` | Low | `DROP TABLE profile;` | profile 데이터 손실 |

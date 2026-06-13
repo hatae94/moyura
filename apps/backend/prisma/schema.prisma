@@ -38,6 +38,8 @@ model Moim {
   members   MoimMember[]
   // SPEC-MOIM-002 X-3: 초대 역참조(additive). moim 테이블 자체는 무변경 — moim_invite만 신규 CREATE.
   invites   MoimInvite[]
+  // SPEC-CHAT-001 T-001: 채팅 메시지 역참조(additive). moim 테이블 자체는 무변경 — chat_message만 신규 CREATE.
+  messages  ChatMessage[]
 
   @@map("moim")
 }
@@ -81,4 +83,22 @@ model MoimMember {
 
   @@id([moimId, userId])
   @@map("moim_member")
+}
+
+// SPEC-CHAT-001 모임 채팅 메시지(REQ-CHAT-001/003). insert-only(수정/삭제 비범위 — spec §5).
+// PK는 BigInt autoincrement — 단조 증가 식별자로 keyset 커서(내림차순/최신순)의 안정 정렬 기준이 된다(REQ-CHAT-003).
+// 주의: BigInt PK는 NestJS JSON 직렬화 불가 → 응답 DTO에서 id.toString()으로 매핑한다(T-006).
+// content 길이 제한은 DTO(400) + DB CHECK(마이그레이션 수동 SQL)로 이중 강제한다.
+model ChatMessage {
+  id        BigInt   @id @default(autoincrement())
+  moimId    String   @map("moim_id")
+  // 발신자 sub(= profile.id). 검증된 sub만 들어온다(mass-assignment 차단 — profile/moim 패턴 동일).
+  senderId  String   @map("sender_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  moim      Moim     @relation(fields: [moimId], references: [id], onDelete: Cascade)
+
+  // keyset 페이지네이션 인덱스: (moimId, id desc)로 모임별 최신순 조회를 커버한다.
+  @@index([moimId, id(sort: Desc)])
+  @@map("chat_message")
 }

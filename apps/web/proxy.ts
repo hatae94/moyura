@@ -37,18 +37,44 @@ function generateCspNonce(): string {
  * - style-src: Tailwind/Next 폰트(next/font)·인라인 스타일 변수가 인라인 <style>/style 속성을 내보내므로
  *   `'unsafe-inline'` 을 유지한다(잔여 caveat — 토큰 exfiltration 벡터로는 약함, 보고서 참조).
  */
+/**
+ * SPEC-CHAT-001 R-2: Realtime WebSocket(wss://) 연결을 허용할 connect-src 토큰을 만든다.
+ *
+ * 보안(MEDIUM-SEC): `wss:` 전체 스킴을 열면 임의 wss 호스트로의 연결을 허용해 토큰 exfiltration 표면이
+ * 생긴다. NEXT_PUBLIC_SUPABASE_URL이 있으면 그 호스트로 핀(`wss://<host>`)해 Supabase Realtime만 허용한다.
+ * URL이 없거나 파싱 불가하면(부팅 가드는 별도 — env.ts) bare `wss:`로 폴백하되, try/catch로 CSP 빌드는
+ * 절대 throw하지 않는다(미들웨어 전 요청 차단 방지).
+ */
+function realtimeWssSource(supabaseUrl: string | undefined): string {
+  if (!supabaseUrl) {
+    return "wss:";
+  }
+  try {
+    return `wss://${new URL(supabaseUrl).host}`;
+  } catch {
+    // 파싱 불가(잘못된 URL) — CSP 빌드를 깨뜨리지 않도록 bare wss:로 안전 폴백.
+    return "wss:";
+  }
+}
+
 function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV !== "production";
   const scriptSrc = isDev
     ? `'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval' 'unsafe-inline'`
     : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  // Supabase Realtime broadcast 구독은 wss://로 연결한다. http(s) origin + 호스트-핀 wss origin 둘 다 허용한다.
+  const wssSource = realtimeWssSource(
+    supabaseUrl === "" ? undefined : supabaseUrl,
+  );
   return [
     `default-src 'self'`,
     `script-src ${scriptSrc}`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: blob: https:`,
     `font-src 'self' data:`,
-    `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}`.trim(),
+    // SPEC-CHAT-001 R-2 + MEDIUM-SEC: 기존 http(s) Supabase origin + 호스트-핀 wss origin(open-wss 표면 제거).
+    `connect-src 'self' ${wssSource} ${supabaseUrl}`.trim().replace(/\s+/g, " "),
     `frame-ancestors 'self'`,
     `base-uri 'self'`,
     `form-action 'self'`,

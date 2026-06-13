@@ -31,7 +31,8 @@ CREATE POLICY "users_update_own"
 
 | Table | Policy Name | Operation | Condition | Notes |
 |-------|------------|-----------|-----------|-------|
-| _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| `realtime.messages` | `members can receive moim broadcasts` | SELECT (authenticated) | `EXISTS (SELECT 1 FROM moim_member m WHERE 'moim:'\|\|m.moim_id = realtime.topic() AND m.user_id = auth.uid())` | SPEC-CHAT-001 AC-4 — private 채널 구독 인가(비멤버 구독 거부). 마이그레이션 `20260613175232_add_chat` 수동 SQL |
+| `chat_message` | (정책 없음 — default deny) | ALL | RLS enable + 정책 부재 = 모두 거부 | SPEC-CHAT-001 — anon/authenticated PostgREST 직접 접근 차단. Prisma(postgres 롤)는 영향 없음(쓰기 인가 = NestJS 서비스 레이어) |
 
 ---
 
