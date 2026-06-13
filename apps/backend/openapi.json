@@ -674,7 +674,7 @@
         ],
         "responses": {
           "204": {
-            "description": "디바이스 토큰 해제(orphan token 방지)"
+            "description": "디바이스 토큰 해제(소유자 한정, orphan token 방지)"
           },
           "401": {
             "description": "유효한 Supabase JWT 부재 — 401"

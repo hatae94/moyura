@@ -97,7 +97,9 @@
       "!generated/**",
       "!main.ts",
       "!openapi.ts",
-      "!swagger.ts"
+      "!swagger.ts",
+      "!**/*.module.ts",
+      "!push/device-token.controller.ts"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
