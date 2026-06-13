@@ -9,6 +9,14 @@
 
 ### Added
 
+- **초대 링크 + 게스트 참여** (SPEC-MOIM-002 — 자동 게이트 통과 — jest 148/148, evaluator Security PASS / 백엔드+웹, 디바이스 게이트 없음 → completed): 모임 host가 발급한 초대 링크로 회원가입 없이 게스트가 모임에 참여하는 가입 경로 구현.
+  - **MoimInvite 모델 + 마이그레이션** (`apps/backend/prisma/schema.prisma`에 `MoimInvite`(token TEXT PK, moimId FK→moim onDelete Cascade, createdBy, expiresAt, maxUses?, usedCount DEFAULT 0, revokedAt?, createdAt; @@index moimId) 추가, 마이그레이션 `20260613171209_add_moim_invite` 적용).
+  - **토큰 발급/목록/폐기 (owner 전용)**: `POST /moims/:id/invites`(201, CSPRNG ≥128-bit 토큰, 기본 만료 +7일, 상한 30일, 선택적 maxUses), `GET /moims/:id/invites`(200, 목록 + 상태, owner 전용 — live 토큰 유출 방지), `DELETE /moims/:id/invites/:inviteId`(200, revokedAt 설정). 비-owner 요청은 모두 403 거부. `assertOwner`(MOIM-001 @MX:ANCHOR) 재사용.
+  - **게스트 accept (익명 로그인 + 멱등 + 원자 usedCount)**: `POST /invites/:token/accept { nickname }`(200) — 토큰 검증(미지 404 / 만료·폐기 410 / maxUses 초과 409) + 멤버십 생성(role=member, nickname) + usedCount 원자 조건부 증가. 이미 멤버인 경우 멱등 반환(P2002 idempotent, usedCount 불변). TOCTOU 경쟁 안전.
+  - **고정 실패 코드 (404/410/409/403)**: 미지 토큰 404, 만료·폐기 토큰 410(`GoneException`), maxUses 초과 409(`ConflictException`), 비-owner 403.
+  - **웹 `/invite/[token]` 랜딩** (`apps/web/app/invite/[token]/page.tsx` + `apps/web/lib/invite/accept.ts`): 세션 없는 방문자 진입 시 `signInAnonymously()` 익명 세션 확보 → nickname 입력 → accept 제출 → `/moims/[id]/chat` 리다이렉트(CHAT-001 미구현, 경로 문자열만).
+  - **`enable_anonymous_sign_ins = true`** (`supabase/config.toml`): Supabase 익명 로그인 활성화 + `anonymous_users = 30` 시간당 IP별 rate limit.
+
 - **모임 도메인 (Moim CRUD + 멤버십 인가)** (SPEC-MOIM-001 — 자동 게이트 통과 — jest 105/105, coverage 96.79%, evaluator PASS / 백엔드 도메인, 디바이스 게이트 없음 → completed): 모임 라이프사이클(생성·조회·삭제)과 멤버십 데이터를 책임지는 백엔드 첫 기능 도메인 모듈 구현.
   - **Moim + MoimMember 모델 + 마이그레이션** (`apps/backend/prisma/schema.prisma`에 `Moim`(id, name, created_by, created_at) + `MoimMember`(moim_id + user_id 복합 PK, nickname, role default 'member', joined_at; moim_id → moim onDelete Cascade) 추가, 마이그레이션 `20260613155202_add_moim` 적용).
   - **6개 REST 라우트 + per-route 인증 가드**: `POST /moims`(201, 생성), `GET /moims`(200, 내 모임 목록), `GET /moims/:id`(200, 단건), `GET /moims/:id/members`(200, 멤버 목록 + nickname), `DELETE /moims/:id`(204, owner 전용 삭제 + Cascade), `DELETE /moims/:id/membership`(204, 일반 멤버 탈퇴 / owner 탈퇴 금지). `MoimController` class 레벨 `@UseGuards(SupabaseAuthGuard)` — 누락 없이 6개 라우트 전체 적용.

@@ -5,6 +5,8 @@ last_synced_at: 2026-06-13
 manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 ---
 
+
+
 # Database Schema
 
 수동 갱신 기준: `apps/backend/prisma/schema.prisma` + 마이그레이션 파일. db.yaml auto-sync는 현재 비활성(`enabled: false`)이므로 SPEC sync 시 수동으로 갱신한다.
@@ -18,6 +20,7 @@ manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 | `profile` | 앱 소유 사용자 프로필 — Supabase auth.users와 sub(uuid) 기반 연결 |
 | `moim` | 모임 엔티티 — 모임 라이프사이클 루트 (SPEC-MOIM-001) |
 | `moim_member` | 멤버십 + 모임별 표시 이름(nickname) — moim_id + user_id 복합 PK (SPEC-MOIM-001) |
+| `moim_invite` | 초대 링크 — token PK, moim_id FK, 만료·폐기·사용 횟수 관리 (SPEC-MOIM-002) |
 
 ### profile
 
@@ -51,6 +54,21 @@ Prisma 모델명: `MoimMember` | 마이그레이션: `20260613155202_add_moim`
 | `role` | TEXT | NOT NULL DEFAULT 'member' | "owner" 또는 "member". owner = 탈퇴 불가, 삭제 전용. |
 | `joined_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 가입 시각 |
 
+### moim_invite
+
+Prisma 모델명: `MoimInvite` | 마이그레이션: `20260613171209_add_moim_invite`
+
+| 컬럼 | 타입 | 제약 | 설명 |
+|------|------|------|------|
+| `token` | TEXT | PK | CSPRNG 생성 불투명 토큰(≥128-bit 엔트로피) — URL-safe |
+| `moim_id` | TEXT | NOT NULL, FK → moim.id onDelete Cascade | 소속 모임 id |
+| `created_by` | TEXT | NOT NULL | 발급자 sub (= profile.id) |
+| `expires_at` | TIMESTAMP(3) | NOT NULL | 만료 시각 (기본 발급 +7일, 상한 30일) |
+| `max_uses` | INT | NULLABLE | 최대 수락 횟수 — NULL = 무제한 |
+| `used_count` | INT | NOT NULL DEFAULT 0 | 현재까지 수락된 횟수 |
+| `revoked_at` | TIMESTAMP(3) | NULLABLE | 폐기 시각 — NULL = 유효 |
+| `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 생성 시각 |
+
 ---
 
 ## Relationships
@@ -58,8 +76,9 @@ Prisma 모델명: `MoimMember` | 마이그레이션: `20260613155202_add_moim`
 | From | To | Cardinality | FK Column | Notes |
 |------|----|-------------|-----------|-------|
 | `moim_member` | `moim` | N:1 | `moim_member.moim_id` | onDelete Cascade — 모임 삭제 시 멤버십 자동 정리 |
+| `moim_invite` | `moim` | N:1 | `moim_invite.moim_id` | onDelete Cascade — 모임 삭제 시 초대 자동 정리 |
 
-> `profile.id`와 `moim.created_by` / `moim_member.user_id`는 모두 Supabase `sub`로 논리적으로 연결되나, 현재 schema에 외래 키 제약은 없다(auth.users는 Supabase 내부 스키마 — app-owned profile 패턴).
+> `profile.id`와 `moim.created_by` / `moim_member.user_id` / `moim_invite.created_by`는 모두 Supabase `sub`로 논리적으로 연결되나, 현재 schema에 외래 키 제약은 없다(auth.users는 Supabase 내부 스키마 — app-owned profile 패턴).
 
 ---
 
@@ -70,6 +89,8 @@ Prisma 모델명: `MoimMember` | 마이그레이션: `20260613155202_add_moim`
 | `profile` | `id` | PK (기본) | 단일 PK 조회 |
 | `moim` | `id` | PK (기본) | 단일 PK 조회 |
 | `moim_member` | `(moim_id, user_id)` | PK 복합 (기본) | 멤버십 유일성 보장 — 한 사용자는 한 모임에 한 번만 |
+| `moim_invite` | `token` | PK (기본) | 토큰 단일 조회 |
+| `moim_invite` | `moim_id` | INDEX (`@@index([moimId])`) | 모임별 초대 목록 조회 최적화 |
 
 ---
 
@@ -81,3 +102,5 @@ Prisma 모델명: `MoimMember` | 마이그레이션: `20260613155202_add_moim`
 | `moim` | `moim_pkey` | PK | `id` |
 | `moim_member` | `moim_member_pkey` | PK | `(moim_id, user_id)` |
 | `moim_member` | `moim_member_moim_id_fkey` | FK | `moim_id → moim(id) ON DELETE CASCADE` |
+| `moim_invite` | `moim_invite_pkey` | PK | `token` |
+| `moim_invite` | `moim_invite_moim_id_fkey` | FK | `moim_id → moim(id) ON DELETE CASCADE` |

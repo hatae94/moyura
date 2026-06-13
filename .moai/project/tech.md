@@ -4,6 +4,7 @@
 > 환경/인프라 배선은 [`SPEC-ENV-SETUP-001`](../specs/SPEC-ENV-SETUP-001/spec.md)(status: `completed`, v0.3.0)에서 정의되었고 **구현 완료**되었다(`master`, 커밋 `7362e2a..1895e05`).
 > 인증(authn)은 [`SPEC-AUTH-001`](../specs/SPEC-AUTH-001/spec.md)(status: `completed`, v0.3.0)에서 **구현 완료**되었다(`master`, 커밋 `6ca29fd..d54adb0`, evaluator-active PASS — security 0.97). 남은 PLANNED 항목은 prod 배포 파이프라인과 인증 후속 과제(소셜 키, 이메일 확인/재설정, RBAC, 프런트 테스트 타겟)뿐이다.
 > 모임 도메인은 [`SPEC-MOIM-001`](../specs/SPEC-MOIM-001/spec.md)(status: `completed`, v0.2.0)에서 **구현 완료**되었다(브랜치 `feature/SPEC-MOBILE-004`, 커밋 `cc37924`, evaluator-active PASS). Moim + MoimMember 테이블, 6개 REST 라우트, assertMember/assertOwner 인가 단일 출처(@MX:ANCHOR) 구현.
+> 초대/게스트 가입은 [`SPEC-MOIM-002`](../specs/SPEC-MOIM-002/spec.md)(status: `completed`, v0.2.0)에서 **구현 완료**되었다(브랜치 `feature/SPEC-MOBILE-004`, 커밋 `acc6fe8`, evaluator Security PASS). MoimInvite 테이블, 토큰 발급/목록/폐기(owner 전용), 게스트 accept(익명 로그인 + 멱등 + 원자 usedCount), 웹 `/invite/[token]` 랜딩, `enable_anonymous_sign_ins = true` 구현.
 
 ## 구현됨 vs 계획됨 (요약)
 
@@ -11,6 +12,7 @@
 |------|------|
 | **IMPLEMENTED (골격)** | 모노레포 골격(pnpm + Nx), 3개 앱 스캐폴드(mobile/web/backend), `@moyura/config` 스텁, 루트/앱별 Nx 타겟, hoisted node_modules |
 | **IMPLEMENTED (SPEC-MOBILE-003, in-progress — iOS 핵심 플로우 검증 완료)** | expo-router(~56.2.10) 네이티브 네비게이션 골격(Root Stack + `(auth)`/`(tabs)` 그룹 + 네이티브 Tabs), 라우트별 WebView 래퍼, 웹 `(main)` 탭 라우트 그룹(BottomTabBar + HomeTab + 플레이스홀더), 네이티브 AuthContext(SecureStore + bridge 신호), route-map-core / auth-state-core 순수 결정 모듈, 셸 모드 탭바 숨김(ShellModeEffect + ShellSessionAnnouncer), redirect /me→/home. Google OAuth·Android·로그아웃 E2E 검증 대기 — status in-progress |
+| **IMPLEMENTED (SPEC-MOIM-002, completed)** | 초대/게스트 가입: MoimInvite 모델(token PK, CSPRNG ≥128-bit, expiresAt 상한 30일, maxUses?, usedCount, revokedAt?) + 마이그레이션 `20260613171209_add_moim_invite`, 토큰 발급/목록/폐기(owner 전용, assertOwner 재사용), 게스트 accept(멱등 P2002 처리, 원자 usedCount), 웹 `/invite/[token]` 랜딩(익명 로그인 → nickname → accept), `enable_anonymous_sign_ins = true`(`anonymous_users = 30` rate limit). jest 148/148, invite 100% stmt / 85.29% branch, evaluator Security PASS. 새 의존성 없음(Node.js `crypto` 내장). |
 | **IMPLEMENTED (SPEC-MOIM-001, completed)** | 모임 도메인 첫 기능 모듈: Moim + MoimMember 모델(nickname, role, joined_at, 복합 PK, onDelete Cascade) + 마이그레이션 `20260613155202_add_moim`, 6개 REST 라우트(POST/GET 목록·단건·멤버/DELETE 모임·멤버십), assertMember/assertOwner 인가 단일 출처(@MX:ANCHOR), createMoim 원자 트랜잭션. jest 105/105, coverage 96.79%, evaluator-active PASS. 새 의존성 없음(@nestjs/common ^11, @prisma/client 7.8.0 재사용). |
 | **IMPLEMENTED (SPEC-ENV-SETUP-001, completed)** | Supabase PostgreSQL 연결(Prisma 7 + `@prisma/adapter-pg` 듀얼 URL), Zod 4 환경검증(fail-fast), NestJS `@nestjs/swagger` OpenAPI → `packages/api-client`(`@moyura/api-client`) 타입드 클라이언트 생성, Supabase CLI 로컬 스택(direct `:54322`), CORS allowlist, `GET /health` 엔드포인트, CI/EAS 스켈레톤, 프런트 env 가드(web/mobile) |
 | **IMPLEMENTED (SPEC-AUTH-001, completed)** | Supabase Auth **실제 인증**(authn-only): 백엔드 ES256 JWKS 검증 가드(jose), 첫 도메인 모델 `Profile` + UPSERT, 보호 라우트 `GET /me`, 웹 `@supabase/ssr` 쿠키 세션 + email/pw + PKCE 콜백, 소셜/모바일 OAuth 스캐폴드, `@moyura/api-client` Bearer 토큰 주입. evaluator-active PASS(security 0.97) |
@@ -123,6 +125,10 @@
 | `apps/backend/prisma/migrations/20260613155202_add_moim/` | 모임 도메인 마이그레이션(`Moim` + `MoimMember`, onDelete Cascade) |
 | `apps/backend/src/auth/`, `apps/backend/src/profile/` | 인증 가드/검증/config + profile 모듈·서비스·`GET /me` |
 | `apps/backend/src/moim/` | 모임 도메인 모듈(SPEC-MOIM-001) — MoimService/MoimController/MoimModule + dto + spec/integration 테스트 |
+| `apps/backend/src/invite/` | 초대 도메인 모듈(SPEC-MOIM-002) — InviteService/InviteController/InviteModule + dto + spec/integration 테스트 |
+| `apps/web/app/invite/[token]/` | 초대 랜딩 페이지(SPEC-MOIM-002) — 익명 로그인 → nickname → accept → /moims/[id]/chat |
+| `apps/web/lib/invite/accept.ts` | 초대 수락 클라이언트 로직(SPEC-MOIM-002) |
+| `supabase/config.toml` (enable_anonymous_sign_ins) | 익명 로그인 활성화(SPEC-MOIM-002) — `enable_anonymous_sign_ins = true`, `anonymous_users = 30` |
 | `apps/web/lib/supabase/`, `apps/web/lib/auth/`, `apps/web/proxy.ts` | 웹 `@supabase/ssr` 클라이언트·세션 미들웨어·auth 액션·PKCE 콜백 |
 | `apps/mobile/App.tsx` | 풀스크린 WebView 셸 + Google OAuth 인터셉트/복귀(SPEC-MOBILE-001) |
 | `apps/mobile/lib/web-url.ts` | `EXPO_PUBLIC_WEB_URL` 가드 + `WEB_URL`(@MX:ANCHOR) — WebView source·OAuth 콜백 호스트 단일 출처 |

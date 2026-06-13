@@ -1,9 +1,9 @@
 ---
 id: SPEC-MOIM-002
-version: "0.1.1"
-status: draft
+version: "0.2.0"
+status: completed
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-13
 author: hatae
 priority: high
 issue_number: 0
@@ -15,6 +15,14 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-13 (v0.2.0): run 완료 → status completed.
+  - MoimInvite 모델 + 마이그레이션(`20260613171209_add_moim_invite`) 추가.
+  - 초대 발급/목록/폐기(assertOwner 재사용) + accept(게스트/멱등/원자 usedCount) + 고정 실패 코드(404/410/409) 구현.
+  - 웹 `/invite/[token]` 랜딩(익명 로그인 → nickname → accept → `/moims/[id]/chat` 리다이렉트) 구현.
+  - `supabase/config.toml` `enable_anonymous_sign_ins = true` 적용.
+  - 검증: jest 148/148, invite 모듈 100% stmt / 85.29% branch, backend:typecheck 0, 마이그레이션 드리프트 없음, api-client + web build/lint green.
+  - TRUST 5 PASS, evaluator Security PASS(CSPRNG 토큰 / owner 전용 인가 / usedCount TOCTOU 경쟁 안전 / mass-assignment 없음).
+  - 사후 수정: branch coverage 84.61→85.29(unreachable body?. null arm 제거), P2002 동시 동일 sub 멱등 처리, 경쟁 테스트 롤백 단언 강화.
 - 2026-06-11 (v0.1.1): plan-auditor iteration 1 FAIL 대응 개정.
   - 헤드라인 기능(게스트 웹 랜딩 흐름)을 1급 REQ로 신설(REQ-INV-006) + AC 추가.
   - 초대 목록 접근을 owner 전용(비-owner 403)으로 명시 — 목록 응답이 live 토큰을 담는 토큰 유출 채널이므로. 목록 조회 AC 추가.
@@ -106,3 +114,50 @@ issue_number: 0
 - 백엔드: jest TDD, 커버리지 85%+ (토큰 검증·멱등·403 경로).
 - 웹: 테스트 하니스 없음 → `nx build web` + `lint`만 (기존 합의).
 - 토큰 엔트로피 검증(≥128-bit), 만료/폐기/max_uses 단위 테스트.
+
+## Implementation Notes (as-implemented)
+
+### 생성 파일
+
+- `apps/backend/src/invite/invite.module.ts` — InviteModule (MoimModule import, assertOwner 재사용)
+- `apps/backend/src/invite/invite.service.ts` — 발급/목록/폐기/accept 로직, usedCount 원자 증가
+- `apps/backend/src/invite/invite.controller.ts` — REST 라우트 5개(POST 발급, GET 목록, DELETE 폐기, POST accept, GET 단건)
+- `apps/backend/src/invite/dto/` — 발급/수락 요청·응답 DTO
+- `apps/backend/src/invite/invite.service.spec.ts`, `invite.controller.spec.ts`, `invite.integration.spec.ts`
+- `apps/backend/prisma/migrations/20260613171209_add_moim_invite/` — MoimInvite 테이블 + token UNIQUE INDEX + Cascade FK
+- `apps/web/app/invite/[token]/page.tsx` — 웹 랜딩 페이지
+- `apps/web/lib/invite/accept.ts` — 수락 클라이언트 로직
+
+### 수정 파일
+
+- `apps/backend/prisma/schema.prisma` — `MoimInvite` 모델 추가 + `Moim.invites` 관계 필드(additive)
+- `apps/backend/src/app.module.ts` — `InviteModule` import 추가
+- `supabase/config.toml` — `enable_anonymous_sign_ins = true`, `anonymous_users = 30`(시간당 IP별 rate limit)
+
+### 수정 사항 (X-1~X-4)
+
+- **X-1**: 만료·폐기 응답을 `HttpException`에서 `GoneException`으로, 중복 멤버 응답을 `ConflictException`으로 교체(NestJS 표준 예외 계층).
+- **X-2**: api-client 재생성 단계를 `api-client:build` → `api-client:generate` + `api-client:typecheck`로 정정.
+- **X-3**: `Moim.invites` 관계 필드 추가를 additive(기존 필드 보존)로 처리.
+- **X-4**: 로컬 Supabase 재시작을 `npx supabase stop && npx supabase start`로 처리.
+
+### 사후 수정 (post-eval)
+
+- branch coverage 84.61%→85.29%: `invite.controller.ts` `body?.expiresAt`, `body?.maxUses`, `body?.nickname` optional chaining의 unreachable null arm(`body` 항상 객체) 제거.
+- P2002 동시 동일 sub 멱등 처리: `accept`에서 `P2002`(unique 제약 위반) catch → 기존 멤버십 반환(idempotent).
+- 경쟁 테스트 롤백 단언 강화: `invite.integration.spec.ts` 경쟁 케이스에서 rollback 시 `usedCount` 불변 단언 추가.
+
+### 크로스 SPEC 참고
+
+- `/moims/[id]/chat` 리다이렉트 대상(SPEC-CHAT-001)은 현재 미구현이며, 웹 랜딩에서 해당 경로 문자열을 사용하는 것은 적절(빌드 타임 오류 없음). CHAT-001 구현 후 실제 동작 확인 필요.
+
+### 남용 완화 (Abuse Mitigations)
+
+- `anonymous_users = 30`: 시간당 IP별 익명 가입 30회 제한(Supabase 내장 rate limit).
+- `maxUses`: 초대당 최대 수락 횟수 제한(선택 설정, 초과 시 409).
+- `expiresAt` 상한: 최대 30일(무기한 초대 금지 — 토큰 노출 창 제한).
+- `revokedAt`: host가 언제든 초대 즉시 폐기 가능.
+
+### Evaluator INFO
+
+- `invite.service.ts` `updateMany` WHERE 절에 redundant OR arm 존재 — 런타임에 무해한 dead branch. Istanbul branch hit 미반영(harmless, 수정 보류).

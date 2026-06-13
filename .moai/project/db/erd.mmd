@@ -1,6 +1,6 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-06-13 (SPEC-MOIM-001 sync)
+%% 최종 갱신: 2026-06-13 (SPEC-MOIM-002 sync)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
@@ -22,4 +22,16 @@ erDiagram
         timestamp joined_at
     }
 
+    MOIM_INVITE {
+        string token PK "CSPRNG ≥128-bit 불투명 토큰"
+        string moim_id FK "→ MOIM.id onDelete Cascade"
+        string created_by "발급자 sub (= PROFILE.id)"
+        timestamp expires_at "만료 시각 (상한 30일)"
+        int max_uses "최대 수락 횟수 (nullable = 무제한)"
+        int used_count "현재 수락 횟수 (default: 0)"
+        timestamp revoked_at "폐기 시각 (nullable = 유효)"
+        timestamp created_at
+    }
+
     MOIM ||--o{ MOIM_MEMBER : "has members (Cascade)"
+    MOIM ||--o{ MOIM_INVITE : "has invites (Cascade)"
