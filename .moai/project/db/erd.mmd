@@ -1,6 +1,6 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-06-13 (SPEC-MOIM-002 sync)
+%% 최종 갱신: 2026-06-14 (SPEC-CHAT-001 sync)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
@@ -33,5 +33,14 @@ erDiagram
         timestamp created_at
     }
 
+    CHAT_MESSAGE {
+        bigint id PK "BigInt 자동 증가 — keyset 커서 기준"
+        string moim_id FK "→ MOIM.id onDelete Cascade"
+        string sender_id "발신자 sub (= PROFILE.id)"
+        string content "메시지 본문 (CHECK 1..2000자)"
+        timestamp created_at
+    }
+
     MOIM ||--o{ MOIM_MEMBER : "has members (Cascade)"
     MOIM ||--o{ MOIM_INVITE : "has invites (Cascade)"
+    MOIM ||--o{ CHAT_MESSAGE : "has messages (Cascade)"

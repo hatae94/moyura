@@ -1,9 +1,9 @@
 ---
 id: SPEC-CHAT-001
-version: "0.1.1"
-status: draft
+version: "0.2.0"
+status: in-progress
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-13
 author: hatae
 priority: high
 issue_number: 0
@@ -15,6 +15,10 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-13 (v0.2.0): run 완료 — 상태 전이 `draft` → `in-progress`.
+  - 구현: `ChatMessage` 모델 + 마이그레이션 `20260613175232_add_chat`(트리거/RLS/CHECK 수동 SQL 포함) + `sendMessage`/`getHistory` + `chat.message.created` 이벤트 계약 + 웹 채팅 UI(`/moims/[id]/chat`).
+  - 검증 게이트: jest 170/170(chat 22), psql 존재 단언 전부 통과(broadcast 함수/트리거/realtime 정책/chat_message RLS/CHECK), backend:typecheck 0, prisma migrate 드리프트 없음, TRUST 5 PASS, evaluator PASS(Func 90/Sec 82/Craft 85/Consistency 90).
+  - `in-progress` 유지 근거: AC-1c(realtime broadcast 브라우저 종단 수신), AC-4(비멤버 RLS 구독 거부 런타임), AC-5(브라우저 구독·CSP 런타임)는 jest 자동화 불가 — psql 존재 단언으로 선행 조건만 검증됨. 디바이스 게이트 원칙(mobile SPEC과 동일)에 따라 런타임 검증 완료 전 completed로 전환하지 않는다. `apps/backend/test/chat.live.mts` 수동 검증 스크립트 제공.
 - 2026-06-11 (v0.1.1): plan-auditor iteration 1 FAIL 대응 개정.
   - 웹 구독 UI REQ 신설(REQ-CHAT-006) — 고아였던 AC-5 연결.
   - nickname/broadcast 모순 해소(게이트 결정): broadcast 페이로드는 chat_message row만 운반(트리거 thin 유지); 웹 UI는 이미 로드한 멤버 목록에서 sender nickname을 클라이언트 측 해석(미지 sender는 재조회 폴백); CHAT-002 푸시는 서버 측 자체 멤버 조회로 nickname 해석. AC-1에서 broadcast 수신분의 nickname 요구 제거.
@@ -108,3 +112,66 @@ issue_number: 0
 - 트리거 종단 검증: insert → broadcast 수신(통합 검증).
 - 웹: 테스트 하니스 없음 → `nx build web` + `lint`만 (기존 합의). CSP 위반 없이 Realtime 구독 연결(R-2).
 - 트리거/RLS는 마이그레이션 SQL에 포함하고 `.moai/project/db/`에 문서화(드리프트 방지 R-6).
+
+---
+
+## Implementation Notes (as-implemented)
+
+> run 완료 기준: 2026-06-13. 커밋 f3fe178 (branch feature/SPEC-MOBILE-004).
+
+### 생성/수정 파일
+
+| 유형 | 경로 |
+|------|------|
+| NEW | `apps/backend/src/chat/chat.service.ts` |
+| NEW | `apps/backend/src/chat/chat.controller.ts` |
+| NEW | `apps/backend/src/chat/chat-events.ts` (이벤트 계약 export — @MX:ANCHOR) |
+| NEW | `apps/backend/src/chat/chat.module.ts` |
+| NEW | `apps/backend/src/chat/dto/send-message.dto.ts` |
+| NEW | `apps/backend/src/chat/dto/get-history.dto.ts` |
+| NEW | `apps/backend/src/chat/dto/message-response.dto.ts` |
+| NEW | `apps/backend/src/chat/chat.service.spec.ts` |
+| NEW | `apps/backend/src/chat/chat.integration.spec.ts` |
+| NEW | `apps/backend/test/chat.live.mts` (수동 검증 스크립트) |
+| NEW | `apps/backend/prisma/migrations/20260613175232_add_chat/migration.sql` |
+| NEW | `apps/web/lib/chat/useChatChannel.ts` |
+| NEW | `apps/web/app/moims/[id]/chat/page.tsx` |
+| MODIFY | `apps/backend/src/app.module.ts` (EventEmitterModule.forRoot + ChatModule) |
+| MODIFY | `apps/backend/package.json` (@nestjs/event-emitter@^3.1.0 추가) |
+| MODIFY | `apps/backend/prisma/schema.prisma` (ChatMessage 모델 + Moim.messages 관계) |
+| MODIFY | `apps/web/proxy.ts` (CSP connect-src wss 호스트 고정) |
+| MODIFY | `.moai/project/db/migrations.md` (T-010 — run 중 갱신 완료) |
+| MODIFY | `.moai/project/db/rls-policies.md` (T-010 — run 중 갱신 완료) |
+
+### 구현 중 수정 사항 (수정 필요 발견 및 적용)
+
+1. **`realtime.broadcast_changes` 7-arg / `private=true`**: 공식 API는 7인자 시그니처(`topic, event_type, operation, table, schema, new, old`)이며 private 토픽은 `private=true`가 아닌 토픽 접두사 규칙(`moim:` 네이밍)으로 처리. 초기 설계의 5-arg 호출 수정.
+2. **BigInt → string DTO 직렬화**: `chat_message.id`는 Prisma `BigInt` 타입 — JSON 직렬화 시 `Cannot serialize BigInt` 오류. `message-response.dto.ts`에서 `.toString()` 변환 명시, 이벤트 페이로드 `messageId`도 string 타입으로 강제.
+3. **404 → 403 변환**: 존재하지 않는 모임으로 전송 시 `assertMember`가 `NotFoundException` 반환하는 경우 `ForbiddenException`으로 래핑. 모임 존재 여부 노출 방지(spec 엣지 케이스 항목 준수).
+4. **shadow-DB 가드 (`to_regnamespace`)**: `realtime.messages` 정책 DDL은 Prisma shadow DB(vanilla Postgres — `realtime` 스키마 없음)에서 실패. `DO $$ BEGIN IF to_regnamespace('realtime') IS NOT NULL THEN ... END IF; END $$` 가드 블록으로 감싸 shadow 검증을 통과시킴.
+
+### 사후 강화 (evaluator MEDIUM 항목 적용)
+
+- **emit best-effort 격리**: `chat.service.ts` emit을 `try-catch`로 래핑하여 CHAT-002 리스너 예외가 `sendMessage` 201 응답을 막지 않도록 처리. DB insert 성공 후 HTTP 500 불일치 방지.
+- **CSP wss 호스트 고정**: `proxy.ts` connect-src를 `wss:` 전체 허용에서 `wss://${supabaseHost}` 호스트 고정으로 변경(OWASP A05 MEDIUM 완화).
+
+### 검증 계층 (3단계)
+
+| 계층 | 수단 | 항목 | 상태 |
+|------|------|------|------|
+| jest 자동 | `chat.service.spec.ts`, `chat.integration.spec.ts` | AC-1a/1b, AC-2, AC-3(HTTP/서비스/엣지), sendMessage/getHistory 경로 전부 | PASS (22/22) |
+| psql 존재 단언 | `psql -c "SELECT ..."` 직접 실행 | broadcast 함수, 트리거, realtime SELECT 정책, chat_message RLS enabled, content CHECK | PASS (2026-06-14) |
+| 런타임/수동 | `apps/backend/test/chat.live.mts` 스크립트 | AC-1c(broadcast 수신), AC-4(비멤버 구독 거부), AC-5(브라우저 구독/CSP) | 대기 (live/device-gated) |
+
+### 미검증 항목 (in-progress 근거)
+
+- **AC-1c**: 브라우저 클라이언트가 `moim:{id}` private 채널에서 실제 메시지를 수신하는 종단 동작. 트리거/RLS 존재는 psql로 확인되었으나, Supabase Realtime 연결 수립 및 broadcast 페이로드 수신은 브라우저 런타임에서만 검증 가능.
+- **AC-4**: 비멤버 authenticated 세션이 구독 시도 시 RLS가 실제로 거부하는 런타임 동작.
+- **AC-5**: 채팅 UI 브라우저 구독/수신/전송 동작 및 CSP `connect-src` 위반 없는 WebSocket 연결.
+
+검증 경로: `apps/backend/test/chat.live.mts`를 로컬 Supabase 실행 환경에서 수동 실행하거나 브라우저 DevTools로 직접 확인.
+
+### 크로스 SPEC 참고
+
+- **CHAT-002** (FCM 푸시 알림)는 `apps/backend/src/chat/chat-events.ts`의 `CHAT_MESSAGE_CREATED` 이벤트 계약(@MX:ANCHOR)을 단방향 의존으로 소비한다. chat 모듈이 계약을 소유하며, CHAT-002는 `@OnEvent(CHAT_MESSAGE_CREATED)` 리스너만 추가하면 된다.
+- evaluator MEDIUM (`emit 비격리`) 항목은 현재 해결됨(try-catch 적용). CHAT-002 리스너 도입 시 `asyncHandlers: true` 옵션 재검토 권장.

@@ -9,6 +9,14 @@
 
 ### Added
 
+- **모임 채팅 코어** (SPEC-CHAT-001 — 자동 게이트 통과 — jest 170/170, psql 존재 단언, evaluator PASS / realtime 종단·RLS 구독·브라우저 런타임 검증 대기 → in-progress): 모임 멤버 간 실시간 채팅 코어 구현.
+  - **ChatMessage 모델 + 트리거/RLS 마이그레이션** (`apps/backend/prisma/schema.prisma`에 `ChatMessage`(BigInt PK auto-increment, moimId FK→moim onDelete Cascade, senderId, content, createdAt; @@index([moimId, id desc])) + `Moim.messages` 관계 추가, 마이그레이션 `20260613175232_add_chat` 적용). 수동 SQL 포함: content CHECK(`1..2000`자), `chat_message` RLS default-deny, `broadcast_chat_message()` SECURITY DEFINER 함수, `chat_message_broadcast` AFTER INSERT 트리거, `realtime.messages` SELECT 정책(멤버십 게이트).
+  - **sendMessage (멤버 인가 + best-effort emit)**: `POST /moims/:id/messages` — `assertMember` 인가 후 insert, `chat.message.created` 이벤트 emit(try-catch best-effort 격리 — CHAT-002 리스너 예외가 201 응답 차단 불가), BigInt→string 직렬화. 비멤버/존재하지 않는 모임 → 403(모임 존재 여부 미노출).
+  - **getHistory (keyset 내림차순)**: `GET /moims/:id/messages?cursor=&limit=` — BigInt keyset 페이지네이션(내림차순/최신순), nextCursor string 반환. 잘못된 cursor → 400.
+  - **`chat.message.created` 이벤트 계약 (@nestjs/event-emitter)**: `apps/backend/src/chat/chat-events.ts`가 이벤트 이름/페이로드 계약을 소유·export(@MX:ANCHOR). push(CHAT-002)는 단방향 의존. `@nestjs/event-emitter@^3.1.0` 신규 의존성, `EventEmitterModule.forRoot()` 등록.
+  - **웹 채팅 UI (private channel 구독 + nickname 클라이언트 해석)**: `apps/web/lib/chat/useChatChannel.ts`(Supabase Realtime private channel `moim:{id}` 구독 훅) + `apps/web/app/moims/[id]/chat/page.tsx`(히스토리 로드 + 실시간 수신 표시 + 전송). sender nickname은 이미 로드된 멤버 목록에서 클라이언트 측 해석(미지 sender 재조회 폴백).
+  - **CSP wss 호스트 고정**: `apps/web/proxy.ts` `connect-src`를 `wss:` 전체 허용 → `wss://${supabaseHost}` 호스트 고정(OWASP A05 MEDIUM 완화).
+
 - **초대 링크 + 게스트 참여** (SPEC-MOIM-002 — 자동 게이트 통과 — jest 148/148, evaluator Security PASS / 백엔드+웹, 디바이스 게이트 없음 → completed): 모임 host가 발급한 초대 링크로 회원가입 없이 게스트가 모임에 참여하는 가입 경로 구현.
   - **MoimInvite 모델 + 마이그레이션** (`apps/backend/prisma/schema.prisma`에 `MoimInvite`(token TEXT PK, moimId FK→moim onDelete Cascade, createdBy, expiresAt, maxUses?, usedCount DEFAULT 0, revokedAt?, createdAt; @@index moimId) 추가, 마이그레이션 `20260613171209_add_moim_invite` 적용).
   - **토큰 발급/목록/폐기 (owner 전용)**: `POST /moims/:id/invites`(201, CSPRNG ≥128-bit 토큰, 기본 만료 +7일, 상한 30일, 선택적 maxUses), `GET /moims/:id/invites`(200, 목록 + 상태, owner 전용 — live 토큰 유출 방지), `DELETE /moims/:id/invites/:inviteId`(200, revokedAt 설정). 비-owner 요청은 모두 403 거부. `assertOwner`(MOIM-001 @MX:ANCHOR) 재사용.
