@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
+import { MoimModule } from './moim/moim.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfileModule } from './profile/profile.module';
 
@@ -17,6 +18,7 @@ import { ProfileModule } from './profile/profile.module';
     PrismaModule,
     HealthModule,
     ProfileModule,
+    MoimModule,
   ],
   controllers: [AppController],
   providers: [AppService],

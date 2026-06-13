@@ -90,7 +90,12 @@
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!**/*.spec.ts",
+      "!generated/**",
+      "!main.ts",
+      "!openapi.ts",
+      "!swagger.ts"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"

@@ -74,6 +74,238 @@
           "me"
         ]
       }
+    },
+    "/moims": {
+      "post": {
+        "operationId": "MoimController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMoimDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "모임 생성 + 생성자 owner 멤버십",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoimResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
+      },
+      "get": {
+        "operationId": "MoimController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "자신이 속한 모임 목록",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MoimResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
+      }
+    },
+    "/moims/{id}": {
+      "get": {
+        "operationId": "MoimController_getOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "단건 모임 정보(멤버 한정)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoimResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 멤버가 아님 — 403"
+          },
+          "404": {
+            "description": "존재하지 않는 모임 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
+      },
+      "delete": {
+        "operationId": "MoimController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "모임 삭제(owner 전용, Cascade)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 owner가 아님 — 403"
+          },
+          "404": {
+            "description": "존재하지 않는 모임 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
+      }
+    },
+    "/moims/{id}/members": {
+      "get": {
+        "operationId": "MoimController_getMembers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "멤버 목록(nickname 포함)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemberResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 멤버가 아님 — 403"
+          },
+          "404": {
+            "description": "존재하지 않는 모임 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
+      }
+    },
+    "/moims/{id}/membership": {
+      "delete": {
+        "operationId": "MoimController_leave",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "멤버 탈퇴(owner 금지)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner는 탈퇴 불가 — 403"
+          },
+          "404": {
+            "description": "멤버십 부재(가입한 적 없음) — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
+      }
     }
   },
   "info": {
@@ -137,6 +369,87 @@
         "required": [
           "id",
           "createdAt"
+        ]
+      },
+      "CreateMoimDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "모임 이름(비어 있을 수 없음)",
+            "example": "주말 등산 모임"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "생성자의 모임별 표시 이름(host nickname, 비어 있을 수 없음). owner 멤버십에 주입된다.",
+            "example": "호스트"
+          }
+        },
+        "required": [
+          "name",
+          "nickname"
+        ]
+      },
+      "MoimResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "모임 id(uuid)",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          },
+          "name": {
+            "type": "string",
+            "description": "모임 이름",
+            "example": "주말 등산 모임"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "생성자 sub(= profile.id)",
+            "example": "00000000-0000-4000-8000-000000000001"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "모임 생성 시각(ISO-8601)",
+            "example": "2026-06-13T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdBy",
+          "createdAt"
+        ]
+      },
+      "MemberResponseDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "멤버 sub(= profile.id)",
+            "example": "00000000-0000-4000-8000-000000000001"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "모임별 표시 이름",
+            "example": "호스트"
+          },
+          "role": {
+            "type": "string",
+            "description": "멤버 역할(\"owner\" | \"member\")",
+            "example": "owner"
+          },
+          "joinedAt": {
+            "type": "string",
+            "description": "가입(생성) 시각(ISO-8601)",
+            "example": "2026-06-13T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "userId",
+          "nickname",
+          "role",
+          "joinedAt"
         ]
       }
     }

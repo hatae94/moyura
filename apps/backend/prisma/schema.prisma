@@ -26,3 +26,34 @@ model Profile {
 
   @@map("profile")
 }
+
+// SPEC-MOIM-001 모임 도메인(REQ-MOIM-004~008). 모임 라이프사이클의 루트 엔티티.
+// name 최소 컬럼만 둔다(설명/이미지/카테고리는 비범위). 삭제 시 멤버십을 Cascade로 정리한다(R-5).
+model Moim {
+  id        String       @id @default(uuid())
+  name      String
+  // 생성자 sub(= profile.id). owner 멤버십은 MoimMember(role=owner)에 별도 기록된다(REQ-MOIM-004).
+  createdBy String       @map("created_by")
+  createdAt DateTime     @default(now()) @map("created_at")
+  members   MoimMember[]
+
+  @@map("moim")
+}
+
+// 멤버십 데이터(누가 어느 모임의 멤버인가) + 모임별 표시 이름(nickname).
+// nickname은 profile에 name 필드가 없는 것을 보완하는 표시 이름 출처다(게이트 결정 — 채팅 sender 해석).
+// PK는 (moimId, userId) 복합 — 한 사용자는 한 모임에 한 번만 속한다.
+model MoimMember {
+  moimId   String   @map("moim_id")
+  // 멤버 sub(= profile.id). 검증된 sub만 들어온다(mass-assignment 차단 — profile 패턴 동일).
+  userId   String   @map("user_id")
+  // 모임별 표시 이름(필수). 생성 시 owner row에 host nickname이 주입된다(REQ-MOIM-004).
+  nickname String
+  // "owner" | "member". owner는 탈퇴 불가(REQ-MOIM-008), 삭제는 owner 전용(REQ-MOIM-003).
+  role     String   @default("member")
+  joinedAt DateTime @default(now()) @map("joined_at")
+  moim     Moim     @relation(fields: [moimId], references: [id], onDelete: Cascade)
+
+  @@id([moimId, userId])
+  @@map("moim_member")
+}
