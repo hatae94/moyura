@@ -9,6 +9,13 @@
 
 ### Added
 
+- **FCM 백그라운드 푸시** (SPEC-CHAT-002 — 자동 게이트 통과 — backend jest 206/206, mobile vitest 151/151, 느슨한 결합 검증, evaluator PASS / 실기기 FCM 수신·탭 device-gated 검증 대기 → in-progress): 앱 백그라운드 상태에서 새 메시지를 FCM 푸시로 수신하는 인프라 구현.
+  - **DeviceToken 모델 + 마이그레이션 + 등록/해제 API(owner-scoped IDOR 차단)**: `apps/backend/prisma/schema.prisma`에 `DeviceToken`(token TEXT PK, userId, platform, createdAt, updatedAt; @@index userId) 추가, 마이그레이션 `20260614_add_device_token` 적용. `POST /devices`(upsert 등록) + `DELETE /devices/:token`(owner-scoped: `unregisterByOwner(userId, token)` — 타인 토큰 삭제 차단, OWASP A01 IDOR 대응).
+  - **PushListener 단방향 이벤트 구독(sender/게스트 제외, 서버 측 nickname)**: `apps/backend/src/push/push.listener.ts`가 `@OnEvent('chat.message.created')` 단방향 구독. sender 제외 + 토큰 미등록 멤버(게스트) 자연 제외 + 서버 측 `moim_member.nickname` 조회로 알림 본문 구성. chat 모듈은 push 존재를 모름(chat↛push).
+  - **FcmSender(firebase-admin, graceful no-op)**: `apps/backend/src/push/fcm-sender.ts` — firebase-admin singleton 초기화 + FIREBASE_CREDENTIALS 부재 시 경고 후 no-op(부팅/테스트 환경 차단 없음). firebase-admin@^13.10.0 신규 의존성(Node 20+ 호환).
+  - **느슨한 결합(chat↛push)**: `chat/**` → push import 0건(grep + `loose-coupling.spec.ts` 정적 검증). push는 `chat-events.ts` 계약(@MX:ANCHOR)에만 단방향 의존.
+  - **mobile expo-notifications(등록/수신/탭 + 로그아웃 해제)**: `apps/mobile/lib/push/` — `register-device-core`(토큰 획득+등록/해제 순수 로직, vitest) + `notification-core`(수신+탭 핸들러 순수 로직, vitest) + 얇은 Expo 의존 래퍼 2종. `AuthContext.tsx` 로그인 후 자동 등록 배선, `useAuthBridge.ts` `session:cleared` 시 해제 연동(orphan token 차단). expo-notifications@~56.0.17 신규 의존성.
+
 - **모임 채팅 코어** (SPEC-CHAT-001 — 자동 게이트 통과 — jest 170/170, psql 존재 단언, evaluator PASS / realtime 종단·RLS 구독·브라우저 런타임 검증 대기 → in-progress): 모임 멤버 간 실시간 채팅 코어 구현.
   - **ChatMessage 모델 + 트리거/RLS 마이그레이션** (`apps/backend/prisma/schema.prisma`에 `ChatMessage`(BigInt PK auto-increment, moimId FK→moim onDelete Cascade, senderId, content, createdAt; @@index([moimId, id desc])) + `Moim.messages` 관계 추가, 마이그레이션 `20260613175232_add_chat` 적용). 수동 SQL 포함: content CHECK(`1..2000`자), `chat_message` RLS default-deny, `broadcast_chat_message()` SECURITY DEFINER 함수, `chat_message_broadcast` AFTER INSERT 트리거, `realtime.messages` SELECT 정책(멤버십 게이트).
   - **sendMessage (멤버 인가 + best-effort emit)**: `POST /moims/:id/messages` — `assertMember` 인가 후 insert, `chat.message.created` 이벤트 emit(try-catch best-effort 격리 — CHAT-002 리스너 예외가 201 응답 차단 불가), BigInt→string 직렬화. 비멤버/존재하지 않는 모임 → 403(모임 존재 여부 미노출).

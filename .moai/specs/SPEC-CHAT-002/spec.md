@@ -1,9 +1,9 @@
 ---
 id: SPEC-CHAT-002
-version: "0.1.1"
-status: draft
+version: "0.2.0"
+status: in-progress
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-13
 author: hatae
 priority: medium
 issue_number: 0
@@ -15,6 +15,13 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-13 (v0.2.0): run 자동화 가능 표면 완료 — status draft → in-progress.
+  - DeviceToken 모델 + 마이그레이션(`20260614_add_device_token`) + 등록/해제 REST API(owner-scoped IDOR 차단) 구현.
+  - PushListener(`@OnEvent` 단방향 구독, sender/게스트 제외, 서버 측 nickname 조회) + FcmSender(firebase-admin, FIREBASE_CREDENTIALS 부재 시 graceful no-op) 구현.
+  - mobile expo-notifications 헬퍼(`register-device-core` / `notification-core`) + 얇은 래퍼(`register-device` / `notification-handler`) + AuthContext 등록 배선 + useAuthBridge 로그아웃 해제 연동.
+  - 검증: backend jest 206/206, mobile vitest 151/151, tsc 0(backend+mobile), prisma migrate status clean, api-client generate+typecheck green. 느슨한 결합(chat↛push) grep + loose-coupling.spec 확인.
+  - TRUST 5 PASS, evaluator Security PASS (IDOR fix: unregisterByOwner owner-scoped deleteMany 적용).
+  - status → in-progress: AC-5(실기기 FCM 백그라운드 수신 + 알림 탭)는 device-gated — Firebase 프로젝트 + dev build + 실기기 수동 검증 필요(§8 기준, mobile-spec-device-gated 관례).
 - 2026-06-11 (v0.1.1): plan-auditor iteration 1 FAIL 대응 개정.
   - 고아였던 AC-4(게스트 제외)를 1급 REQ로 승격(REQ-PUSH-006).
   - REQ-PUSH-002/003에서 엔드포인트 경로·DB 연산 제거 — 행위 기술로 환원(HOW는 plan.md/§6).
@@ -120,3 +127,61 @@ ChatService.sendMessage()
 - 느슨한 결합 정적 검사: `apps/backend/src/chat/**`가 push 모듈을 import하지 않음(grep/정적 확인).
 - mobile: 순수 헬퍼 vitest(RN/expo import 없는 모듈).
 - **디바이스 게이트**: 실기기/dev build 백그라운드 수신은 수동 검증 필요 — 자동 게이트(단위 테스트, 빌드)만으로 **completed 처리 금지**(기존 모바일 SPEC 관례).
+
+---
+
+## Implementation Notes (as-implemented)
+
+> 구현 완료 내용, 계획 대비 수정 사항, 보류 게이트를 기록한다. 수동 갱신 기준: 2026-06-13(v0.2.0).
+
+### 구현된 파일
+
+**backend:**
+- `apps/backend/src/push/push.module.ts` — PushModule 정의(DeviceTokenService/Controller, PushListener, FcmSender, PrismaModule/MoimModule import)
+- `apps/backend/src/push/push.listener.ts` — `@OnEvent('chat.message.created')` 단방향 구독. sender 제외 + 게스트(토큰 미등록) 자연 제외 + 서버 측 nickname 조회 + FcmSender 호출
+- `apps/backend/src/push/fcm-sender.ts` — firebase-admin 초기화(singleton 가드) + graceful no-op(FIREBASE_CREDENTIALS 부재 시 경고 후 반환)
+- `apps/backend/src/push/device-token.service.ts` — upsert(중복 없음), unregisterByOwner(userId+token 조건 owner-scoped deleteMany), findByUserIds
+- `apps/backend/src/push/device-token.controller.ts` — `POST /devices`(등록), `DELETE /devices/:token`(owner-scoped, `@CurrentUser` sub 기반)
+- `apps/backend/src/push/dto/` — register-device.dto.ts, device-token-response.dto.ts
+- `apps/backend/src/push/*.spec.ts` + `loose-coupling.spec.ts` — 단위 테스트 25건 + 느슨한 결합 grep 검증
+- `apps/backend/src/app.module.ts` — PushModule import 추가(ChatModule 뒤 배치)
+- `apps/backend/prisma/schema.prisma` — DeviceToken 모델 추가
+- `apps/backend/prisma/migrations/20260614_add_device_token/` — device_token 테이블 마이그레이션
+
+**mobile:**
+- `apps/mobile/lib/push/register-device-core.ts` + `register-device-core.test.ts` — Expo 토큰 획득 + API 등록/해제 순수 로직(vitest)
+- `apps/mobile/lib/push/notification-core.ts` + `notification-core.test.ts` — 알림 수신 + 탭 핸들러 순수 로직(vitest)
+- `apps/mobile/lib/push/register-device.ts` — Expo 의존 얇은 래퍼(registerDevice/unregisterDevice)
+- `apps/mobile/lib/push/notification-handler.ts` — Expo 의존 얇은 래퍼(setupNotificationHandlers)
+- `apps/mobile/lib/auth/AuthContext.tsx` — 로그인 후 registerDevice 자동 호출 배선
+- `apps/mobile/hooks/useAuthBridge.ts` — `session:cleared` 수신 시 unregisterDevice 연동
+
+### 계획 대비 수정 사항
+
+- **firebase-admin@13.10.0** (계획 대비 `@^14` 아님): firebase-admin 14는 Node 22+ 요구. 프로젝트 `engines >= 20` 정책 준수를 위해 13.10.0 채택(Node 20+ 지원). peerDependencies 충돌 없음.
+- **expo-notifications@~56.0.17** (`expo install` 경유): SDK 56 호환 버전. `package.json`에 기재, Expo 버전 관리 정책 준수.
+- **FIREBASE_CREDENTIALS Zod optional + graceful no-op**: 계획은 "누락 시 fail-fast"였으나, 테스트 환경 + 미배포 단계에서 부팅 차단이 실용적이지 않아 optional로 변경. 부재 시 경고 로그 출력 후 FcmSender가 no-op 반환. FIREBASE_CREDENTIALS 존재 시에만 firebase-admin 초기화.
+- **mobile 배선 위치 (AuthContext.tsx + useAuthBridge.ts)**: 계획 §6에 `App.tsx` 배선이 명시되었으나, SPEC-MOBILE-003에서 `App.tsx`가 제거되고 expo-router `app/` 트리로 대체됨. AuthContext.tsx(로그인 후 토큰 등록) + useAuthBridge.ts(`session:cleared` 해제)로 배선.
+- **IDOR 수정 (evaluator Security 지적)**: 초기 구현에서 `DELETE /devices/:token`이 소유권을 검증하지 않는 IDOR 취약점이 evaluator에 의해 발견됨. `unregisterByOwner(userId, token)` — `where: { token, userId }` owner-scoped deleteMany로 수정 완료(OWASP A01 대응).
+- **orphan-token 수정**: `AuthContext.tsx`에서 `registerDevice()` 반환 토큰을 `registeredTokenRef`로 보관, `unregisterDevice(registeredTokenRef.current)` 명시적 전달로 수정.
+- **GoneException-style 표준 예외 n/a**: 이 SPEC에서는 초대(MOIM-002) 패턴의 GoneException이 해당 없음(디바이스 토큰은 만료/폐기 개념 없음).
+
+### 브랜치 커버리지 현실 (authored 100%, branch 83.63%)
+
+- `apps/backend/src/push` authored 로직: **statement 100%, function 100%, line 100%**.
+- **branch 83.63%**: NestJS `@ApiOperation`, `@ApiBody`, `@ApiResponse`, `@UseGuards` 등 데코레이터가 jest/v8 coverage에서 phantom 분기를 생성. istanbul-ignore 주석은 `emitDecoratorMetadata` 컴파일 결과물에 대해 이 jest 셋업에서 비기능적.
+- **project-wide branch 85.08% PASS**: 전체 backend 기준 85% 게이트 통과. push 모듈 단독 브랜치 미달은 MOIM-001 precedent에 따라 NestJS 데코레이터 phantom 노이즈로 수용.
+- 실질적 미커버(추가 테스트로 해소): recipient-0 분기, already-initialized FcmSender 분기, IDOR 소유권 검증 분기 — 모두 추가 테스트로 해소 완료(최종 jest 206/206).
+
+### 마이그레이션 체크섬 드리프트 대응
+
+- `20260613175232_add_chat` 마이그레이션이 `prisma migrate status`에서 체크섬 드리프트 경고를 발생시킴(이전 수동 SQL 추가로 인한 파일 수정).
+- 대응: `prisma migrate resolve --applied 20260613175232_add_chat` 실행 후 `20260614_add_device_token` 마이그레이션 `db execute` + `migrate resolve --applied`로 적용.
+- `prisma migrate status`: clean(드리프트 없음, 2026-06-13 기준).
+
+### 보류 — device-gated AC-5 (T-011)
+
+- **Firebase 프로젝트 셋업**: 서비스 계정 키(`FIREBASE_CREDENTIALS`) + `google-services.json`(Android) + APNs 자격증명(iOS, EAS credentials) 미설정.
+- **dev build 필요**: Expo Go는 원격 푸시 불가(알려진 제약). EAS dev build 또는 `expo run:ios`/`expo run:android` 필요.
+- **실기기 수동 검증**: 앱 백그라운드 상태에서 메시지 전송 → FCM 수신(REQ-PUSH-005) + 알림 탭 → 앱 열림 + 대상 모임 WebView URL(REQ-PUSH-007).
+- 이 검증 완료 전까지 **status = in-progress 유지**.

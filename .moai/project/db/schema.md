@@ -22,6 +22,7 @@ manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 | `moim_member` | 멤버십 + 모임별 표시 이름(nickname) — moim_id + user_id 복합 PK (SPEC-MOIM-001) |
 | `moim_invite` | 초대 링크 — token PK, moim_id FK, 만료·폐기·사용 횟수 관리 (SPEC-MOIM-002) |
 | `chat_message` | 모임 채팅 메시지 — BigInt PK, moim_id FK, RLS default-deny, content CHECK(1..2000) (SPEC-CHAT-001) |
+| `device_token` | FCM 디바이스 토큰 레지스트리 — token PK, userId(=profile.id), platform, upsert 중복 없음 (SPEC-CHAT-002) |
 
 ### profile
 
@@ -84,6 +85,24 @@ Prisma 모델명: `ChatMessage` | 마이그레이션: `20260613175232_add_chat`
 
 **RLS 설정**: `ENABLE ROW LEVEL SECURITY` + 정책 없음 = default deny. Prisma(postgres 롤)는 직접 연결로 영향 없음(쓰기 인가 = NestJS 서비스 레이어). anon/authenticated PostgREST 직접 접근 차단 용도.
 
+### device_token
+
+Prisma 모델명: `DeviceToken` | 마이그레이션: `20260614_add_device_token`
+
+| 컬럼 | 타입 | 제약 | 설명 |
+|------|------|------|------|
+| `token` | TEXT | PK | FCM/Expo 푸시 토큰 — 디바이스별 고유 문자열 |
+| `user_id` | TEXT | NOT NULL | 소유자 sub (= profile.id). 논리적 연결(FK 없음 — profile과 auth.users 경계 동일 사유) |
+| `platform` | TEXT | NOT NULL | 플랫폼 구분 — "ios" \| "android" |
+| `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 최초 등록 시각 |
+| `updated_at` | TIMESTAMP(3) | NOT NULL | 마지막 upsert 시각 (Prisma @updatedAt) |
+
+**인덱스**: `@@index([userId])` — 사용자별 토큰 목록 조회(PushListener에서 수신자 토큰 일괄 조회) 최적화.
+
+**IDOR 차단**: `DELETE /devices/:token` — `unregisterByOwner(userId, token)` 메서드가 `where: { token, userId }` 조건으로 owner-scoped 삭제. 타인 토큰 삭제 불가(OWASP A01:2021 대응).
+
+**Supabase Realtime/PostgREST 미노출**: device_token은 PostgREST 접근 불필요. RLS 미적용(NestJS 서비스 레이어가 인가 경계).
+
 **트리거**: `broadcast_chat_message()` SECURITY DEFINER 함수(`search_path=""`) + `chat_message_broadcast` AFTER INSERT FOR EACH ROW 트리거. Supabase Realtime `moim:{moimId}` private channel로 메시지 레코드만 fanout(nickname 미포함 — thin trigger).
 
 **Realtime 구독 정책**: `realtime.messages` SELECT `members can receive moim broadcasts` — `moim_member` 멤버십 확인으로 구독 인가. 비멤버 구독 거부(AC-4).
@@ -100,7 +119,7 @@ Prisma 모델명: `ChatMessage` | 마이그레이션: `20260613175232_add_chat`
 | `moim_invite` | `moim` | N:1 | `moim_invite.moim_id` | onDelete Cascade — 모임 삭제 시 초대 자동 정리 |
 | `chat_message` | `moim` | N:1 | `chat_message.moim_id` | onDelete Cascade — 모임 삭제 시 채팅 메시지 자동 정리 |
 
-> `profile.id`와 `moim.created_by` / `moim_member.user_id` / `moim_invite.created_by`는 모두 Supabase `sub`로 논리적으로 연결되나, 현재 schema에 외래 키 제약은 없다(auth.users는 Supabase 내부 스키마 — app-owned profile 패턴).
+> `profile.id`와 `moim.created_by` / `moim_member.user_id` / `moim_invite.created_by` / `device_token.user_id`는 모두 Supabase `sub`로 논리적으로 연결되나, 현재 schema에 외래 키 제약은 없다(auth.users는 Supabase 내부 스키마 — app-owned profile 패턴). `device_token`은 `moim`에도 FK가 없는 독립 레지스트리다(사용자-디바이스 등록, moim과 무관).
 
 ---
 
@@ -115,6 +134,8 @@ Prisma 모델명: `ChatMessage` | 마이그레이션: `20260613175232_add_chat`
 | `moim_invite` | `moim_id` | INDEX (`@@index([moimId])`) | 모임별 초대 목록 조회 최적화 |
 | `chat_message` | `id` | PK (기본) | 메시지 단일 조회 |
 | `chat_message` | `(moim_id, id)` | INDEX (`@@index([moimId, id])`) | 모임별 keyset 내림차순 히스토리 쿼리 최적화 |
+| `device_token` | `token` | PK (기본) | 토큰 단일 조회 |
+| `device_token` | `user_id` | INDEX (`@@index([userId])`) | 사용자별 토큰 목록 조회 최적화(PushListener 수신자 토큰 일괄 조회) |
 
 ---
 
@@ -131,3 +152,4 @@ Prisma 모델명: `ChatMessage` | 마이그레이션: `20260613175232_add_chat`
 | `chat_message` | `chat_message_pkey` | PK | `id` (BIGSERIAL) |
 | `chat_message` | `chat_message_moim_id_fkey` | FK | `moim_id → moim(id) ON DELETE CASCADE` |
 | `chat_message` | `chat_message_content_length` | CHECK | `char_length(content) BETWEEN 1 AND 2000` |
+| `device_token` | `device_token_pkey` | PK | `token` |

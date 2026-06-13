@@ -1,6 +1,6 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-06-14 (SPEC-CHAT-001 sync)
+%% 최종 갱신: 2026-06-14 (SPEC-CHAT-002 sync)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
@@ -39,6 +39,14 @@ erDiagram
         string sender_id "발신자 sub (= PROFILE.id)"
         string content "메시지 본문 (CHECK 1..2000자)"
         timestamp created_at
+    }
+
+    DEVICE_TOKEN {
+        string token PK "FCM/Expo 푸시 토큰 (디바이스별 고유)"
+        string user_id "소유자 sub (= PROFILE.id, 논리적 연결 — FK 없음)"
+        string platform "ios | android"
+        timestamp created_at
+        timestamp updated_at "Prisma @updatedAt"
     }
 
     MOIM ||--o{ MOIM_MEMBER : "has members (Cascade)"

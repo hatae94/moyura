@@ -26,9 +26,10 @@ moyura/
 │  │  │  ├─ moim/       # 첫 기능 도메인 모듈 (SPEC-MOIM-001) — MoimModule/MoimService/MoimController + dto(create/response/member) + *.spec.ts + integration.spec.ts. assertMember/assertOwner 인가 단일 출처(@MX:ANCHOR). MoimService export — 하위 SPEC(CHAT-001/CHAT-002/MOIM-002) 재사용 계약.
 │  │  │  ├─ invite/     # 초대 도메인 모듈 (SPEC-MOIM-002) — InviteModule/InviteService/InviteController + dto(create-invite/accept-invite/response) + *.spec.ts + invite.integration.spec.ts. MoimModule import(assertOwner 재사용). 발급/목록/폐기(owner 전용) + accept(멱등/원자 usedCount).
 │  │  │  ├─ chat/       # 채팅 도메인 모듈 (SPEC-CHAT-001) — ChatModule/ChatService/ChatController + chat-events.ts(이벤트 계약 소유·export, @MX:ANCHOR) + dto(send-message/get-history/message-response) + *.spec.ts + chat.integration.spec.ts. MoimModule import(assertMember 재사용). EventEmitterModule 인프라 선행 도입(CHAT-002가 구독할 chat.message.created 이벤트 계약).
+│  │  │  ├─ push/       # FCM 푸시 도메인 모듈 (SPEC-CHAT-002) — PushModule/PushListener(@OnEvent 단방향, chat↛push 의존 방향 없음) + FcmSender(firebase-admin, graceful no-op) + DeviceTokenService(upsert/unregisterByOwner owner-scoped) + DeviceTokenController(POST /devices, DELETE /devices/:token) + dto(register-device/device-token-response) + *.spec.ts + loose-coupling.spec.ts. chat 모듈은 push 존재 미인지 — push는 chat-events.ts(@MX:ANCHOR) 계약에만 단방향 의존.
 │  │  │  ├─ prisma/     # PrismaService (pg adapter, pingDatabase)
 │  │  │  └─ generated/  # Prisma 7 source-emit 클라이언트 (gitignore, 재생성)
-│  │  ├─ prisma/        # schema.prisma (Profile + Moim + MoimMember + MoimInvite + ChatMessage 모델) + migrations/20260602095934_init_profile + 20260613155202_add_moim + 20260613171209_add_moim_invite + 20260613175232_add_chat
+│  │  ├─ prisma/        # schema.prisma (Profile + Moim + MoimMember + MoimInvite + ChatMessage + DeviceToken 모델) + migrations/20260602095934_init_profile + 20260613155202_add_moim + 20260613171209_add_moim_invite + 20260613175232_add_chat + 20260614_add_device_token
 │  │  ├─ test/          # 수동 통합 검증 스크립트 — chat.live.mts(SPEC-CHAT-001 AC-1c/4/5 런타임 검증용)
 │  │  ├─ prisma.config.ts  # Prisma 7 연결 URL 위치
 │  │  ├─ openapi.ts     # OpenAPI emit 스크립트
@@ -48,8 +49,8 @@ moyura/
 │  │  │     ├─ notifications.tsx # ${WEB_URL}/notifications 호스팅 WebView 래퍼
 │  │  │     └─ profile.tsx      # ${WEB_URL}/profile 호스팅 WebView 래퍼
 │  │  ├─ components/    # WebViewShell.tsx, LoadingOverlay.tsx, WebViewErrorOverlay.tsx, BridgedWebView.tsx(탭 공유 seam)
-│  │  ├─ hooks/         # useAppLifecycle.ts(Android 백/네비 이력), useAuthBridge.ts(OAuth 인터셉트 + 토큰 브리지 + 보안)
-│  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비), route-map-core.ts(@MX:ANCHOR, URL↔라우트 매핑), auth/(oauth.ts·oauth-bridge.ts·bridge-protocol.ts·nonce-core.ts·token-store.ts·token-store-core.ts·auth-bridge-core.ts·app-lifecycle-core.ts·auth-state-core.ts(@MX:ANCHOR)·AuthContext.tsx + 보안/단위 테스트)
+│  │  ├─ hooks/         # useAppLifecycle.ts(Android 백/네비 이력), useAuthBridge.ts(OAuth 인터셉트 + 토큰 브리지 + 보안 + session:cleared 시 FCM 토큰 해제 연동 — SPEC-CHAT-002)
+│  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비), route-map-core.ts(@MX:ANCHOR, URL↔라우트 매핑), auth/(oauth.ts·oauth-bridge.ts·bridge-protocol.ts·nonce-core.ts·token-store.ts·token-store-core.ts·auth-bridge-core.ts·app-lifecycle-core.ts·auth-state-core.ts(@MX:ANCHOR)·AuthContext.tsx(로그인 후 FCM registerDevice 배선 — SPEC-CHAT-002) + 보안/단위 테스트), push/(register-device-core.ts·register-device-core.test.ts·notification-core.ts·notification-core.test.ts·register-device.ts·notification-handler.ts — SPEC-CHAT-002)
 │  │  ├─ patches/       # @react-native-cookies__cookies.patch(jcenter→mavenCentral, Android Gradle 9 호환)
 │  │  └─ eas.json       # EAS local/prod 프로파일 스켈레톤
 │  └─ web/              # @moyura/web     — Next.js 16 (app/, public/)
