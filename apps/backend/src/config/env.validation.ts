@@ -40,6 +40,13 @@ export const envSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
   // SUPABASE_JWT_SECRET: 레거시 HS256 폴백 전용(R-A4). JWKS-primary 운영 시 미설정 가능 → optional 유지.
   SUPABASE_JWT_SECRET: z.string().optional(),
+
+  // --- FCM 발송(SPEC-CHAT-002 T-004) ---
+  // FIREBASE_CREDENTIALS: firebase-admin 서비스 계정 키 JSON(문자열). OPTIONAL — 의도적으로 fail-fast하지 않는다.
+  // 부재 시 FcmSender가 firebase-admin을 초기화하지 않고 send()가 no-op이 되어(푸시 비활성, 경고 1회 로깅)
+  // 자격증명 없이도 부팅·AppModule 통합 테스트가 통과한다(required로 두면 모든 통합 테스트가 깨진다).
+  // 존재 시 admin.initializeApp({credential})로 발송이 활성화된다. JSON 파싱은 FcmSender가 수행한다(스키마는 문자열만 검증).
+  FIREBASE_CREDENTIALS: z.string().optional(),
 });
 
 // 검증된 설정의 타입. CORS_ORIGINS는 transform 이후 string[]로 추론된다.

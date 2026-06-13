@@ -102,3 +102,23 @@ model ChatMessage {
   @@index([moimId, id(sort: Desc)])
   @@map("chat_message")
 }
+
+// SPEC-CHAT-002 디바이스 토큰 레지스트리(REQ-PUSH-002/003). FCM 발송 대상 디바이스를 사용자에 연결한다.
+// token을 PK로 둔다 — 등록은 token 기준 upsert로 중복 없이 저장하고(REQ-PUSH-002), 해제는 token으로 삭제한다
+// (REQ-PUSH-003 orphan token 방지). 같은 디바이스 토큰이 다른 사용자로 재등록되면 userId가 갱신된다(디바이스 핸드오프).
+// userId(= profile.id)는 가드-검증 sub만 들어온다(mass-assignment 차단 — profile/moim 패턴 동일).
+// @@index(userId)로 사용자별 토큰 조회(수신 대상 산정)를 커버한다. 게스트(웹)는 디바이스가 없어 row 자체가 없다.
+model DeviceToken {
+  // FCM/Expo 디바이스 push 토큰(PK). 등록 upsert·해제 delete의 유일한 키.
+  token     String   @id
+  // 토큰 소유 사용자 sub(= profile.id). 검증된 sub만 들어온다(mass-assignment 차단).
+  userId    String   @map("user_id")
+  // "android" | "ios". 클라이언트가 전달하되 컨트롤러가 비어 있음을 400으로 거른다(ValidationPipe 부재 보완).
+  platform  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 사용자별 토큰 조회(수신 대상 산정 시 userId in [...] 필터)를 커버한다.
+  @@index([userId])
+  @@map("device_token")
+}

@@ -626,6 +626,69 @@
           "chat"
         ]
       }
+    },
+    "/devices": {
+      "post": {
+        "operationId": "DeviceTokenController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "디바이스 토큰 등록(upsert, 중복 없음)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/devices/{token}": {
+      "delete": {
+        "operationId": "DeviceTokenController_unregister",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "디바이스 토큰 해제(orphan token 방지)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "devices"
+        ]
+      }
     }
   },
   "info": {
@@ -940,6 +1003,29 @@
         "required": [
           "messages",
           "nextCursor"
+        ]
+      },
+      "RegisterDeviceDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "FCM/Expo 디바이스 push 토큰(비어 있을 수 없음)",
+            "example": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+          },
+          "platform": {
+            "type": "string",
+            "description": "디바이스 플랫폼(비어 있을 수 없음)",
+            "example": "ios",
+            "enum": [
+              "android",
+              "ios"
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "platform"
         ]
       }
     }

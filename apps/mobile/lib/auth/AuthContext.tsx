@@ -33,6 +33,7 @@ import {
   deriveAuthState,
   type AuthBridgeSignal,
 } from "./auth-state-core";
+import { registerDevice } from "../push/register-device";
 
 /** AuthContext 가 노출하는 인증 상태 + 신호 보고 채널. */
 export interface AuthContextValue {
@@ -114,15 +115,32 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
     [],
   );
 
+  const { isSignedIn } = deriveAuthState({ tokens, lastBridgeSignal });
+
+  // R-PUSH-005/R-3: 로그인 상태로 전환되면 디바이스 토큰을 등록한다(REST 직접 등록 — bridge 무수정, R-1).
+  // isSignedIn=false→true 전이에서만 1회 호출한다(중복 등록 방지). registerDevice 는 권한 거부/Expo Go/
+  // 미인증을 비차단으로 흡수하고(no-op, 비throw) token PK upsert 라 재호출돼도 중복 row 가 없다.
+  // 해제(unregisterDevice)는 useAuthBridge 의 명시 로그아웃(session:cleared) 경로가 담당한다(orphan 방지).
+  const wasSignedInRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (isSignedIn && !wasSignedInRef.current) {
+      wasSignedInRef.current = true;
+      // 콜드스타트 토큰 로드 완료 후(isSignedIn 도출 시점) 등록한다. best-effort — 실패해도 앱 흐름 비차단.
+      void registerDevice();
+    } else if (!isSignedIn) {
+      // 미로그인으로 돌아가면 다음 로그인 전이에서 다시 등록할 수 있도록 플래그를 리셋한다.
+      wasSignedInRef.current = false;
+    }
+  }, [isSignedIn]);
+
   const value = useMemo<AuthContextValue>(() => {
-    const { isSignedIn } = deriveAuthState({ tokens, lastBridgeSignal });
     return {
       isSignedIn,
       isLoading,
       nonce: nonceRef.current,
       reportSignal,
     };
-  }, [tokens, lastBridgeSignal, isLoading, reportSignal]);
+  }, [isSignedIn, isLoading, reportSignal]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

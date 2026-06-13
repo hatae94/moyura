@@ -98,6 +98,19 @@ describe('validateEnv (AC-B1 / AC-B2)', () => {
       /CORS_ORIGINS/,
     );
   });
+
+  // --- SPEC-CHAT-002 T-004: FIREBASE_CREDENTIALS optional (graceful degrade) ---
+  // FCM 자격증명은 선택적이다. 부재 시 부팅/통합 테스트가 그대로 통과해야 하며(푸시 비활성), fail-fast 금지.
+  it('FIREBASE_CREDENTIALS 누락 시에도 검증을 통과하고 undefined가 된다 (graceful degrade)', () => {
+    const env = validateEnv(baseValidEnv);
+    expect(env.FIREBASE_CREDENTIALS).toBeUndefined();
+  });
+
+  it('FIREBASE_CREDENTIALS가 있으면 그대로 보존한다 (발송 활성)', () => {
+    const creds = '{"project_id":"demo","client_email":"x@y.z","private_key":"k"}';
+    const env = validateEnv({ ...baseValidEnv, FIREBASE_CREDENTIALS: creds });
+    expect(env.FIREBASE_CREDENTIALS).toBe(creds);
+  });
 });
 
 describe('isOriginAllowed (AC-F1 / AC-F3)', () => {

@@ -27,7 +27,14 @@
     "plugins": [
       "expo-secure-store",
       "expo-splash-screen",
-      "expo-router"
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#E6F4FE"
+        }
+      ]
     ],
     "extra": {
       "eas": {

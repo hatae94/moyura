@@ -28,6 +28,7 @@ import { SUPABASE_URL } from "../lib/env";
 import { bridgeGoogleOAuth } from "../lib/auth/oauth";
 import { saveTokens, clearTokens, type SessionTokens } from "../lib/auth/token-store";
 import { clearWebViewCookies } from "../lib/auth/cookie-clear";
+import { unregisterDevice } from "../lib/push/register-device";
 import {
   serializeBridgeMessage,
   parseBridgeMessage,
@@ -233,6 +234,10 @@ export function useAuthBridge({
             onAuthSignal?.("session:none");
           } else {
             // R-PR5: cleared(로그아웃) — 콜드스타트 결과 아님(M-1). AuthContext 미로그인 → (auth)/login 전환.
+            // R-PUSH-003/R-3: 명시 로그아웃에서만 디바이스 토큰을 해제한다(orphan token 방지 — 로그아웃 후
+            // 푸시 수신 차단). none(콜드스타트 미인증)에는 호출하지 않는다 — 등록한 적 없는 디바이스이거나
+            // 세션 만료 폴백이라 해제 대상이 아니다(현재 디바이스 토큰을 재획득해 best-effort DELETE).
+            void unregisterDevice();
             onAuthSignal?.("session:cleared");
           }
           break;
