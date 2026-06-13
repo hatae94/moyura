@@ -23,9 +23,10 @@ moyura/
 │  │  │  ├─ health/     # GET /health (PrismaService SELECT 1 프로브)
 │  │  │  ├─ auth/       # SupabaseAuthGuard(ES256 JWKS, jose) + TokenVerifierService + auth.config + @CurrentUser
 │  │  │  ├─ profile/    # ProfileService(upsertBySub) + me.controller(GET /me 보호) + profile-response.dto
+│  │  │  ├─ moim/       # 첫 기능 도메인 모듈 (SPEC-MOIM-001) — MoimModule/MoimService/MoimController + dto(create/response/member) + *.spec.ts + integration.spec.ts. assertMember/assertOwner 인가 단일 출처(@MX:ANCHOR). MoimService export — 하위 SPEC(CHAT-001/CHAT-002/MOIM-002) 재사용 계약.
 │  │  │  ├─ prisma/     # PrismaService (pg adapter, pingDatabase)
 │  │  │  └─ generated/  # Prisma 7 source-emit 클라이언트 (gitignore, 재생성)
-│  │  ├─ prisma/        # schema.prisma (Profile 모델) + migrations/20260602095934_init_profile (첫 도메인 마이그레이션)
+│  │  ├─ prisma/        # schema.prisma (Profile + Moim + MoimMember 모델) + migrations/20260602095934_init_profile + 20260613155202_add_moim
 │  │  ├─ prisma.config.ts  # Prisma 7 연결 URL 위치
 │  │  ├─ openapi.ts     # OpenAPI emit 스크립트
 │  │  └─ openapi.json   # 커밋된 OpenAPI 계약 산출물

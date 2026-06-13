@@ -57,7 +57,7 @@
 - `nx run backend:typecheck` 통과 (Prisma generate 의존).
 - `pnpm --filter @moyura/backend test` green.
 - 마이그레이션 로컬 `:54322` 적용 성공 (drift 없음 — 본 SPEC은 수동 SQL 없음).
-- api-client 재생성 후 `nx run api-client:build` 통과.
+- api-client 재생성 후 `nx run api-client:generate` + `nx run api-client:typecheck` 통과 (api-client:build 타겟 부재 — C-2 교정).
 
 ## Definition of Done
 

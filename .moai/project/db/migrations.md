@@ -1,52 +1,33 @@
 # Migrations
 
-_TBD — Populate this file as migrations are created and applied. The `Applied Migrations` table
-is partially auto-updated by the `moai-domain-db-docs` hook when migration files are detected._
+수동 갱신 기준: `apps/backend/prisma/migrations/`. db.yaml auto-sync는 현재 비활성(`enabled: false`)이므로 SPEC sync 시 수동으로 갱신한다.
 
 ---
 
 ## Applied Migrations
 
-| Filename | Applied At | Checksum | Summary |
-|----------|-----------|----------|---------|
-| _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+로컬 Supabase(`:54322`) 적용 기준. 적용 시각은 `prisma migrate status` 기준(Checksum은 Prisma 내부 관리).
 
-<!--
-Example rows:
-| 20240101_001_create_users.sql     | 2024-01-01T10:00:00Z | sha256:abc123 | Initial users table |
-| 20240115_002_add_posts_table.sql  | 2024-01-15T14:30:00Z | sha256:def456 | Add posts with user FK |
-| 20240201_003_add_email_index.sql  | 2024-02-01T09:15:00Z | sha256:ghi789 | Perf index on users.email |
--->
+| Filename | Applied At | Summary |
+|----------|-----------|---------|
+| `20260602095934_init_profile` | 2026-06-02 | `profile` 테이블 생성 — Supabase sub PK, SPEC-AUTH-001 |
+| `20260613155202_add_moim` | 2026-06-13 | `moim` + `moim_member` 테이블 생성, moim_member → moim FK onDelete Cascade, SPEC-MOIM-001 |
 
 ---
 
 ## Pending Migrations
 
-List migrations that exist in the codebase but have not yet been applied to production.
+현재 미적용(로컬 적용 완료, prod 미배포 — prod 배포 파이프라인은 SPEC-ENV-SETUP-001 follow-up).
 
 | Filename | Created At | Description | Blocking? |
 |----------|-----------|-------------|-----------|
-| _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-
-<!--
-Example:
-| 20240301_004_add_comments.sql | 2024-03-01 | Add comments table | No |
-| 20240310_005_rls_enable.sql   | 2024-03-10 | Enable RLS on users | Yes — requires DBA review |
--->
+| `20260613155202_add_moim` | 2026-06-13 | prod DB에 모임 테이블 추가 필요 | Yes (prod 배포 시) |
 
 ---
 
 ## Rollback Notes
 
-Document rollback procedures for each migration that is difficult or non-trivial to reverse.
-
 | Migration | Risk Level | Rollback Steps | Data Loss? |
 |-----------|-----------|----------------|------------|
-| _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-
-<!--
-Example:
-| 20240201_003_add_email_index.sql | Low    | DROP INDEX users_email_idx; | No |
-| 20240310_005_rls_enable.sql      | High   | Disable RLS, restore original policies | No |
-| 20240401_006_drop_old_column.sql | Critical | Cannot roll back — column data lost | YES |
--->
+| `20260613155202_add_moim` | Low | `DROP TABLE moim_member; DROP TABLE moim;` | moim/moim_member 데이터 손실 (현재 로컬 개발 데이터만 해당) |
+| `20260602095934_init_profile` | Low | `DROP TABLE profile;` | profile 데이터 손실 |

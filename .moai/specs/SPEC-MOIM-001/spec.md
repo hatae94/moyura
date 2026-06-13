@@ -1,9 +1,9 @@
 ---
 id: SPEC-MOIM-001
-version: "0.1.1"
-status: draft
+version: "0.2.0"
+status: completed
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-13
 author: hatae
 priority: high
 issue_number: 0
@@ -15,6 +15,9 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-13 (v0.2.0): run 완료 — status draft → completed.
+  - T-001~T-009 전체 구현 완료: Moim + MoimMember 모델 + 마이그레이션, 6개 REST 라우트, assertMember/assertOwner 인가 단일 출처(@MX:ANCHOR), createMoim 원자 트랜잭션.
+  - jest 105/105 통과, 커버리지 96.79% (moim 영역 100%), TRUST 5 PASS, evaluator-active PASS (Functionality 95 / Security 95 / Craft 88 / Consistency 95).
 - 2026-06-11 (v0.1.1): plan-auditor iteration 1 FAIL 대응 개정.
   - REQ 모듈을 2개(인증·인가 / 모임 라이프사이클·멤버십)로 그룹화하고, 복합 REQ(탈퇴+멤버목록)를 원자 REQ로 분리.
   - CRUD 스코프 정합: 모임 조회(단건/목록)·삭제(owner 전용) REQ 신설, update는 비범위 유지. 제목 정합.
@@ -107,3 +110,30 @@ issue_number: 0
 - 백엔드: jest TDD, statement 커버리지 85%+ (TRUST 5).
 - `nx run backend:typecheck` + `pnpm --filter @moyura/backend test` 통과.
 - 마이그레이션 로컬(`:54322`) 적용 성공.
+
+## Implementation Notes (as-implemented)
+
+### 생성된 파일
+
+- `apps/backend/src/moim/moim.module.ts` — MoimModule 선언 (MoimService export 포함)
+- `apps/backend/src/moim/moim.service.ts` — MoimService (assertMember/@MX:ANCHOR, assertOwner/@MX:ANCHOR, createMoim 원자 트랜잭션, CRUD 메서드)
+- `apps/backend/src/moim/moim.controller.ts` — MoimController (6개 라우트, class 레벨 @UseGuards)
+- `apps/backend/src/moim/dto/create-moim.dto.ts`, `moim-response.dto.ts`, `member-response.dto.ts`
+- `apps/backend/src/moim/moim.service.spec.ts`, `moim.controller.spec.ts`, `moim.integration.spec.ts`
+- `apps/backend/prisma/migrations/20260613155202_add_moim/migration.sql`
+- `apps/backend/src/app.module.ts` — MoimModule import 추가 (ProfileModule 뒤)
+
+### 계획 대비 실제 차이 (divergences)
+
+1. **deleteMoim 메서드 명시적 분리**: plan.md에는 삭제 로직이 controller 인라인으로 구상되었으나, 실제 구현에서는 `MoimService.deleteMoim(sub, moimId)` 별도 메서드로 분리하여 단일 책임 원칙과 일관성을 강화했다.
+2. **jest collectCoverageFrom 제외 목록 추가**: `package.json`에 커버리지 수집 제외 패턴(`generated/**`, `main.ts`, `openapi.ts`, `swagger.ts`, `**/*.spec.ts`)을 추가했다. 이는 생성 코드·부트스트랩·테스트 파일을 정확히 제외하기 위한 정당한 조정이며, moim 도메인 커버리지는 100%를 달성했다.
+
+### Evaluator LOW findings — 수용됨 (accepted)
+
+1. **getMoim double-read** (`moim.service.ts:67-71`): `assertMember` 호출 후 명시적 `requireMoim` 재호출로 DB 쿼리 3회 발생. 기능 결함이 아닌 성능 비효율로 분류됨. SPEC 범위 내 정확성은 완전히 충족하며, 리팩토링은 후속 최적화 작업으로 연기한다.
+2. **leave() 404 단일 응답** (`moim.service.ts:94-107`): 존재하지 않는 moimId로 탈퇴 시도 시 "모임 없음 404"와 "멤버십 없음 404"를 구분하지 않는다. SPEC 엣지 시나리오("비멤버 → 404")는 정확히 충족하며, 모임 존재 여부를 404로 노출하지 않음으로써 비멤버에게 모임 존재 여부를 숨기는 보안 이점이 있다.
+
+### C-1 / C-2 교정 사항
+
+- **C-1**: class-validator를 사용하지 않고 controller의 `requireNonEmpty` 헬퍼로 수동 400 검증 구현 (class-validator/class-transformer 의존성 없음).
+- **C-2**: `nx run api-client:build` 타겟이 존재하지 않으므로, 품질 게이트는 `nx run api-client:generate` + `nx run api-client:typecheck` 로 대체 확인했다. acceptance.md 해당 라인도 교정됨.

@@ -9,6 +9,15 @@
 
 ### Added
 
+- **모임 도메인 (Moim CRUD + 멤버십 인가)** (SPEC-MOIM-001 — 자동 게이트 통과 — jest 105/105, coverage 96.79%, evaluator PASS / 백엔드 도메인, 디바이스 게이트 없음 → completed): 모임 라이프사이클(생성·조회·삭제)과 멤버십 데이터를 책임지는 백엔드 첫 기능 도메인 모듈 구현.
+  - **Moim + MoimMember 모델 + 마이그레이션** (`apps/backend/prisma/schema.prisma`에 `Moim`(id, name, created_by, created_at) + `MoimMember`(moim_id + user_id 복합 PK, nickname, role default 'member', joined_at; moim_id → moim onDelete Cascade) 추가, 마이그레이션 `20260613155202_add_moim` 적용).
+  - **6개 REST 라우트 + per-route 인증 가드**: `POST /moims`(201, 생성), `GET /moims`(200, 내 모임 목록), `GET /moims/:id`(200, 단건), `GET /moims/:id/members`(200, 멤버 목록 + nickname), `DELETE /moims/:id`(204, owner 전용 삭제 + Cascade), `DELETE /moims/:id/membership`(204, 일반 멤버 탈퇴 / owner 탈퇴 금지). `MoimController` class 레벨 `@UseGuards(SupabaseAuthGuard)` — 누락 없이 6개 라우트 전체 적용.
+  - **assertMember/assertOwner 인가 단일 출처 (@MX:ANCHOR, 하위 SPEC 재사용 계약)**: `MoimService`에 `assertMember` + `assertOwner` 두 헬퍼를 단일 출처로 구현하고 `@MX:ANCHOR`로 표기. SPEC-CHAT-001/CHAT-002/MOIM-002가 이 인가 경계를 재사용할 계획. `MoimService`는 module에서 export됨(하위 SPEC 소비 가능).
+  - **createMoim 원자 트랜잭션**: 모임 생성과 생성자 owner 멤버십 생성을 Prisma 인터랙티브 `$transaction(async tx => {...})` 콜백으로 단일 원자 단위로 처리 — 부분 성공 방지.
+  - **owner 탈퇴 금지 / owner 전용 삭제(Cascade)**: owner는 자기 모임의 멤버십을 탈퇴할 수 없음(403); 퇴장 경로는 모임 삭제 전용. 모임 삭제 시 `MoimMember` Cascade 자동 정리.
+  - **수동 입력 검증**: class-validator 미사용, `requireNonEmpty` 헬퍼로 nickname/name 빈 문자열 수동 400 검증.
+  - **openapi/api-client 재생성**: 6개 라우트 포함 `openapi.json` 재생성 + `nx run api-client:generate` + `nx run api-client:typecheck` 통과.
+
 - **expo-router 네비게이션 골격 + 라우트별 WebView 하이브리드** (SPEC-MOBILE-003 — 자동 게이트 통과 / 핵심 플로우 iOS 디바이스 검증 완료 / Google OAuth·Android·로그아웃 검증 대기): `apps/mobile`에 expo-router(SDK 56) 네이티브 네비게이션 골격을 도입하고, `apps/web`에 `(main)` 탭 라우트 그룹을 신설하여 동일 라우트 트리(`/home`/`/explore`/`/notifications`/`/profile`)를 웹·앱이 공유하는 하이브리드 아키텍처 완성.
   - **expo-router 네이티브 네비게이션 골격**: `app/_layout.tsx`(Root Stack + SplashScreen/useAppLifecycle/useAuthBridge/AuthContext 오케스트레이션), `app/index.tsx`(auth-state-core 결정 기반 Redirect), `app/(auth)/_layout.tsx`+`login.tsx`(기존 WebViewShell 이메일 로그인 in-WebView 흐름 보존), `app/(tabs)/_layout.tsx`(expo-router Tabs, emoji-glyph 아이콘, notifications 배지 mock, Tabs.Protected 가드), `app/(tabs)/{home,explore,notifications,profile}.tsx`(각 탭 = `${WEB_URL}/<route>` 호스팅 얇은 WebView 래퍼). `App.tsx` 제거 — `app/` 트리 단일 진입.
   - **웹 `(main)` 탭 라우트 그룹 + HomeTab**: `apps/web/app/(main)/layout.tsx`(공유 BottomTabBar + 인증 가드), `(main)/_components/BottomTabBar.tsx`(lucide-react + Tailwind v4, Figma 적응), `(main)/home/page.tsx`+`HomeTab.tsx`+`_mock.ts`(시간대별 인사말·아바타, 모임 생성 CTA, 필터 칩, 모임 카드 mock, 빈 상태), `(main)/{explore,notifications,profile}/page.tsx`(플레이스홀더). `apps/web/lib/auth/actions.ts` redirect `/me`→`/home`(이메일/가입/OAuth 3곳), mobile `oauth-bridge.ts` `DEFAULT_NEXT` `/home` 변경.
