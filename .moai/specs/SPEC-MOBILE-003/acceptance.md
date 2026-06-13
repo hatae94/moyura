@@ -32,7 +32,7 @@
 
 - **Given** `App.tsx` 의 스플래시/브리지/콜드스타트 핸드셰이크 오케스트레이션이 `app/_layout.tsx` 로 행위 보존 이전(R-RT3)되고 `import './lib/env'` env 가드 side-effect 가 첫 렌더 전 보존(R-RT4)되며 SDK 56 호환 네비게이션 의존성이 추가(R-RT2)된 `apps/mobile`/`apps/web` 에서,
 - **When** `nx test mobile`(vitest), `tsc --noEmit`(mobile/web), `next build`(web), `expo export`(mobile) 를 실행하면,
-- **Then** 기존 `lib/auth/`·`hooks/` 테스트가 전부 통과(89/89 baseline 이상 유지, 신규 `auth-state-core`/`route-map-core`/확장 테스트 포함)하고, typecheck 0 에러(추가된 expo-router 의존성·타입 포함), web build 통과, expo 번들 OK(엔트리 이전이 번들/스플래시 부트를 깨지 않음)이며, 이메일 로그인 in-WebView 흐름 단언이 보존된다.
+- **Then** 기존 `lib/auth/`·`hooks/` 테스트가 전부 통과(134/134 이상 유지 — 94 기존 baseline + 40 신규: route-map-core 17, auth-state-core 10, crossroute 10, app-lifecycle +3)하고, typecheck 0 에러(추가된 expo-router 의존성·타입 포함), web build 통과, expo 번들 OK(엔트리 이전이 번들/스플래시 부트를 깨지 않음)이며, 이메일 로그인 in-WebView 흐름 단언이 보존된다.
 - 검증: 자동(전체 게이트 출력 첨부). env 가드 보존(R-RT4)은 미설정 throw 동작 확인 + `_layout.tsx`/entry 의 `./lib/env` import 존재 static-grep.
 
 ## AC-5 — 셸 모드 탭바 숨김(이중 탭바 없음) + 웹 `(main)`/`/home` 렌더 (R-WB1 / R-WB2 / R-WB3 / R-WB4 / R-PR3)
@@ -116,7 +116,7 @@
 
 ## Quality Gates (요약)
 
-- 자동: vitest 89/89 baseline 이상(+ `auth-state-core`/`route-map-core`/확장 `decideWebViewLoad`·`decideBackPress`), `tsc --noEmit`(mobile/web) 0 에러, `next build` 통과, `expo export` OK.
+- 자동: vitest 134/134 이상(94 기존 baseline + 40 신규: route-map-core 17, auth-state-core 10, crossroute 10, app-lifecycle +3), `tsc --noEmit`(mobile/web) 0 에러, `next build` 통과, `expo export` OK.
 - static-grep: `(tabs)/*.tsx` = WebView 래퍼, 웹 `(main)/*` 에 `react-native-webview` import 0, deprecated expo-router API(`@react-navigation/*`/`expo-router/babel`/`useRootNavigation`) 0, `actions.ts`/`oauth-bridge.ts` redirect = `/home`.
 - 디바이스 게이트(completed 전환 조건): 로그인→`/(tabs)/home`, 탭 전환=네이티브, 교차 라우트 차단→디스패치, Android 네이티브 back, 셸 모드 웹 탭바 미표시(flash 없음), `moyura://` 딥링크 공존, 로그아웃 종단.
 

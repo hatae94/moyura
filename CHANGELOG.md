@@ -9,6 +9,17 @@
 
 ### Added
 
+- **expo-router 네비게이션 골격 + 라우트별 WebView 하이브리드** (SPEC-MOBILE-003 — 자동 게이트 통과 / 핵심 플로우 iOS 디바이스 검증 완료 / Google OAuth·Android·로그아웃 검증 대기): `apps/mobile`에 expo-router(SDK 56) 네이티브 네비게이션 골격을 도입하고, `apps/web`에 `(main)` 탭 라우트 그룹을 신설하여 동일 라우트 트리(`/home`/`/explore`/`/notifications`/`/profile`)를 웹·앱이 공유하는 하이브리드 아키텍처 완성.
+  - **expo-router 네이티브 네비게이션 골격**: `app/_layout.tsx`(Root Stack + SplashScreen/useAppLifecycle/useAuthBridge/AuthContext 오케스트레이션), `app/index.tsx`(auth-state-core 결정 기반 Redirect), `app/(auth)/_layout.tsx`+`login.tsx`(기존 WebViewShell 이메일 로그인 in-WebView 흐름 보존), `app/(tabs)/_layout.tsx`(expo-router Tabs, emoji-glyph 아이콘, notifications 배지 mock, Tabs.Protected 가드), `app/(tabs)/{home,explore,notifications,profile}.tsx`(각 탭 = `${WEB_URL}/<route>` 호스팅 얇은 WebView 래퍼). `App.tsx` 제거 — `app/` 트리 단일 진입.
+  - **웹 `(main)` 탭 라우트 그룹 + HomeTab**: `apps/web/app/(main)/layout.tsx`(공유 BottomTabBar + 인증 가드), `(main)/_components/BottomTabBar.tsx`(lucide-react + Tailwind v4, Figma 적응), `(main)/home/page.tsx`+`HomeTab.tsx`+`_mock.ts`(시간대별 인사말·아바타, 모임 생성 CTA, 필터 칩, 모임 카드 mock, 빈 상태), `(main)/{explore,notifications,profile}/page.tsx`(플레이스홀더). `apps/web/lib/auth/actions.ts` redirect `/me`→`/home`(이메일/가입/OAuth 3곳), mobile `oauth-bridge.ts` `DEFAULT_NEXT` `/home` 변경.
+  - **네이티브 인증 상태 + 가드**: `lib/auth/auth-state-core.ts`(`{tokens, lastBridgeSignal}→{isSignedIn, redirectTo}` 순수 결정, @MX:ANCHOR, vitest 10종), `lib/auth/AuthContext.tsx`(SecureStore + bridge 신호 단일 소스). `Stack.Protected`/`Tabs.Protected` SDK 56 표준 가드.
+  - **라우트별 WebView 래퍼 + 네비게이션 계약**: `lib/route-map-core.ts`(URL↔네이티브 라우트 1:1 매핑, @MX:ANCHOR, vitest 17종), `components/BridgedWebView.tsx`(공유 WebView seam). `decideWebViewLoad` 교차 라우트 차단+dispatch 확장(cross-route vitest 10종, 기존 origin 잠금 단언 보존). `decideBackPress` 라우트 컨텍스트 확장(app-lifecycle vitest +3).
+  - **셸 모드 탭바 숨김**: `(main)/_components/ShellModeEffect.tsx`(soft-nav 안전 client component, `data-shell` 감지), inline shell-detect script 병행(full-load flash 방지). 셸 모드에서 웹 BottomTabBar 숨김 — 이중 탭바 방지. `x-nonce` 헤더 → inline script nonce(CSP 호환).
+  - **디바이스 검증 수정 (ShellSessionAnnouncer)**: `(main)/_components/ShellSessionAnnouncer.tsx` — (main) 마운트 시 `getSession()`으로 쿠키 토큰 읽어 `session:synced`(v1 프로토콜, nonce, access_token dedup) 전송. 서버 액션 쿠키 세션 로그인 후 웹→네이티브 토큰 핸드오버 구현(D-V2 해소). 로그인→`/(tabs)/home` 네이티브 전환 + 콜드 재시작 세션 지속(AC-1/4 디바이스 PASS).
+  - **의존성**: `expo-router ~56.2.10`, `react-native-safe-area-context`, `react-native-screens`, `expo-constants`(apps/mobile 스코프). `@react-native-cookies` jcenter()→mavenCentral() pnpm patch(`patches/@react-native-cookies__cookies.patch`, Android Gradle 9 호환).
+  - **테스트**: mobile vitest 134/134(94 기존 baseline + 40 신규: route-map-core 17, auth-state-core 10, crossroute 10, app-lifecycle +3). web tsc 0 + next build. mobile tsc 0 + expo export.
+  - 검증: 자동 게이트 전부 통과. iOS 시뮬레이터 디바이스 검증: AC-1(로그인→네이티브 (tabs)/home) PASS, AC-4(콜드 재시작 세션 지속) PASS, AC-5(셸 모드 탭바 숨김 + 데스크톱 /home) PASS, AC-7(moyura:// 딥링크 공존) PASS. AC-2/3/8 자동 PASS. Google OAuth 라운드트립(실계정 수동 검증 대기), 로그아웃 E2E(탭 플로우 밖), AC-6 Android back(Android 제외) 미검증 — status in-progress 유지.
+
 - **WebView 셸 컴포넌트화** (SPEC-WEBVIEW-SHELL-001 — 자동 게이트 통과 / 디바이스 검증 대기): 모놀리식 `App.tsx`를 재사용 가능한 컴포넌트·훅으로 행위 보존 추출(회귀 0).
   - `components/WebViewShell.tsx`: source URL prop + 이벤트 핸들러 prop을 받는 재사용 가능 WebView 셸 컴포넌트.
   - `components/LoadingOverlay.tsx`, `components/WebViewErrorOverlay.tsx`: 분리된 오버레이 presentational 컴포넌트.

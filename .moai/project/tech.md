@@ -9,6 +9,7 @@
 | 구분 | 내용 |
 |------|------|
 | **IMPLEMENTED (골격)** | 모노레포 골격(pnpm + Nx), 3개 앱 스캐폴드(mobile/web/backend), `@moyura/config` 스텁, 루트/앱별 Nx 타겟, hoisted node_modules |
+| **IMPLEMENTED (SPEC-MOBILE-003, in-progress — iOS 핵심 플로우 검증 완료)** | expo-router(~56.2.10) 네이티브 네비게이션 골격(Root Stack + `(auth)`/`(tabs)` 그룹 + 네이티브 Tabs), 라우트별 WebView 래퍼, 웹 `(main)` 탭 라우트 그룹(BottomTabBar + HomeTab + 플레이스홀더), 네이티브 AuthContext(SecureStore + bridge 신호), route-map-core / auth-state-core 순수 결정 모듈, 셸 모드 탭바 숨김(ShellModeEffect + ShellSessionAnnouncer), redirect /me→/home. Google OAuth·Android·로그아웃 E2E 검증 대기 — status in-progress |
 | **IMPLEMENTED (SPEC-ENV-SETUP-001, completed)** | Supabase PostgreSQL 연결(Prisma 7 + `@prisma/adapter-pg` 듀얼 URL), Zod 4 환경검증(fail-fast), NestJS `@nestjs/swagger` OpenAPI → `packages/api-client`(`@moyura/api-client`) 타입드 클라이언트 생성, Supabase CLI 로컬 스택(direct `:54322`), CORS allowlist, `GET /health` 엔드포인트, CI/EAS 스켈레톤, 프런트 env 가드(web/mobile) |
 | **IMPLEMENTED (SPEC-AUTH-001, completed)** | Supabase Auth **실제 인증**(authn-only): 백엔드 ES256 JWKS 검증 가드(jose), 첫 도메인 모델 `Profile` + UPSERT, 보호 라우트 `GET /me`, 웹 `@supabase/ssr` 쿠키 세션 + email/pw + PKCE 콜백, 소셜/모바일 OAuth 스캐폴드, `@moyura/api-client` Bearer 토큰 주입. evaluator-active PASS(security 0.97) |
 | **PLANNED (follow-up, 미구현)** | prod 배포 파이프라인(자동 Prisma migrate + deploy, Render/Supabase 실 배포 및 prod e2e 증명), 인증 후속 과제(실제 소셜 provider 키, 모바일 런타임 OAuth 라운드트립, 이메일 확인/비밀번호 재설정, RBAC/인가, 프런트 자동 테스트 타겟, prod HTTPS 강제) |
@@ -29,7 +30,7 @@
 
 | 앱 | 프레임워크 | 핵심 버전 | 특이사항(검증됨) |
 |----|------------|-----------|------------------|
-| mobile | Expo (React Native) | expo `~56.0.6`, react `19.2.3`, react-native `0.85.3`, `react-native-webview 13.16.1`(Expo56 핀), `expo-secure-store ~56.0.4`, `expo-splash-screen ~56.0.10` | `app.json` slug `app`, scheme `moyura`. `App.tsx`가 `WebViewShell` + 오버레이 + 훅을 합성하는 씬 셸; `expo-secure-store` 기반 토큰 캐시 + nonce 인증 postMessage 브리지(SPEC-WEBVIEW-SHELL-001 + SPEC-MOBILE-002, 코드 구현 / 디바이스 종단 검증 대기) |
+| mobile | Expo (React Native) | expo `~56.0.6`, react `19.2.3`, react-native `0.85.3`, `react-native-webview 13.16.1`(Expo56 핀), `expo-secure-store ~56.0.4`, `expo-splash-screen ~56.0.10`, `expo-router ~56.2.10`(SPEC-MOBILE-003), `react-native-safe-area-context`, `react-native-screens`, `expo-constants` | `app.json` slug `app`, scheme `moyura`. expo-router 파일 기반 라우팅(`app/` 트리) — Root Stack + `(auth)`/`(tabs)` 그룹 + 네이티브 Tabs. `App.tsx` 제거(SPEC-MOBILE-003). `expo-secure-store` 기반 토큰 캐시 + nonce 인증 postMessage 브리지(SPEC-WEBVIEW-SHELL-001 + SPEC-MOBILE-002). @react-native-cookies jcenter()→mavenCentral() pnpm patch(Android Gradle 9 호환) |
 | web | Next.js | `16.2.6`, react/react-dom `19.2.4` | App Router(`app/`), Tailwind v4(`@tailwindcss/postcss`), `reactCompiler: true`, `turbopack.root`를 모노레포 루트로 고정(stray lockfile 워크스페이스 오탐 방지) |
 | backend | NestJS | `@nestjs/common ^11`, `@nestjs/core ^11`, platform-express `^11` | 현재 기본 `app.controller`/`app.service`만 존재. `main.ts` 포트 `3000` 하드코딩(SPEC에서 config화 예정) |
 

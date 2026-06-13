@@ -35,7 +35,7 @@ depends-on: SPEC-WEBVIEW-SHELL-001, SPEC-MOBILE-002. status: draft. priority: hi
 - R-WB5 [U]: 모바일 `(tabs)/_layout.tsx` = expo-router Tabs(Figma BottomTabBar RN 재해석, safe-area, notifications 배지 mock); 각 탭 = `${WEB_URL}/<route>` 호스팅 얇은 WebView 래퍼.
 
 ### M5 보존/회귀 + 목적지 전환
-- R-PR1 [U]: 기존 `lib/auth/`·`hooks/` vitest(89/89 baseline 이상) 보존.
+- R-PR1 [U]: 기존 `lib/auth/`·`hooks/` vitest(134/134 이상 — 94 기존 baseline + 40 신규) 보존.
 - R-PR2 [S]: `(auth)/login` 이메일/비번 로그인 in-WebView 흐름 보존(네이티브 인터셉트 없음).
 - R-PR3 [E]: 웹 단독 로그인 완료 → `redirect("/home")`(actions.ts:46,65,89 + oauth-bridge.ts:29 DEFAULT_NEXT + 관련 테스트 일관 변경).
 - R-PR4 [U]: `moyura://auth-callback` 딥링크가 expo-router 자동 라우팅과 공존(콜백 경로 라우트 파일 부재).
@@ -46,7 +46,7 @@ depends-on: SPEC-WEBVIEW-SHELL-001, SPEC-MOBILE-002. status: draft. priority: hi
 - AC-1 (R-NC5/R-AS2): 로그인→`router.replace("/(tabs)/home")`, home 탭 WebView = `${WEB_URL}/home` (디바이스).
 - AC-2 (R-AS4/R-AS1/R-AS5/R-AS3): `auth-state-core` 순수 결정(none→login, synced→home, cleared→login; RN import 0) — 가드 결정 포함 (vitest).
 - AC-3 (R-NC1/R-NC2/R-NC3): 탭 WebView 교차 라우트 로드 시 라우트 매핑+WebView-load 결정(구현 위치 무관) → deny + 네이티브 디스패치; 기존 단언 보존 (vitest).
-- AC-4 (R-PR1/R-PR2/R-RT2/R-RT3/R-RT4): 엔트리 이전 행위 보존 + 회귀 게이트 — vitest 89/89+, tsc 0, next build, expo export, env 가드/이메일 로그인 보존 (자동).
+- AC-4 (R-PR1/R-PR2/R-RT2/R-RT3/R-RT4): 엔트리 이전 행위 보존 + 회귀 게이트 — vitest 134/134 이상(94 기존 baseline + 40 신규), tsc 0, next build, expo export, env 가드/이메일 로그인 보존 (자동).
 - AC-5 (R-WB1/R-WB2/R-WB3/R-WB4/R-PR3): 셸 모드 웹 탭바 숨김(flash 없음, 이중 탭바 없음) + 데스크톱 `/home` HomeTab 렌더 + `redirect("/home")` (웹 build+수동/디바이스).
 - AC-6 (R-NC4): back 결정 컨텍스트(구현 위치 무관) — `(tabs)` native-back / `(auth)/login` WebView back 보존 (vitest+디바이스).
 - AC-7 (R-PR4/R-PR5): `moyura://` 딥링크 공존(콜백 라우트 파일 부재) + 로그아웃→`(auth)/login` 종단 (static-grep+디바이스).

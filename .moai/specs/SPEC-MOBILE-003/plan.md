@@ -66,7 +66,7 @@
 ### 단계 G — 보존/회귀 + 종단 (spec M5 / R-PR1·R-PR4·R-PR5) — Priority High
 | 작업 | 검증 | 비고 |
 |---|---|---|
-| 회귀 게이트 | `nx test mobile` 89/89+ , `tsc --noEmit`(mobile/web), `next build`, `expo export` | R-PR1 |
+| 회귀 게이트 | `nx test mobile` 134/134 이상(94 기존 baseline + 40 신규), `tsc --noEmit`(mobile/web), `next build`, `expo export` | R-PR1 |
 | 딥링크 공존 | `moyura://auth-callback` 가 라우트 파일로 안 잡힘 확인 | R-PR4(디바이스) |
 | 로그아웃 종단 | `session:cleared` → `(auth)/login` 네이티브 이동 + R-R4 cookie-clear 보존 | R-PR5(디바이스) |
 
@@ -87,7 +87,7 @@
 |---|---|---|---|
 | 1 | 엔트리 전환 시 `App.tsx` 스플래시/브리지/콜드스타트 핸드셰이크(`App.tsx:35,82`) 손실, `index.ts:5` env 가드 side-effect 누락 | HIGH | `_layout.tsx` 단방향 행위 보존 이전 + env import 최상단 재배치. App.tsx 제거(R-RT5). **@MX:WARN**(@MX:REASON: 엔트리 전환 = 세션 부트 회귀 위험) |
 | 2 | 인증 상태 신호 누락 시 로그인 무한 루프 | HIGH | `auth-state-core.ts` 순수 결정 + vitest 특성화. bridge 신호 단일 소스(R-AS1/AS5). **@MX:ANCHOR**(라우트 가드 fan_in) |
-| 3 | `decideWebViewLoad` 확장이 기존 R-T9 origin 잠금 단언 회귀 | HIGH | 기존 security 테스트 보존 후 cross-route 분기 추가(89/89 게이트). RED 로 신규 분기만 추가 |
+| 3 | `decideWebViewLoad` 확장이 기존 R-T9 origin 잠금 단언 회귀 | HIGH | 기존 security 테스트 보존 후 cross-route 분기 추가(134/134 게이트). RED 로 신규 분기만 추가 |
 | 4 | Android back 일원화가 `(auth)/login` WebView back 회귀 | MEDIUM | `decideBackPress` 라우트 컨텍스트 인자(OD-2). `(auth)` 는 기존 동작 보존 |
 | 5 | 셸 모드 웹 탭바 hydration flash(이중 탭바 순간 노출) | MEDIUM | `injectedJavaScriptBeforeContentLoaded` 마커(OD-3, R-WB4). 디바이스 검증 |
 | 6 | `moyura://auth-callback` 딥링크가 expo-router 라우트로 포착 | MEDIUM | 콜백 경로를 라우트 파일로 만들지 않음(R-PR4). 디바이스 검증 |

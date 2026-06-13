@@ -1,11 +1,11 @@
 ---
 id: SPEC-MOBILE-003
-version: 0.1.1
-status: draft
+version: 0.2.0
+status: in-progress
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-13
 created_at: 2026-06-11
-updated_at: 2026-06-11
+updated_at: 2026-06-13
 author: hatae
 priority: high
 issue_number: 0
@@ -20,6 +20,7 @@ labels: [mobile, navigation, expo-router, webview, hybrid]
 
 ## HISTORY
 
+- 2026-06-13 (v0.2.0): run + 디바이스 검증 완료. T-001~T-010 전 구현(expo-router 하이브리드 네비게이션 골격, 웹 `(main)` 라우트 그룹, 네이티브 인증 상태, 라우트별 WebView 래퍼, `/me`→`/home` 전환, 셸 모드 탭바 숨김). 핵심 플로우 iOS 시뮬레이터 디바이스 검증: AC-1(로그인→네이티브 (tabs)/home) PASS, AC-4(콜드 재시작 세션 지속) PASS, AC-5(셸 모드 탭바 숨김 + 데스크톱 /home) PASS, AC-7(moyura:// 딥링크 공존) PASS. AC-2/3/8 자동 PASS. 디바이스 검증 중 발견된 결함 수정(D-V1/D-V2 ShellSessionAnnouncer 토큰 핸드오버 / CSP nonce / D-V3 soft-nav ShellModeEffect). status → in-progress (Google OAuth 라운드트립 / Android / 로그아웃 E2E 검증 대기). vitest 기준선 수정: 89/89(stale) → 134/134(94 기존 baseline + 40 신규). Implementation Notes 절 추가.
 - 2026-06-11 (v0.1.1): plan-audit review-2(PASS 0.90)의 비차단 권고 중 2건 정리. **D10**: R-WB4 의 If 조건에 셸 모드 스코핑을 명시("If shell-mode determination is unresolved before content hydration ... NOT a desktop browser")하여 데스크톱 브라우저(마커 자연 부재)에서 웹 탭바가 숨겨지는 literal 오독 가능성 제거(AC-5(a) 데스크톱 탭바 표시와 일관). spec-compact.md 동기화. **D12**: acceptance.md 추적 매트릭스의 R-AS2→AC-2 인용과 AC-2 헤더 불일치 해소 — AC-2 헤더에 R-AS2 추가(본문 L19 의 session 신호→isSignedIn 전이 단언이 이미 실질 커버). D11(OD-1 확정 시 R-NC1 동반 개정)·D13(created/created_at 중복)은 의도적으로 보류(D11=런 진입 OD 결정, D13=감사 스키마 호환 유지).
 - 2026-06-11 (v0.1.0): 최초 작성 (draft). 사전 조사 `research.md`(§1·6·8 사용자 align 2라운드 반영) 기반. **메이저 아키텍처 확정(초기 "네이티브 RN /home"에서 피벗)**: 모바일은 expo-router(SDK 56)로 **네이티브 네비게이션 골격(Tabs/Stack)**만 만들고, 각 라우트의 **화면 콘텐츠는 대응 웹 페이지를 WebView로 렌더링**한다. 웹(`apps/web`)과 앱은 **동일 라우트 트리**(`/home`,`/explore`,`/notifications`,`/profile`)를 공유하며 URL↔네이티브-라우트 1:1 매핑이 네비게이션 계약이다. 화면 UI는 **웹 측(Next.js 16 + Tailwind v4 + lucide-react)** 에 신설하는 `(main)` 라우트 그룹으로 구현(Figma Make 코드와 스택 호환). 모바일 네이티브 구현 대상은 **네비게이션 크롬(Figma BottomTabBar 의 RN 재해석 탭바)뿐**. 모바일의 모든 화면 전환(탭/push/back/로그인 후)은 expo-router 가 담당하며 WebView 의 교차 라우트 자체 이동은 금지(기존 `decideWebViewLoad` 인터셉트 자산 확장으로 차단 후 네이티브 디스패치). 로그인/회원가입은 기존 WebView 흐름을 `(auth)/login` 라우트로 보존. 로그인 완료 후 bridge `session:synced` → `router.replace("/(tabs)/home")`; 웹 단독 사용자는 `redirect("/home")`(`actions.ts` 3곳 + mobile `oauth-bridge` `DEFAULT_NEXT` + 관련 테스트 변경). `/me` 페이지 자체는 유지. **단일 SPEC(M1~M5)**. MeetupDetail 은 본 SPEC 제외 — 네비게이션 계약을 따르는 후속 SPEC(SPEC-MOBILE-004 후보)로 명시. 본 SPEC 의 expo-router 토대를 지금 만드는 이유는 라우트별 WebView 래퍼가 **향후 화면 단위로 WebView→RN UI 독립 교체**를 가능케 하기 때문(네비게이션 골격 불변).
 
@@ -115,7 +116,7 @@ labels: [mobile, navigation, expo-router, webview, hybrid]
 
 ### M5 — 보존 / 회귀 + post-login 목적지 전환 종단
 
-- **R-PR1** [U][PRESERVE]: The existing `apps/mobile/lib/auth/` and `apps/mobile/hooks/` vitest suites (bridge-protocol, nonce-core, token-store-core, auth-bridge-core, app-lifecycle-core including security suites) **shall** continue to pass (89/89 baseline 이상 유지) after the `decideWebViewLoad`/`decideBackPress` extensions.
+- **R-PR1** [U][PRESERVE]: The existing `apps/mobile/lib/auth/` and `apps/mobile/hooks/` vitest suites (bridge-protocol, nonce-core, token-store-core, auth-bridge-core, app-lifecycle-core including security suites) **shall** continue to pass (134/134 이상 유지 — 94 기존 baseline + 40 신규: route-map-core 17, auth-state-core 10, crossroute 10, app-lifecycle +3) after the `decideWebViewLoad`/`decideBackPress` extensions.
 - **R-PR2** [S][PRESERVE]: **While** a user performs email/password login inside the `(auth)/login` WebView, the existing in-WebView flow (no native interception of email login) **shall** be preserved.
 - **R-PR3** [E][MODIFY]: **When** login completes for a web-only (desktop browser) user, the web **shall** `redirect("/home")` instead of `redirect("/me")`; the three redirect sites (`actions.ts:46,65` and OAuth `?next=` at `:89`) and the mobile `oauth-bridge` `DEFAULT_NEXT` (`oauth-bridge.ts:29`) and their affected tests **shall** be updated consistently to `/home`.
 - **R-PR4** [U][PRESERVE]: The OAuth deep link (`moyura://auth-callback`) **shall** coexist with expo-router auto deep-link routing without conflict; the callback path **shall not** be captured as an app route file. (research §7.4)
@@ -145,9 +146,66 @@ labels: [mobile, navigation, expo-router, webview, hybrid]
 
 ## Definition of Done (요약)
 
-- 자동 게이트: `nx test mobile`(vitest, 89/89 baseline 이상 + 신규 `auth-state-core`/`route-map-core`/확장 `decideWebViewLoad`/`decideBackPress` 테스트) 통과, `tsc --noEmit`(mobile/web) 0 에러, `next build`(web) 통과, `expo export` 번들 OK.
+- 자동 게이트: `nx test mobile`(vitest, 134/134 통과 — 94 기존 baseline + 40 신규: route-map-core 17, auth-state-core 10, crossroute 10, app-lifecycle +3) 통과, `tsc --noEmit`(mobile/web) 0 에러, `next build`(web) 통과, `expo export` 번들 OK.
 - 정적 검사: `(tabs)/*.tsx` 가 WebView 래퍼임(웹 페이지 호스팅), 웹 `(main)` 페이지에 `react-native-webview` import 0, deprecated expo-router API(`@react-navigation/*`/`expo-router/babel`/`useRootNavigation`) 0.
 - **디바이스 검증 게이트(메모리 `mobile-spec-device-gated` 일관)**: 실기기/에뮬레이터에서 로그인→`/(tabs)/home` 전환, 탭 전환=네이티브, 교차 라우트 차단→네이티브 디스패치, Android 네이티브 back, 셸 모드 웹 탭바 미표시(flash 없음), `moyura://` 딥링크 공존 종단 검증 완료 전까지 **status `in-progress` 유지**.
+
+---
+
+## Implementation Notes (as-implemented)
+
+> 이 절은 런 + 디바이스 검증 단계에서 확인된 실제 구현 내용과 plan.md 대비 차이를 기록한다 (v0.2.0, 2026-06-13).
+
+### 생성된 파일
+
+**모바일 (`apps/mobile/app/` 트리)**:
+- `app/_layout.tsx` — Root Stack + SplashScreen/useAppLifecycle/useAuthBridge/AuthContext 오케스트레이션
+- `app/index.tsx` — auth-state-core 결정 기반 Redirect 분기
+- `app/+not-found.tsx` — 404 폴백
+- `app/(auth)/_layout.tsx` — (auth) Stack 그룹 레이아웃
+- `app/(auth)/login.tsx` — 기존 WebViewShell 재사용(이메일 로그인 in-WebView 흐름 보존)
+- `app/(tabs)/_layout.tsx` — expo-router Tabs (Figma BottomTabBar RN 재해석, emoji-glyph 아이콘, notifications 배지 mock, Tabs.Protected 가드)
+- `app/(tabs)/home.tsx`, `app/(tabs)/explore.tsx`, `app/(tabs)/notifications.tsx`, `app/(tabs)/profile.tsx` — 각각 `${WEB_URL}/<route>`를 호스팅하는 얇은 BridgedWebView 래퍼
+
+**모바일 (`apps/mobile/lib/`, `apps/mobile/components/`)**:
+- `lib/route-map-core.ts` — URL↔네이티브 라우트 1:1 매핑 순수 모듈 (@MX:ANCHOR, @MX:NOTE)
+- `lib/auth/auth-state-core.ts` — `{tokens, lastBridgeSignal}→{isSignedIn, redirectTo}` 순수 결정 함수 (@MX:ANCHOR, @MX:NOTE)
+- `lib/auth/AuthContext.tsx` — SecureStore + bridge 신호 기반 네이티브 인증 상태 컨텍스트
+- `components/BridgedWebView.tsx` — 탭 WebView 래퍼 공유 seam (ShellSessionAnnouncer 포함)
+
+**웹 (`apps/web/app/(main)/`)**:
+- `(main)/layout.tsx` — 공유 레이아웃 (BottomTabBar + 인증 가드 + ShellSessionAnnouncer + ShellModeEffect)
+- `(main)/_components/BottomTabBar.tsx` — Figma BottomTabBar 적응 (lucide-react, Tailwind v4)
+- `(main)/_components/PlaceholderTab.tsx` — 플레이스홀더 탭 공유 컴포넌트
+- `(main)/_components/ShellModeEffect.tsx` — soft-nav 안전 셸 모드 감지 (client component, D-V3 수정)
+- `(main)/_components/ShellSessionAnnouncer.tsx` — (main) 마운트 시 쿠키 세션 읽어 session:synced 핸드오버 (D-V2 수정)
+- `(main)/home/page.tsx` + `(main)/home/HomeTab.tsx` + `(main)/home/_mock.ts` — Figma HomeTab (인사말/CTA/필터 칩/모임 카드 mock/빈 상태)
+- `(main)/explore/page.tsx`, `(main)/notifications/page.tsx`, `(main)/profile/page.tsx` — 플레이스홀더
+
+### plan.md 대비 실질 차이점 (drift)
+
+1. **@expo/vector-icons 부재 → emoji-glyph 탭 아이콘**: pnpm hoisted 레이아웃에서 `@expo/vector-icons`가 hoisted 범위에 없어 설치 없이 emoji 문자로 탭 아이콘 표현. 신규 의존성 미추가 (계획: Figma BottomTabBar RN 재해석 — in-scope, 외형만 차이).
+2. **`experiments.typedRoutes` 비활성 유지**: `tsconfig`에 `.expo/types`가 없어 typedRoutes 활성화 시 typecheck 실패. R-RT6(Optional) 조건에 따라 비활성(hrefs는 cast 처리). AC-8 통과 조건 그대로.
+3. **BridgedWebView + supporting 컴포넌트**: plan.md 파일 목록보다 `BridgedWebView.tsx`, `ShellModeEffect.tsx`, `ShellSessionAnnouncer.tsx`, `PlaceholderTab.tsx`가 추가됨. 모두 in-scope supporting 파일 — 누적 drift < 20% (informational).
+
+### 디바이스 검증 중 발견·수정된 결함
+
+- **D-V1 (사전 CRITICAL)**: Next.js App Router soft navigation이 `onShouldStartLoadWithRequest`를 트리거하지 않아 post-login WebView가 `/home`으로 soft-nav → 네이티브 (tabs) 미마운트. **ShellSessionAnnouncer**(F1')로 신호 기반 전환으로 우회 — 결과적으로 auth-flow 경로 CLOSED.
+- **D-V2 (HIGH)**: 서버 액션(쿠키 세션) 로그인은 브라우저 `supabase` 클라이언트 이벤트를 emit하지 않아 웹→네이티브 토큰 핸드오버가 없었음. `ShellSessionAnnouncer`: `(main)` 레이아웃 마운트 시 `getSession()`으로 쿠키 토큰 읽어 `session:synced`(+tokens, nonce, v1 프로토콜, access_token dedup) 전송. AC-4 CLOSED.
+- **D-V3 (MEDIUM)**: soft navigation에서 React-rendered inline script가 재실행되지 않아 `data-shell` 미갱신 → 탭바 숨김 실패. `ShellModeEffect` client component(useEffect)로 교체 — full-load용 inline script는 flash 방지 목적으로 병행 유지. AC-5b CLOSED.
+- **CSP nonce**: `(main)/layout.tsx`의 inline shell-detect script가 MOBILE-002 CSP의 `nonce-...` + `strict-dynamic`에 의해 차단됨. `x-nonce` 헤더 → script `nonce` 속성 적용으로 수정.
+- **@react-native-cookies jcenter→mavenCentral pnpm patch**: Android Gradle 9 build blocker 수정(`patches/@react-native-cookies__cookies.patch`). Android 검증은 user directive에 따라 제외 — 향후 Android 빌드 시 유효.
+
+### 미검증 항목 (비차단, 기록 목적)
+
+- **Google OAuth 라운드트립 (device, 수동)**: 실계정 필요 — 사용자 수동 검증 정책에 따라 기록.
+- **로그아웃 E2E**: 웹 `/me` 로그아웃 UI가 탭 플로우 밖에 있어 이 SPEC의 탭 네비게이션 범위 내에서 검증 불가.
+- **AC-6 Android 하드웨어 back**: Android 제외 user directive(2026-06-12)에 따라 iOS 시뮬레이터만 검증.
+- **AC-3 cross-route 런타임**: in-scope 페이지에 교차 라우트 링크가 없어 런타임 미검증 — vitest 계약 테스트 + 데스크톱 시뮬레이션 통과.
+
+### 후속 SPEC 후보 (메모)
+
+MeetupDetail 화면(모임 카드 탭 → 상세)은 본 SPEC 제외 항목으로 명시됨. 본 SPEC의 네비게이션 계약(`(tabs)/home/[id]` native push + 대응 웹 상세 WebView 또는 RN UI)을 따르는 **후속 SPEC 후보**다. ID는 현재 존재하는 SPEC-MOBILE-004(native Google Sign-In)와 **충돌하지 않는 별도 SPEC**으로 결정 예정 — ID 중복 주의.
 
 ---
 
