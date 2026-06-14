@@ -31,9 +31,6 @@ import { RegisterDeviceDto } from './dto/register-device.dto';
 @Controller('devices')
 @UseGuards(SupabaseAuthGuard)
 export class DeviceTokenController {
-  // istanbul ignore next — 파라미터 프로퍼티 DI 생성자. TS emitDecoratorMetadata가 만드는 phantom 삼항이라
-  // 로직이 없어 테스트로 도달 불가하다(device-token.service와 동일 아티팩트).
-  /* istanbul ignore next */
   constructor(private readonly deviceTokens: DeviceTokenService) {}
 
   // POST /devices — 디바이스 토큰 등록(REQ-PUSH-002 / AC-2). 201. token PK 기준 upsert(중복 없음).

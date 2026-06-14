@@ -22,8 +22,6 @@ export class FcmSender implements OnModuleInit {
   // firebase-admin Messaging 인스턴스. 자격증명 부재 시 null로 남아 send()가 no-op이 된다.
   private messaging: admin.messaging.Messaging | null = null;
 
-  // istanbul ignore next — 파라미터 프로퍼티 DI 생성자(TS emitDecoratorMetadata phantom 분기, 로직 없음).
-  /* istanbul ignore next */
   constructor(private readonly config: ConfigService) {}
 
   // 부팅 시 1회 초기화. FIREBASE_CREDENTIALS가 있으면 firebase-admin을 초기화하고, 없으면 경고 1회 후

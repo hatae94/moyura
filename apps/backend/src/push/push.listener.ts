@@ -19,8 +19,6 @@ const DEFAULT_NOTIFICATION_TITLE = '새 메시지';
 // 메시지 전송(ChatService.emit)을 무효화하지 않는다(재시도/큐 비범위 — spec §5).
 @Injectable()
 export class PushListener {
-  // istanbul ignore next — 파라미터 프로퍼티 DI 생성자(TS emitDecoratorMetadata phantom 분기, 로직 없음).
-  /* istanbul ignore next */
   constructor(
     private readonly prisma: PrismaService,
     private readonly fcm: FcmSender,

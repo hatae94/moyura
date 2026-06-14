@@ -34,10 +34,6 @@ export const BRIDGE_MESSAGE_TYPES = {
   REVALIDATE: "resume:revalidate",
 } as const;
 
-/** 보장 message type 의 유니온. */
-export type BridgeMessageType =
-  (typeof BRIDGE_MESSAGE_TYPES)[keyof typeof BRIDGE_MESSAGE_TYPES];
-
 /** 토큰 페이로드 — access/refresh 만(userId/프로필 미포함 — PII 최소화 OD-4). */
 export interface TokenPayload {
   access: string;
