@@ -1,7 +1,7 @@
 ---
 id: SPEC-WEB-GUARD-001
-version: 0.1.0
-status: draft
+version: 0.2.0
+status: completed
 created: 2026-06-15
 updated: 2026-06-15
 author: hatae
@@ -13,6 +13,7 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-15 (v0.2.0): sync 단계 — status `draft` → `completed` 전환. 본 SPEC은 device-gated 아님: 순수 웹 서버 측 라우팅 로직으로 OAuth/FCM/Realtime/네이티브 의존이 없다. 6개 AC 전부 검증 완료: AC-1(서버 layout 가드, 코드 검사), AC-2(미인증 → 307→/login, 실 HTTP 확인), AC-3(이름 없음 → /onboarding, `requireNamedSession()` 동일 코드 경로 재사용으로 보증 — web/app/(main)/layout.tsx·app/me/page.tsx에서 이미 실 검증됨), AC-4(탭바 없음, 코드 검사), AC-5(리다이렉트 루프 없음 — /login·/onboarding이 app/moims/ 밖, 코드 검사), AC-6(nx run web:build 0 errors, nx run web:lint 0 errors). 검증 증거: `nx run web:build` PASS(Compiled successfully, TypeScript finished 0 errors), `nx run web:lint` PASS(0 errors), GET /moims/test-id/chat 세션 없음 → HTTP 307→/login PASS. SPEC-MOBILE-004 sync 리포트의 cross-SPEC 후속(chat 페이지 이름 온보딩 가드 미적용) 해소.
 - 2026-06-15 (v0.1.0): 최초 draft. SPEC-MOBILE-004 evaluator가 MEDIUM으로 플래그한 cross-SPEC follow-up. `app/moims/` 서브트리가 `app/(main)/` 라우트 그룹 밖에 있어 `app/(main)/layout.tsx`의 `requireNamedSession()` 가드가 적용되지 않는 갭을 닫는다. 단일 파일(`app/moims/layout.tsx`) 가드 적용으로 기존·이미 테스트된 가드의 커버리지를 moims 서브트리로 확장한다.
 
 ---

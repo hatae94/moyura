@@ -57,7 +57,9 @@ moyura/
 │     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback, require-named-session.ts(공유 서버 가드 — SPEC-MOBILE-004)), native-bridge/(bridge-client.ts·bridge-protocol.ts·NativeBridgeProvider.tsx·LogoutBridgeNotifier.tsx), invite/accept.ts(초대 수락 클라이언트 로직), chat/useChatChannel.ts(Supabase Realtime private channel 구독 훅 — SPEC-CHAT-001)
 │     ├─ app/           # auth/callback/route.ts(PKCE 콜백), login/, me/(require-named-session 가드 적용 — SPEC-MOBILE-004), invite/[token]/(초대 랜딩 — 익명 로그인 → nickname → accept → /moims/[id]/chat), onboarding/(이름 입력 온보딩 — SPEC-MOBILE-004, (main) 그룹 외부, 루프 안전)
 │     │  ├─ (main)/     # 탭 라우트 그룹 (SPEC-MOBILE-003) — layout.tsx(BottomTabBar·인증가드·ShellSessionAnnouncer·ShellModeEffect·require-named-session 가드 — SPEC-MOBILE-004) + _components/(BottomTabBar·PlaceholderTab·ShellModeEffect·ShellSessionAnnouncer) + home/(page·HomeTab·_mock) + explore/notifications/profile(플레이스홀더)
-│     │  └─ moims/[id]/chat/  # 모임 채팅 페이지 (SPEC-CHAT-001) — page.tsx(히스토리 로드 + useChatChannel 구독 + 실시간 수신 표시 + 메시지 전송)
+│     │  └─ moims/            # moims 서브트리 — (main) 라우트 그룹 밖
+│     │     ├─ layout.tsx     # 서버 가드 (SPEC-WEB-GUARD-001) — requireNamedSession() await → children. 탭바 없음(chat 풀스크린)
+│     │     └─ [id]/chat/     # 모임 채팅 페이지 (SPEC-CHAT-001) — page.tsx(히스토리 로드 + useChatChannel 구독 + 실시간 수신 표시 + 메시지 전송)
 │     └─ proxy.ts       # @supabase/ssr updateSession + per-request CSP (Next 16 미들웨어 컨벤션)
 ├─ packages/
 │  ├─ config/           # @moyura/config  — 공유 tsconfig base (현재 스텁)

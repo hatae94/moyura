@@ -9,6 +9,10 @@
 
 ### Added
 
+- **moims 서브트리 이름-온보딩 가드 확장** (SPEC-WEB-GUARD-001 — completed — nx run web:build 0 errors, nx run web:lint 0 errors, GET /moims/*/chat 세션 없음 → 307→/login 실 HTTP 확인): `app/(main)/` 라우트 그룹 밖에 위치한 `app/moims/` 서브트리에 이름 온보딩 가드를 적용하여 미인증·이름 미보유 사용자의 채팅 페이지 직접 진입을 차단. SPEC-MOBILE-004 sync 리포트가 기록한 cross-SPEC 후속(chat 페이지 `requireNamedSession()` 가드 미적용 MEDIUM) 해소.
+  - **신규 파일**: `apps/web/app/moims/layout.tsx` — 서버 컴포넌트(async). 자식 렌더링 전 `requireNamedSession()`을 await. 탭바·셸 감지 없음(chat은 풀스크린 라우트).
+  - **재사용**: `apps/web/lib/auth/require-named-session.ts` 무변경 — 기존 가드 정책(세션 없음 → /login, 이름 없음 → /onboarding, 정상 → children) 그대로 적용. 리다이렉트 루프 없음(/login·/onboarding이 app/moims/ 밖).
+
 - **네이티브 Google 로그인 + provider-agnostic 이름 온보딩** (SPEC-MOBILE-004 — 자동 게이트 통과 — backend jest 214/214 85.36% branch, mobile vitest 187/187, tsc 0 errors, web build OK, expo export OK, evaluator-active Overall PASS Func 75/Sec 75/Craft 75/Consistency 90 / AC-1~3·5·6a·6b device-gated EAS dev build + 실 Google 계정 필요 → in-progress): 모바일 앱스토어 제출 준비를 위해 WebView 내 Google 버튼을 네이티브 SDK로 인터셉트하고, 신규/기존 사용자 모두 이름을 수집하는 provider 비종속 온보딩을 구현.
   - **backend Profile.name 필드 + 마이그레이션**: `apps/backend/prisma/schema.prisma`에 `Profile.name String?`(nullable) 추가, 마이그레이션 `20260615000000_add_profile_name` 적용. `GET /me` 응답에 `name` 포함(`ProfileResponseDto.name string|null`). `PATCH /me { name }` 엔드포인트 신규 추가 — `requireNonEmpty` 400 검증, `ProfileService.updateName` sub-scoped `data={name}` 업데이트(mass-assignment 차단), `UpdateNameDto`.
   - **web signUpAction 이름 배선 + 온보딩 가드**: `apps/web/lib/auth/actions.ts` `signUpAction`이 폼 `name` 값을 읽어 `options.data.name` 포함 가입 후 `PATCH /me` 영속. `apps/web/app/onboarding/` 신규 라우트(`(main)` 그룹 외부, 루프 안전: name 있으면 `/home` 리다이렉트). `apps/web/lib/auth/require-named-session.ts` 공유 서버 가드(`getSession`→`/login`, `getMe`, name 없으면 `/onboarding`) — `apps/web/app/(main)/layout.tsx`·`apps/web/app/me/page.tsx` 적용.
