@@ -1,9 +1,9 @@
 ---
 id: SPEC-MOBILE-004
-version: 0.1.0
-status: draft
+version: 0.2.0
+status: in-progress
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-15
 author: hatae
 priority: high
 issue_number: 0
@@ -13,6 +13,7 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-15 (v0.2.0): sync 단계 — status `draft` → `in-progress` 전환. 자동화 가능한 게이트(backend jest 214/214 85.36% branch, mobile vitest 187/187, tsc 0 errors, web build OK, expo export OK, prisma migrate status clean, evaluator-active Overall PASS Func 75/Sec 75/Craft 75/Consistency 90) 전부 GREEN. **device-gated 미충족으로 `in-progress` 유지**: AC-1(Google 버튼 네이티브 SDK 진입), AC-2(signInWithIdToken Supabase 세션 획득), AC-3(session:restore 주입 + 웹 세션 확립), AC-5(구글 계정 이름 prefill), AC-6a(취소 시 로그인 페이지 복귀), AC-6b(signInWithIdToken 실패 에러 표시)는 EAS dev build + 실제 Google 계정 + Google Cloud OAuth 클라이언트 ID 없이 검증 불가. 이 패턴은 SPEC-MOBILE-001/002/003·SPEC-CHAT-001/002·SPEC-MOIM-001(OAuth) 동일 정책을 따른다. `completed` 전환 조건: spec.md §6 디바이스 종단 검증 게이트 항목(device-gated AC 전부) 실 기기/EAS dev build에서 통과 확인 후.
 - 2026-06-11 (v0.1.0): 최초 draft 작성. research.md(2026-06-11) 기반. SPEC-MOBILE-001(브라우저 OAuth 브리지)·SPEC-MOBILE-002(토큰 세션 기반)·SPEC-AUTH-002(Google OAuth 키 배선) 위에서 동작. 핵심 결정: (1) WebView 내 웹 로그인 UI 유지 + Google 버튼만 인터셉트 → 네이티브 SDK 실행, (2) 기존 `session:restore` 경로 재사용(bridge-protocol v1 무변경), (3) 이메일 가입과 Google(향후 Apple) 가입 모두 이름 수집, (4) Profile.name 미보유 시 온보딩 강제 리다이렉트로 신규/기존 분기. App Store 4.8 리스크로 Android(Google Play) 제출 우선 타깃.
 
 ---

@@ -1,9 +1,10 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-06-14 (SPEC-CHAT-002 sync)
+%% 최종 갱신: 2026-06-15 (SPEC-MOBILE-004 sync — Profile.name nullable 추가)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
+        string name "사용자 이름 (nullable, SPEC-MOBILE-004)"
         timestamp created_at
     }
 

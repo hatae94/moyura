@@ -1,7 +1,7 @@
 ---
 engine: PostgreSQL 17.x (Supabase 관리형)
 orm: Prisma 7.8.0
-last_synced_at: 2026-06-14
+last_synced_at: 2026-06-15
 manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 ---
 
@@ -17,7 +17,7 @@ manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 
 | Table | Description |
 |-------|-------------|
-| `profile` | 앱 소유 사용자 프로필 — Supabase auth.users와 sub(uuid) 기반 연결 |
+| `profile` | 앱 소유 사용자 프로필 — Supabase auth.users와 sub(uuid) 기반 연결. `name`(nullable) 추가(SPEC-MOBILE-004) |
 | `moim` | 모임 엔티티 — 모임 라이프사이클 루트 (SPEC-MOIM-001) |
 | `moim_member` | 멤버십 + 모임별 표시 이름(nickname) — moim_id + user_id 복합 PK (SPEC-MOIM-001) |
 | `moim_invite` | 초대 링크 — token PK, moim_id FK, 만료·폐기·사용 횟수 관리 (SPEC-MOIM-002) |
@@ -26,11 +26,12 @@ manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 
 ### profile
 
-Prisma 모델명: `Profile` | 첫 도메인 마이그레이션: `20260602095934_init_profile`
+Prisma 모델명: `Profile` | 첫 도메인 마이그레이션: `20260602095934_init_profile` | name 추가 마이그레이션: `20260615000000_add_profile_name` (SPEC-MOBILE-004)
 
 | 컬럼 | 타입 | 제약 | 설명 |
 |------|------|------|------|
 | `id` | TEXT | PK | Supabase JWT `sub` (uuid 문자열) — 별도 시퀀스 없음 |
+| `name` | TEXT | NULLABLE | 사용자 표시 이름 — provider 비종속(이메일/Google/향후 Apple 공통). NULL = 온보딩 미완료 판별 기준(SPEC-MOBILE-004). `PATCH /me { name }` 으로 업데이트 |
 | `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 생성 시각 |
 
 ### moim
@@ -52,7 +53,7 @@ Prisma 모델명: `MoimMember` | 마이그레이션: `20260613155202_add_moim`
 |------|------|------|------|
 | `moim_id` | TEXT | PK(복합), FK → moim.id onDelete Cascade | 소속 모임 id |
 | `user_id` | TEXT | PK(복합) | 멤버 sub (= profile.id) |
-| `nickname` | TEXT | NOT NULL | 모임별 표시 이름 — profile에 name 필드 부재를 보완(채팅 sender 해석 출처) |
+| `nickname` | TEXT | NOT NULL | 모임별 표시 이름(채팅 sender 해석 출처). profile.name은 전역 이름이고 nickname은 모임 내 표시 이름으로 역할이 다름(SPEC-MOBILE-004 이후 profile.name 존재) |
 | `role` | TEXT | NOT NULL DEFAULT 'member' | "owner" 또는 "member". owner = 탈퇴 불가, 삭제 전용. |
 | `joined_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 가입 시각 |
 

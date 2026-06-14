@@ -15,6 +15,7 @@
 | `20260613171209_add_moim_invite` | 2026-06-13 | `moim_invite` 테이블 생성 — token PK, moim_id FK onDelete Cascade, @@index(moimId), SPEC-MOIM-002 |
 | `20260613175232_add_chat` | 2026-06-14 | `chat_message` 테이블(BigInt PK, moim_id FK Cascade, @@index(moimId, id desc)) + **수동 SQL**: content CHECK(1..2000), chat_message RLS enable(default deny), `broadcast_chat_message()` security-definer 함수, `chat_message_broadcast` AFTER INSERT 트리거, `realtime.messages` SELECT 정책(멤버십 게이트). SPEC-CHAT-001 |
 | `20260614_add_device_token` | 2026-06-14 | `device_token` 테이블(token TEXT PK, user_id TEXT, platform TEXT, created_at, updated_at; @@index(userId)). SPEC-CHAT-002 — FCM 디바이스 토큰 레지스트리. Prisma 표준 타임스탬프 없음(파일명에 시간 부분 미포함 — 로컬 개발 단계 마이그레이션. 적용은 `db execute` + `migrate resolve --applied`로 체크섬 드리프트 우회). |
+| `20260615000000_add_profile_name` | 2026-06-15 | `profile` 테이블에 `name TEXT` 컬럼(nullable) 추가. SPEC-MOBILE-004 — provider 비종속 이름 온보딩. NULL = 온보딩 미완료 판별 기준. `PATCH /me { name }` 으로 업데이트. |
 
 ### SPEC-CHAT-001 수동 SQL 주의 (R-6 드리프트)
 
@@ -41,6 +42,7 @@
 | `20260613171209_add_moim_invite` | 2026-06-13 | prod DB에 초대 테이블 추가 필요 | Yes (prod 배포 시) |
 | `20260613175232_add_chat` | 2026-06-14 | prod DB에 채팅 테이블 + 트리거/RLS 추가 필요 (prod realtime/auth 스키마 존재 전제) | Yes (prod 배포 시) |
 | `20260614_add_device_token` | 2026-06-14 | prod DB에 device_token 테이블 추가 필요 | Yes (prod 배포 시) |
+| `20260615000000_add_profile_name` | 2026-06-15 | prod DB에 profile.name(nullable) 컬럼 추가 필요 | Yes (prod 배포 시) |
 
 ---
 
@@ -48,6 +50,7 @@
 
 | Migration | Risk Level | Rollback Steps | Data Loss? |
 |-----------|-----------|----------------|------------|
+| `20260615000000_add_profile_name` | Low | `ALTER TABLE profile DROP COLUMN name;` | name 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260614_add_device_token` | Low | `DROP TABLE device_token;` | device_token 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260613175232_add_chat` | Low | `DROP TRIGGER chat_message_broadcast ON chat_message; DROP FUNCTION broadcast_chat_message(); DROP POLICY "members can receive moim broadcasts" ON realtime.messages; DROP TABLE chat_message;` | chat_message 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260613171209_add_moim_invite` | Low | `DROP TABLE moim_invite;` | moim_invite 데이터 손실 (현재 로컬 개발 데이터만 해당) |
