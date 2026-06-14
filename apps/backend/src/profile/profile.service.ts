@@ -22,8 +22,22 @@ export class ProfileService {
     return this.prisma.profile.upsert({
       where: { id: sub },
       // create/update 모두 id만 다룬다 — 클라이언트 입력을 끼워 넣지 않는다(R-B3/M-5).
+      // update:{}이므로 기존 name은 건드리지 않고 그대로 보존한다(SPEC-MOBILE-004 T-001 UPSERT preserve).
       create: { id: sub },
       update: {},
+    });
+  }
+
+  // @MX:NOTE: [AUTO] SPEC-MOBILE-004 REQ-MOB4-003/004: 사용자 이름 영속의 단일 진입점(provider 비종속).
+  // 이메일 회원가입(signUpAction)·이름 온보딩(향후 소셜)이 모두 이 경로로 Profile.name을 채운다.
+  //
+  // [보안] sub는 호출자(컨트롤러)가 가드-검증 VerifiedUser.sub에서만 전달한다 — body/query/header의
+  // id/sub는 절대 키로 쓰지 않는다(mass-assignment 차단, R-B3/M-5). data도 name만 다루므로 다른
+  // 클라이언트 필드가 끼어들 수 없다. profile은 GET /me 최초 호출 시 UPSERT로 항상 존재가 보장된다.
+  async updateName(sub: string, name: string): Promise<Profile> {
+    return this.prisma.profile.update({
+      where: { id: sub },
+      data: { name },
     });
   }
 }

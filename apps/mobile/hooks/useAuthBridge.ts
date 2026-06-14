@@ -26,6 +26,11 @@ import type {
 import { WEB_URL } from "../lib/web-url";
 import { SUPABASE_URL } from "../lib/env";
 import { bridgeGoogleOAuth } from "../lib/auth/oauth";
+import { signInWithGoogle } from "../lib/auth/google-signin";
+import {
+  createMobileSupabaseClient,
+  exchangeGoogleIdTokenForSession,
+} from "../lib/auth/supabase-mobile";
 import { saveTokens, clearTokens, type SessionTokens } from "../lib/auth/token-store";
 import { clearWebViewCookies } from "../lib/auth/cookie-clear";
 import { unregisterDevice } from "../lib/push/register-device";
@@ -121,12 +126,17 @@ function postMessageJs(serialized: string, targetOrigin: string): string {
 }
 
 // @MX:ANCHOR: [AUTO] 토큰이 JS 브리지를 가로지르는 단일 동기화·인증 경계 — 콜드스타트/resume 주입,
-//   onMessage 수신, in-WebView 로드 게이트가 모두 이 훅을 통과한다(App.tsx + resume 경로 fan_in >= 3).
-// @MX:REASON: 보안 민감(R-V2 — C-1/C-2/H-1): 이 경계가 (1) origin allowlist + LIVE origin 재검증(R-T6/
-//   R-T9 TOCTOU 차단), (2) specific targetOrigin(R-T8 — `"*"` 금지), (3) per-session nonce 인증
-//   (R-T8/OD-11 — 위조 메시지 거부), (4) WebView origin 잠금(R-T9 deny 게이트), (5) postMessage-only +
-//   비로깅을 단일 출처로 보장한다. 하나라도 누락되면 third-party 페이지/동일 page 스크립트로 토큰이
-//   유출되거나 session:restore 위조(세션 고정)가 가능하다(OWASP M3/M4/M5).
+//   onMessage 수신, in-WebView 로드 게이트, 그리고 (SPEC-MOBILE-004) 네이티브 Google Sign-In 으로 얻은
+//   Supabase 세션 토큰까지 모두 이 훅의 injectRestore(session:restore v1)를 통과한다
+//   (App.tsx + resume + 네이티브 SDK 경로 — fan_in 증가, >= 3).
+// @MX:REASON: 보안 민감(R-V2 — C-1/C-2/H-1 + SPEC-MOBILE-004 AC-6b): 이 경계가 (1) origin allowlist +
+//   LIVE origin 재검증(R-T6/R-T9 TOCTOU 차단), (2) specific targetOrigin(R-T8 — `"*"` 금지), (3) per-
+//   session nonce 인증(R-T8/OD-11 — 위조 메시지 거부), (4) WebView origin 잠금(R-T9 deny 게이트),
+//   (5) postMessage-only + 토큰 비로깅을 단일 출처로 보장한다. SPEC-MOBILE-004 가 네이티브 SDK 세션
+//   토큰을 동일 injectRestore 로 주입하면서 이 경계를 통과하는 토큰 출처가 늘었으므로(fan_in↑),
+//   bridge-protocol v1(메시지 타입/ nonce 봉투)을 변경하지 않고 기존 보안 불변식을 그대로 재사용한다.
+//   하나라도 누락되면 third-party 페이지/동일 page 스크립트로 토큰이 유출되거나 session:restore
+//   위조(세션 고정)가 가능하다(OWASP M3/M4/M5).
 export function useAuthBridge({
   onNavigateToCallback,
   webViewRef,
@@ -141,8 +151,17 @@ export function useAuthBridge({
   const ackedRef = useRef<boolean>(false);
   // R-T8: targetOrigin 신뢰 origin literal(주입 시 `"*"` 대신 사용 — H-1).
   const targetOrigin = buildTargetOrigin(WEB_URL);
+  // SPEC-MOBILE-004: 네이티브 Google Sign-In 실행 함수 ref. 실제 콜백은 injectRestore 정의 이후에
+  // 할당한다(injectRestore 클로저 참조 — TDZ 회피). onShouldStartLoadWithRequest 의 oauth-intercept
+  // 분기는 이 ref 를 통해 호출하므로 자신의 의존성 배열을 안정적으로 유지한다(렌더마다 재생성 방지).
+  const nativeGoogleSignInRef = useRef<() => void>(() => undefined);
 
-  // 시스템 브라우저 OAuth → deep-link 복귀 → WebView 콜백 로드(R-O2/R-O3/R-O4) — 보존.
+  // 시스템 브라우저 OAuth → deep-link 복귀 → WebView 콜백 로드(R-O2/R-O3/R-O4) — 보존(폴백 경로).
+  //
+  // SPEC-MOBILE-004: Google 은 아래 runNativeGoogleSignIn(네이티브 SDK) 으로 전환됐다. 이 시스템
+  // 브라우저 브리지는 비-Google provider/수동 폴백 용도로 정의를 유지한다 — Google 경로의 실패는
+  // REQ-MOB4-005(복구 가능한 오류: 미인증 유지 + 버튼 재활성)이므로 여기로 자동 폴백하지 않는다
+  // (자동 폴백은 AC-6b 의 "다른 플로우 자동 실행 금지" 의미를 깬다).
   const runOAuthBridge = useCallback(
     async (interceptedAuthorizeUrl: string): Promise<void> => {
       const result = await bridgeGoogleOAuth(interceptedAuthorizeUrl);
@@ -154,6 +173,10 @@ export function useAuthBridge({
     },
     [onNavigateToCallback],
   );
+
+  // SPEC-MOBILE-004 의 네이티브 Google Sign-In 경로(runNativeGoogleSignIn)는 injectRestore 정의 이후에
+  // 선언한다(injectRestore 를 클로저로 참조 — TDZ 회피). onShouldStartLoadWithRequest 의 oauth-intercept
+  // 분기가 그 ref 를 통해 호출한다(아래 nativeGoogleSignInRef).
 
   // R-O1/R-T9/R-NC2: in-WebView 로드 게이트 — OAuth 인터셉트 보존 + WebView origin 잠금(비신뢰 거부)
   //   + (MOBILE-003) 교차 라우트 차단 → 네이티브 라우트 디스패치.
@@ -175,8 +198,11 @@ export function useAuthBridge({
           // 신뢰 origin / 프레임워크 내부 요청 — in-WebView 로드 허용(R-V1 무회귀).
           return true;
         case "oauth-intercept":
-          // GoTrue authorize URL — 시스템 브라우저 브리지로 인터셉트(보존, R-NC3 인증 플로우 예외).
-          void runOAuthBridge(request.url);
+          // SPEC-MOBILE-004 R-MOB4-001: GoTrue authorize URL(WebView 내 Google 버튼 동작)을 인터셉트해
+          // in-WebView 로드를 차단하고(return false) 네이티브 Google Sign-In SDK 를 실행한다 — 기존
+          // 시스템 브라우저 브리지(runOAuthBridge) 대신. 데스크톱 웹은 이 인터셉트가 없으므로 기존
+          // OAuth 흐름이 그대로 유지된다(AC-7 — 모바일 앱 컨텍스트에서만 동작).
+          nativeGoogleSignInRef.current();
           return false;
         case "deny":
           // R-T9/C-2: 비신뢰 top-level origin — in-WebView 로드 거부, 외부 브라우저로 위임.
@@ -186,7 +212,8 @@ export function useAuthBridge({
       // 위 switch 는 3분기를 전수 커버한다(decision 은 string union 으로 좁혀짐) — 도달 불가 방어 반환.
       return false;
     },
-    [runOAuthBridge, getCurrentUrl, onCrossRouteDispatch],
+    // nativeGoogleSignInRef 는 안정적 ref 라 의존성이 아니다(oauth-intercept 가 ref.current 로 호출).
+    [getCurrentUrl, onCrossRouteDispatch],
   );
 
   // 진행 중인 주입 재시도 타이머를 정리한다(핸드셰이크 해결/언마운트 시).
@@ -293,6 +320,43 @@ export function useAuthBridge({
     },
     [webViewRef, nonce, targetOrigin],
   );
+
+  // SPEC-MOBILE-004 R-MOB4-001/002/005: 네이티브 Google Sign-In → signInWithIdToken → 세션 주입.
+  // (injectRestore 정의 이후에 선언 — 클로저로 참조해 TDZ 회피.)
+  //
+  // 1) signInWithGoogle(네이티브 SDK, 무료 Original API) → idToken/cancelled/error 분류.
+  // 2) idToken → exchangeGoogleIdTokenForSession(Supabase signInWithIdToken) → session/error 분류.
+  // 3) session → saveTokens(SecureStore) + injectRestore(session:restore v1, bridge-protocol 무변경)
+  //    — 웹이 setSession 후 session:synced 로 ack 하면 onMessage 가 isSignedIn 전환을 보고한다(AC-5).
+  // 4) cancelled/error(어느 단계든) → 미인증 유지: 토큰 저장/주입 없음. 로그인 페이지가 그대로 유지되고
+  //    WebView 내 Google 버튼은 네이티브가 비활성화한 적이 없으므로 즉시 재시도 가능하다(AC-6a/6b).
+  //
+  // injectRestore 의 currentUrl 은 라이브 navigation URL(getCurrentUrl)을 쓴다 — 버튼 탭 시점의 WebView 는
+  // 신뢰 origin 의 로그인 페이지이므로 isTrustedOrigin 선통과가 보장된다. getCurrentUrl 부재 폴백은
+  // WEB_URL(셸의 신뢰 origin literal)을 쓴다 — isTrustedOrigin(WEB_URL, WEB_URL)===true.
+  //
+  // 보안(AC-6b): 토큰/idToken 값을 로깅하지 않는다 — core 분류 결과만 분기에 쓴다.
+  const runNativeGoogleSignIn = useCallback(async (): Promise<void> => {
+    const signIn = await signInWithGoogle();
+    if (signIn.kind !== "idToken") {
+      return; // cancelled | error → 미인증 유지, 토큰 미저장/미주입(AC-6a/6b).
+    }
+    const client = createMobileSupabaseClient();
+    const session = await exchangeGoogleIdTokenForSession(client, signIn.token);
+    if (session.kind !== "session") {
+      return; // signInWithIdToken 실패 → 복구 가능한 오류: 미인증 유지, 토큰 미저장(AC-6b).
+    }
+    // 세션 확립 — SecureStore 저장 후 기존 session:restore 경로로 WebView 웹 세션에 주입(v1 무변경).
+    await saveTokens(session.tokens);
+    injectRestore(session.tokens, getCurrentUrl?.() ?? WEB_URL);
+  }, [injectRestore, getCurrentUrl]);
+
+  // oauth-intercept 분기(onShouldStartLoadWithRequest)가 호출하는 ref 를 최신 콜백으로 동기화한다.
+  // ref 호출은 fire-and-forget(void)이며 결과 Promise 의 reject 는 흡수한다 — 분기는 미인증 유지일 뿐
+  // 크래시하지 않는다(REQ-MOB4-005). 토큰/오류 상세는 로깅하지 않는다(AC-6b).
+  nativeGoogleSignInRef.current = (): void => {
+    void runNativeGoogleSignIn().catch(() => undefined);
+  };
 
   return {
     onShouldStartLoadWithRequest,

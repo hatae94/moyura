@@ -22,6 +22,10 @@ datasource db {
 model Profile {
   // Supabase user uuid(`sub`). 검증된 JWT의 sub만 이 값으로 들어온다(R-B3/M-5).
   id        String   @id
+  // SPEC-MOBILE-004 REQ-MOB4-003/004: 사용자 표시 이름(nullable). 이메일·소셜(Google/향후 Apple)
+  // 모든 인증 경로가 공유하는 provider 비종속 영속 필드. null/빈 값이면 온보딩 가드의 리다이렉트 대상이며,
+  // 이 필드의 보유 여부가 신규/기존 사용자 판별의 권위 있는 출처다(created_at 비의존, research §6 옵션 A).
+  name      String?
   createdAt DateTime @default(now())
 
   @@map("profile")

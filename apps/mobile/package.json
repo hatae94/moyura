@@ -5,6 +5,8 @@
   "dependencies": {
     "@moyura/api-client": "workspace:*",
     "@react-native-cookies/cookies": "^6.2.1",
+    "@react-native-google-signin/google-signin": "^16.1.2",
+    "@supabase/supabase-js": "2.106.2",
     "expo": "~56.0.6",
     "expo-auth-session": "~56.0.13",
     "expo-constants": "~56.0.18",

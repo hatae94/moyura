@@ -7,7 +7,11 @@ import type { paths, components } from './schema';
 export type HealthResponse = components['schemas']['HealthResponseDto'];
 
 // 보호 라우트 /me 가 반환하는 profile DTO(ProfileResponseDto)의 타입 별칭(SPEC-AUTH-001 R-C1).
+// SPEC-MOBILE-004 T-001: name(string | null) 필드를 포함한다 — 웹 온보딩 가드의 권위 있는 출처.
 export type ProfileResponse = components['schemas']['ProfileResponseDto'];
+
+// PATCH /me 요청 바디(UpdateNameDto) 타입 별칭(SPEC-MOBILE-004 T-002/T-003).
+export type UpdateNameRequest = components['schemas']['UpdateNameDto'];
 
 /**
  * 인증 토큰 공급자(SPEC-AUTH-001 R-D4 / OD-3).
@@ -127,6 +131,20 @@ export class ApiClient {
    */
   async getMe(): Promise<ProfileResponse> {
     return (await this.request('/me', 'get')) as ProfileResponse;
+  }
+
+  /**
+   * PATCH /me — 인증 사용자의 표시 이름을 영속한다(SPEC-MOBILE-004 REQ-MOB4-003/004).
+   * 이메일 회원가입·이름 온보딩(향후 소셜)이 공유하는 provider 비종속 단일 영속 경로의 클라이언트 표면이다.
+   * Bearer 토큰은 getToken 공급자로 주입된다(R-D4). name 이 비어 있으면 백엔드가 400 → ApiError 로 전파한다.
+   * 갱신 키(sub)는 백엔드 가드-검증 토큰에서만 도출되며 body 에는 name 만 싣는다(mass-assignment 차단).
+   */
+  async patchMe(name: string): Promise<ProfileResponse> {
+    const requestBody: UpdateNameRequest = { name };
+    return (await this.request('/me', 'patch', {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    })) as ProfileResponse;
   }
 }
 

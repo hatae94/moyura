@@ -8,6 +8,9 @@
 
 import { redirect } from "next/navigation";
 
+import { createApiClient } from "@moyura/api-client";
+
+import { API_BASE_URL } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
 // 소셜 OAuth redirectTo 의 로컬 host 리터럴(site_url host = localhost, http scheme).
@@ -24,23 +27,51 @@ function readCredentials(formData: FormData): { email: string; password: string 
 }
 
 /**
- * 회원가입(R-G1). 로컬 GoTrue(enable_signup=true) 대상으로 계정을 생성한다.
- * 이메일 확인이 꺼져 있으면 즉시 세션이 확립된다(로컬 기본값).
+ * 회원가입(R-G1 + SPEC-MOBILE-004 REQ-MOB4-003 / AC-4).
+ * 로컬 GoTrue(enable_signup=true) 대상으로 계정을 생성한다. 이메일 확인이 꺼져 있으면 즉시 세션이 확립된다.
+ *
+ * 이름 영속(OD-2, provider 비종속 단일 경로):
+ *  1) signUp options.data.name 으로 user_metadata 에 이름을 심는다(/home 표시·온보딩 prefill 용).
+ *  2) 세션 확립 후 백엔드 PATCH /me 로 Profile.name 을 영속한다 — 온보딩 가드의 권위 있는 출처.
+ * PATCH 가 실패해도 가입 자체는 성립하므로 /home 으로 보내고, 이름 미영속이면 (main) 가드가
+ * 온보딩으로 리다이렉트한다(AC-1/AC-3 와 동일 안전망 — 단일 진실 출처는 Profile.name).
  */
 export async function signUpAction(
   _prev: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
   const { email, password } = readCredentials(formData);
+  const name = String(formData.get("name") ?? "").trim();
   if (!email || !password) {
     return { error: "이메일과 비밀번호를 입력하세요." };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    // OD-2: user_metadata 에 이름을 심어 /home 표시·온보딩 prefill 에 재사용한다(이메일·소셜 통합).
+    options: name ? { data: { name } } : undefined,
+  });
   if (error) {
     // 에러 메시지에 자격증명/토큰을 포함하지 않는다(R-A9).
     return { error: error.message };
+  }
+
+  // OD-2: 세션이 확립되고 이름이 입력되었으면 Profile.name 을 백엔드에 영속한다(provider 비종속 PATCH /me).
+  const accessToken = data.session?.access_token;
+  if (name && accessToken) {
+    try {
+      const api = createApiClient({
+        baseUrl: API_BASE_URL,
+        getToken: () => accessToken,
+      });
+      await api.patchMe(name);
+    } catch {
+      // PATCH 실패는 가입을 무효화하지 않는다(토큰/상세 노출 없이 서버 로그만 남긴다 — R-A9).
+      // 이름 미영속 시 (main) 가드가 온보딩으로 리다이렉트해 사용자가 다시 입력하도록 한다.
+      console.error("signUpAction: Profile.name 영속 실패(온보딩 가드가 보강)");
+    }
   }
 
   redirect("/home");

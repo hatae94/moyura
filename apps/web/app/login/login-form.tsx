@@ -177,7 +177,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         ) : null}
 
         <form action={formAction} className="flex flex-col gap-4">
-          {/* 이름 필드: 회원가입일 때만 이메일 위에 렌더(R-B4). action 은 name 을 무시한다(decorative). */}
+          {/* 이름 필드: 회원가입일 때만 이메일 위에 렌더(R-B4). SPEC-MOBILE-004 AC-4: signUpAction 이
+              이 name 을 읽어 user_metadata + Profile.name 으로 영속한다(이메일·소셜 통합 이름 수집). */}
           {isSignUp ? (
             <div>
               <label htmlFor="login-name" className="block text-sm font-medium mb-2">

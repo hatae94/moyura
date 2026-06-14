@@ -34,6 +34,12 @@
           "icon": "./assets/icon.png",
           "color": "#E6F4FE"
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER_IOS_CLIENT_ID"
+        }
       ]
     ],
     "extra": {

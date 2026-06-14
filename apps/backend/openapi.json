@@ -73,6 +73,46 @@
         "tags": [
           "me"
         ]
+      },
+      "patch": {
+        "operationId": "MeController_updateName",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNameDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "이름 갱신 후 갱신된 profile 반환",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "name이 비어 있음(trim 후) — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
       }
     },
     "/moims": {
@@ -743,6 +783,12 @@
             "description": "Supabase auth user id(`sub`) — profile의 PK",
             "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
           },
+          "name": {
+            "type": "string",
+            "description": "사용자 표시 이름(미보유 시 null — 온보딩 가드 대상)",
+            "example": "홍길동",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string",
             "description": "profile 최초 생성 시각(ISO-8601)",
@@ -751,7 +797,21 @@
         },
         "required": [
           "id",
+          "name",
           "createdAt"
+        ]
+      },
+      "UpdateNameDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "설정할 사용자 표시 이름(trim 후 비어 있을 수 없음)",
+            "example": "홍길동"
+          }
+        },
+        "required": [
+          "name"
         ]
       },
       "CreateMoimDto": {

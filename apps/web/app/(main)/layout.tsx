@@ -12,9 +12,8 @@
 //   둘 다 없는 데스크톱 브라우저는 셸 모드가 확정적으로 부재 → data-shell 미설정 → 탭바 표시(R-WB4).
 //   CSS 규칙(globals.css)이 html[data-shell="native"] [data-bottom-tab-bar] { display:none } 으로 숨긴다.
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireNamedSession } from "@/lib/auth/require-named-session";
 
 import { BottomTabBar } from "./_components/BottomTabBar";
 import { ShellModeEffect } from "./_components/ShellModeEffect";
@@ -28,21 +27,15 @@ const SHELL_DETECT_SCRIPT = `try{if(window.__MOYURA_NATIVE_SHELL__===true||!!win
 export default async function MainLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const supabase = await createClient();
-
   // [HARD] CSP nonce(R-T8 연동): proxy.ts 가 요청 헤더에 주입한 per-request x-nonce 를 읽어 인라인
   // 셸 감지 스크립트에 부여한다. nonce 없는 인라인 스크립트는 `'nonce-...' 'strict-dynamic'` CSP 가
   // 차단한다('unsafe-inline' 은 nonce 존재 시 무시됨) — 누락 시 셸 모드 탭바 숨김이 통째로 무력화.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
-  // getSession() 은 쿠키에서 세션을 읽는다(/me 와 동일 가드 패턴 — R-WB1).
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    redirect("/login");
-  }
+  // SPEC-MOBILE-004 REQ-MOB4-004: 세션 가드(R-WB1)에 이름 온보딩 가드를 합친다.
+  //   세션 없음 → /login, 세션 있음 + Profile.name 미보유 → /onboarding(이 (main) 그룹 밖).
+  // 데스크톱 웹도 이 server-side 가드로 자동 커버된다(AC-7). 미충족 시 내부에서 redirect 한다.
+  await requireNamedSession();
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-background">
