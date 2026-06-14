@@ -30,7 +30,7 @@ moyura/
 │  │  │  ├─ prisma/     # PrismaService (pg adapter, pingDatabase)
 │  │  │  └─ generated/  # Prisma 7 source-emit 클라이언트 (gitignore, 재생성)
 │  │  ├─ prisma/        # schema.prisma (Profile(name? 추가 — SPEC-MOBILE-004) + Moim + MoimMember + MoimInvite + ChatMessage + DeviceToken 모델) + migrations/20260602095934_init_profile + 20260613155202_add_moim + 20260613171209_add_moim_invite + 20260613175232_add_chat + 20260614_add_device_token + 20260615000000_add_profile_name(SPEC-MOBILE-004)
-│  │  ├─ test/          # 수동 통합 검증 스크립트 — chat.live.mts(SPEC-CHAT-001 AC-1c/4/5 런타임 검증용)
+│  │  ├─ test/          # 수동 통합 검증 스크립트 — chat.live.mts(SPEC-CHAT-001 AC-1c/4/5 정식 수동 검증 스크립트, 라이브 E2E 2026-06-15 완료)
 │  │  ├─ prisma.config.ts  # Prisma 7 연결 URL 위치
 │  │  ├─ openapi.ts     # OpenAPI emit 스크립트
 │  │  └─ openapi.json   # 커밋된 OpenAPI 계약 산출물

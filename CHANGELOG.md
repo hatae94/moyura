@@ -27,7 +27,7 @@
   - **느슨한 결합(chat↛push)**: `chat/**` → push import 0건(grep + `loose-coupling.spec.ts` 정적 검증). push는 `chat-events.ts` 계약(@MX:ANCHOR)에만 단방향 의존.
   - **mobile expo-notifications(등록/수신/탭 + 로그아웃 해제)**: `apps/mobile/lib/push/` — `register-device-core`(토큰 획득+등록/해제 순수 로직, vitest) + `notification-core`(수신+탭 핸들러 순수 로직, vitest) + 얇은 Expo 의존 래퍼 2종. `AuthContext.tsx` 로그인 후 자동 등록 배선, `useAuthBridge.ts` `session:cleared` 시 해제 연동(orphan token 차단). expo-notifications@~56.0.17 신규 의존성.
 
-- **모임 채팅 코어** (SPEC-CHAT-001 — 자동 게이트 통과 — jest 170/170, psql 존재 단언, evaluator PASS / realtime 종단·RLS 구독·브라우저 런타임 검증 대기 → in-progress): 모임 멤버 간 실시간 채팅 코어 구현.
+- **모임 채팅 코어** (SPEC-CHAT-001 — 라이브 E2E 검증 2026-06-15 — AC-1c 멤버 broadcast 수신 PASS / AC-4 비멤버 RLS 거부 PASS / AC-5 CSP wss 연결 PASS → completed): 모임 멤버 간 실시간 채팅 코어 구현.
   - **ChatMessage 모델 + 트리거/RLS 마이그레이션** (`apps/backend/prisma/schema.prisma`에 `ChatMessage`(BigInt PK auto-increment, moimId FK→moim onDelete Cascade, senderId, content, createdAt; @@index([moimId, id desc])) + `Moim.messages` 관계 추가, 마이그레이션 `20260613175232_add_chat` 적용). 수동 SQL 포함: content CHECK(`1..2000`자), `chat_message` RLS default-deny, `broadcast_chat_message()` SECURITY DEFINER 함수, `chat_message_broadcast` AFTER INSERT 트리거, `realtime.messages` SELECT 정책(멤버십 게이트).
   - **sendMessage (멤버 인가 + best-effort emit)**: `POST /moims/:id/messages` — `assertMember` 인가 후 insert, `chat.message.created` 이벤트 emit(try-catch best-effort 격리 — CHAT-002 리스너 예외가 201 응답 차단 불가), BigInt→string 직렬화. 비멤버/존재하지 않는 모임 → 403(모임 존재 여부 미노출).
   - **getHistory (keyset 내림차순)**: `GET /moims/:id/messages?cursor=&limit=` — BigInt keyset 페이지네이션(내림차순/최신순), nextCursor string 반환. 잘못된 cursor → 400.

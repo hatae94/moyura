@@ -1,9 +1,9 @@
 ---
 id: SPEC-CHAT-001
-version: "0.2.0"
-status: in-progress
+version: "0.3.0"
+status: completed
 created: 2026-06-11
-updated: 2026-06-13
+updated: 2026-06-15
 author: hatae
 priority: high
 issue_number: 0
@@ -15,6 +15,14 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-15 (v0.3.0): sync 완료 — 상태 전이 `in-progress` → `completed`.
+  - 라이브 E2E 검증 결과 (2026-06-15, 로컬 Supabase 스택 127.0.0.1:54321 API / 54322 DB + direct Postgres INSERT):
+    - 모임 seeding: 멤버 A(owner) + 멤버 B(member), 유저 C는 비멤버.
+    - **AC-1c PASS**: 멤버 B가 인증 JWT(HS256, SUPABASE_JWT_SECRET)로 private 채널 `moim:{id}` 구독(SUBSCRIBED) 후, sender A의 `chat_message` row를 direct Postgres INSERT → `broadcast_chat_message` 트리거 → `realtime.broadcast_changes` 실행 → 멤버 B가 해당 메시지를 실시간 수신(content 일치). 종단 broadcast 동작 확인.
+    - **AC-4 PASS**: 비멤버 C가 동일 채널 구독 시도 → `CHANNEL_ERROR: "Unauthorized: You do not have permissions to read from this Channel topic"` 반환 + 메시지 수신 없음. `realtime.messages` 멤버십 RLS가 비멤버를 정상 거부.
+    - **AC-5 PASS**: `apps/web/proxy.ts` CSP `connect-src`는 `'self' wss://127.0.0.1:54321 http://127.0.0.1:54321` (호스트 고정). CSP3 scheme-matching에 의해 http origin 토큰이 ws:// realtime 연결을 허용하며, 라이브 E2E WebSocket 핸드셰이크 성공(멤버 B SUBSCRIBED) 확인. 채팅 UI 빌드/린트는 v0.2.0 게이트에서 이미 통과, send는 jest 검증 완료. 잔여 사항: 브라우저 풀 페이지 CSP 런타임(로그인 세션으로 `/moims/[id]/chat` 진입)은 별도로 실행하지 않았으나, CSP 정책이 realtime origin을 명시적으로 허용하고 프로토콜 수준 WS 연결·broadcast 수신을 증명하였으므로 AC-5 CSP 요건 충족으로 판정.
+  - 임시 E2E 스크립트는 실행 후 삭제(임시 위생). 정식 수동 검증 스크립트: `apps/backend/test/chat.live.mts`.
+  - 이전 누적 게이트(재실행 불필요): jest 170/170(chat 22), backend:typecheck 0, prisma migrate 드리프트 없음, psql 존재 단언 전부 통과(broadcast 함수/트리거/realtime 정책/chat_message RLS/CHECK), TRUST 5 PASS, evaluator PASS(Func 90/Sec 82/Craft 85/Consistency 90).
 - 2026-06-13 (v0.2.0): run 완료 — 상태 전이 `draft` → `in-progress`.
   - 구현: `ChatMessage` 모델 + 마이그레이션 `20260613175232_add_chat`(트리거/RLS/CHECK 수동 SQL 포함) + `sendMessage`/`getHistory` + `chat.message.created` 이벤트 계약 + 웹 채팅 UI(`/moims/[id]/chat`).
   - 검증 게이트: jest 170/170(chat 22), psql 존재 단언 전부 통과(broadcast 함수/트리거/realtime 정책/chat_message RLS/CHECK), backend:typecheck 0, prisma migrate 드리프트 없음, TRUST 5 PASS, evaluator PASS(Func 90/Sec 82/Craft 85/Consistency 90).

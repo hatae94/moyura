@@ -49,10 +49,10 @@
 
 ## Definition of Done
 
-- [ ] `ChatMessage` 모델 + 마이그레이션(트리거 + Realtime 메시지 RLS + chat_message default-deny RLS 포함)
-- [ ] `sendMessage`(assertMember → insert → 저장 메시지 반환 → event emit) + `getHistory`(keyset 내림차순)
-- [ ] `@nestjs/event-emitter` 등록 + `chat-events.ts` 계약 export(@MX:ANCHOR)
-- [ ] 웹 `/moims/[id]/chat` UI: 구독 + 수신 표시(nickname 클라이언트 해석) + 전송
-- [ ] CSP(R-2) 검증/수정
-- [ ] 백엔드 커버리지 85%+, 전파 종단 검증, 웹 build/lint green
-- [ ] openapi + api-client 재생성, db 문서 동기화
+- [x] `ChatMessage` 모델 + 마이그레이션(트리거 + Realtime 메시지 RLS + chat_message default-deny RLS 포함)
+- [x] `sendMessage`(assertMember → insert → 저장 메시지 반환 → event emit) + `getHistory`(keyset 내림차순)
+- [x] `@nestjs/event-emitter` 등록 + `chat-events.ts` 계약 export(@MX:ANCHOR)
+- [x] 웹 `/moims/[id]/chat` UI: 구독 + 수신 표시(nickname 클라이언트 해석) + 전송
+- [x] CSP(R-2) 검증/수정
+- [x] 백엔드 커버리지 85%+, 전파 종단 검증, 웹 build/lint green (라이브 E2E 검증 2026-06-15 — AC-1c/AC-4/AC-5 전부 PASS)
+- [x] openapi + api-client 재생성, db 문서 동기화

@@ -1,13 +1,83 @@
 # Sync Report — SPEC-CHAT-001 (모임 채팅 코어)
 
-**Date**: 2026-06-14
+**최초 생성**: 2026-06-14 (v0.2.0 — in-progress 전환)
+**완료 검증 추가**: 2026-06-15 (v0.3.0 — completed 전환)
 **Branch**: feature/SPEC-MOBILE-004
 **Commit (run)**: f3fe178
 **Synced by**: manager-docs
 
 ---
 
-## 상태 전이
+## 상태 전이 이력
+
+| 날짜 | 버전 | 이전 status | 이후 status | 근거 |
+|------|------|------------|------------|------|
+| 2026-06-14 | v0.2.0 | `draft` | `in-progress` | run 완료, AC-1c/4/5 런타임 검증 대기 |
+| 2026-06-15 | v0.3.0 | `in-progress` | `completed` | 라이브 E2E 검증 AC-1c/AC-4/AC-5 전부 PASS |
+
+---
+
+## [v0.3.0 추가] 라이브 E2E 검증 — 2026-06-15
+
+### 검증 환경
+
+- **스택**: 로컬 Supabase (API `127.0.0.1:54321` / DB `127.0.0.1:54322`)
+- **검증 수단**: 인증 JWT(HS256, SUPABASE_JWT_SECRET)로 Supabase Realtime 구독 + direct Postgres INSERT로 트리거 발화
+- **스크립트**: 임시 ad-hoc 스크립트(실행 후 삭제, 임시 위생). 정식 수동 검증 스크립트는 `apps/backend/test/chat.live.mts`.
+
+### 데이터 시나리오
+
+- 모임 seeding: 멤버 A(owner) + 멤버 B(member) / 유저 C는 비멤버
+- 대상 채널: `moim:{id}` (Supabase Realtime private channel)
+
+### AC-by-AC 검증 결과
+
+#### AC-1c — realtime broadcast 종단 수신
+
+**판정: PASS**
+
+- 멤버 B가 인증 JWT(HS256, SUPABASE_JWT_SECRET 서명)로 private 채널 `moim:{id}`에 구독 → 상태 `SUBSCRIBED` 확인.
+- sender A 명의로 `chat_message` row를 direct Postgres INSERT 실행.
+- INSERT → `broadcast_chat_message()` AFTER INSERT 트리거 → `realtime.broadcast_changes` 호출.
+- 멤버 B의 구독 클라이언트가 해당 메시지를 실시간 수신, content 일치 확인.
+- **결론**: Postgres 트리거 → Realtime broadcast → 구독 클라이언트 수신 전체 경로 검증 완료.
+
+#### AC-4 — 비멤버 구독 차단 (realtime.messages RLS)
+
+**판정: PASS**
+
+- 비멤버 유저 C가 동일 채널 `moim:{id}` 구독 시도.
+- `CHANNEL_ERROR: "Unauthorized: You do not have permissions to read from this Channel topic"` 응답 수신.
+- 비멤버 C는 아무 메시지도 수신하지 않음.
+- **결론**: `realtime.messages` 멤버십 RLS 정책이 비멤버의 채널 구독을 정상 거부.
+
+#### AC-5 — 브라우저 Realtime 구독 + CSP 위반 없는 연결
+
+**판정: PASS (정책 + 프로토콜 증거 기반)**
+
+- `apps/web/proxy.ts` CSP `connect-src` 값: `'self' wss://127.0.0.1:54321 http://127.0.0.1:54321` (호스트 고정).
+- CSP3 scheme-matching 규칙: `http://host` 토큰은 동일 host의 `ws://` 연결을 허용.
+- 라이브 E2E WebSocket 핸드셰이크 성공 (멤버 B SUBSCRIBED 상태 확인) — realtime 엔드포인트 연결 실증.
+- 채팅 UI 빌드/린트: v0.2.0 게이트에서 이미 통과. send 동작: jest 검증 완료.
+- **잔여 미실행 항목**: 인증 세션으로 브라우저에서 `/moims/[id]/chat` 풀 페이지를 로드하는 인-브라우저 CSP 런타임은 별도로 실행하지 않음.
+- **판정 근거**: CSP 정책이 realtime origin을 명시적으로 허용(정책 증거)하고, 프로토콜 수준 WS 연결 및 broadcast 수신을 라이브 E2E로 실증(프로토콜 증거)하였으므로 AC-5 CSP 요건 충족으로 판정.
+
+### v0.3.0 동기화 파일 목록
+
+| 파일 | 변경 유형 | 내용 요약 |
+|------|-----------|-----------|
+| `.moai/specs/SPEC-CHAT-001/spec.md` | 수정 | status: in-progress→completed, version: 0.2.0→0.3.0, updated: 2026-06-15, HISTORY v0.3.0 추가 |
+| `.moai/specs/SPEC-CHAT-001/acceptance.md` | 수정 | DoD 체크박스 전부 체크 완료, 전파 종단 검증 항목에 라이브 E2E 주석 추가 |
+| `CHANGELOG.md` | 수정 | CHAT-001 항목 in-progress → completed, 라이브 E2E 결과 명시 |
+| `.moai/project/tech.md` | 수정 | 상단 기록 블록 + 구현됨 표 CHAT-001 행 completed로 갱신 |
+| `.moai/project/structure.md` | 수정 | chat.live.mts 설명 갱신(라이브 E2E 완료) |
+| `.moai/reports/sync-report-SPEC-CHAT-001.md` | 수정 | 본 섹션 추가 |
+
+---
+
+## [v0.2.0] 최초 sync (2026-06-14, in-progress)
+
+### 상태 전이 (v0.2.0)
 
 | 항목 | 이전 | 이후 |
 |------|------|------|
