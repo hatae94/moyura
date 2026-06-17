@@ -155,6 +155,9 @@ secret-*.*
 .aws/config
 .aws/credentials
 
+# Project credentials (Firebase GoogleService-Info, OAuth files — never commit)
+/credentials/
+
 # ===========================================
 # Claude Code Configuration
 # ===========================================

@@ -79,3 +79,29 @@ export const SUPABASE_ANON_KEY: string = resolvePublicSupabaseValue(
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
   "EXPO_PUBLIC_SUPABASE_ANON_KEY",
 );
+
+/**
+ * Google Sign-In 공개 client ID — 옵셔널 (SPEC-MOBILE-004 R-MOB4-001).
+ *
+ * 미설정이어도 throw 하지 않는다(undefined 반환) — Google 로그인은 이메일/비번과 병존하는 선택적
+ * 인증 경로이므로, client ID 부재로 앱 부팅 전체가 깨지면 안 된다. 값이 있을 때만
+ * configureGoogleSignIn 이 SDK 를 설정한다(app/_layout.tsx). 시크릿이 아니므로 EXPO_PUBLIC_* 로 노출 가능.
+ *
+ * @param value `process.env.EXPO_PUBLIC_GOOGLE_*` 의 인라인/참조 결과
+ * @returns 설정 시 trim 값, 미설정/공백이면 undefined
+ */
+export function resolveOptionalPublicValue(
+  value: string | undefined,
+): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+// 리터럴 키 직접 접근으로 Expo 인라인을 보장한다(동적 조회는 변환되지 않음).
+export const GOOGLE_WEB_CLIENT_ID: string | undefined = resolveOptionalPublicValue(
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+);
+
+export const GOOGLE_IOS_CLIENT_ID: string | undefined = resolveOptionalPublicValue(
+  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+);

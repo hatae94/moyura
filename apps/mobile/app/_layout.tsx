@@ -17,10 +17,23 @@ import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider } from "../lib/auth/AuthContext";
+import { configureGoogleSignIn } from "../lib/auth/google-signin";
+import { GOOGLE_IOS_CLIENT_ID, GOOGLE_WEB_CLIENT_ID } from "../lib/env";
 
 // R-N3/OD-8: 콜드스타트 핸드셰이크 동안 스플래시를 유지한다 — 모듈 평가 시점에 자동 숨김을 막는다
 // (App.tsx 모듈 평가 시점 호출 보존). 실패해도 throw 하지 않게 흡수(스플래시 미지원/이미 숨김 등).
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+// SPEC-MOBILE-004 R-MOB4-001: Google Sign-In SDK 를 부팅 시 1회 설정한다(signInWithGoogle 선행 조건).
+// 두 client ID 가 모두 설정된 경우에만 호출한다 — 미설정 시(이메일/비번 전용 환경) Google 로그인만
+// 비활성화되고 앱 부팅은 정상 진행된다(env 가 옵셔널인 이유). webClientId 는 signInWithIdToken 의
+// audience(Supabase Google provider client_id 와 동일), iosClientId 는 네이티브 iOS Sign-In 용.
+if (GOOGLE_WEB_CLIENT_ID && GOOGLE_IOS_CLIENT_ID) {
+  configureGoogleSignIn({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+  });
+}
 
 /**
  * 루트 레이아웃 — AuthProvider + 루트 Stack((auth)/(tabs) 그룹). 헤더는 전 그룹에서 숨긴다
