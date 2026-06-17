@@ -40,7 +40,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.1069980037272-4k1a3qlvm4ounerhrmcdp4v3vpeodhii"
         }
-      ]
+      ],
+      "./plugins/withModularHeaders"
     ],
     "extra": {
       "eas": {

@@ -29,6 +29,8 @@ export const BRIDGE_MESSAGE_TYPES = {
   CLEARED: "session:cleared",
   /** native→web: resume 토큰 재주입 + 재검증 신호(R-R1). */
   REVALIDATE: "resume:revalidate",
+  /** web→native: 셸 안에서 Google 버튼 탭 시 네이티브 Google Sign-In 실행 요청(SPEC-MOBILE-004, 토큰 없음). */
+  GOOGLE_SIGNIN_REQUEST: "auth:google-request",
 } as const;
 
 /** 토큰 페이로드 — access/refresh 만(PII 최소화 OD-4). */
@@ -160,4 +162,13 @@ export function serializeNoneMessage(nonce: string): string {
 /** web→native session:cleared 메시지를 직렬화한다(로그아웃 — R-R2, nonce 포함). */
 export function serializeClearedMessage(nonce: string): string {
   return JSON.stringify({ version: BRIDGE_VERSION, type: BRIDGE_MESSAGE_TYPES.CLEARED, nonce });
+}
+
+/**
+ * web→native auth:google-request 메시지를 직렬화한다(SPEC-MOBILE-004 — 셸 Google 버튼 탭).
+ * 토큰 없는 명령 신호로, 네이티브가 nonce 인증 후 Google Sign-In SDK 를 실행한다. 외부 브라우저 OAuth
+ * 이탈 없이 네이티브 인앱 로그인을 띄우는 결정적 경로다(웹의 OAuth 네비게이션 인터셉트 의존 제거).
+ */
+export function serializeGoogleSignInRequest(nonce: string): string {
+  return JSON.stringify({ version: BRIDGE_VERSION, type: BRIDGE_MESSAGE_TYPES.GOOGLE_SIGNIN_REQUEST, nonce });
 }

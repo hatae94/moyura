@@ -268,6 +268,11 @@ export function useAuthBridge({
             onAuthSignal?.("session:cleared");
           }
           break;
+        case "google-signin":
+          // SPEC-MOBILE-004: 셸 Google 버튼 탭(nonce 인증 통과) → 네이티브 Google Sign-In SDK 실행.
+          // 외부 브라우저 OAuth 네비게이션 없이 인앱 네이티브 로그인을 띄운다(결정적 경로 — 인터셉트 비의존).
+          nativeGoogleSignInRef.current();
+          break;
         case "ignore":
           break;
       }

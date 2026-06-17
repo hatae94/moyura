@@ -16,6 +16,7 @@ import {
   signUpAction,
   type AuthActionState,
 } from "@/lib/auth/actions";
+import { requestNativeGoogleSignIn } from "@/lib/native-bridge/bridge-client";
 
 // 인라인 Google 아이콘(R-A3/R-F1: lucide 가 아닌 인라인 20×20 SVG 컴포넌트로 유지).
 function GoogleIcon() {
@@ -86,11 +87,19 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
             {/* 소셜 버튼 3종(R-A3) + "또는" 디바이더(R-A4) */}
             <div className="flex flex-col gap-3 mt-8">
-              {/* Google: 인라인 GoogleIcon outline 버튼(OD-1 form + hidden provider) */}
+              {/* Google: 인라인 GoogleIcon outline 버튼(OD-1 form + hidden provider).
+                  SPEC-MOBILE-004: 네이티브 셸 안에서는 OAuth 제출을 막고 네이티브 Google Sign-In SDK 를
+                  브리지로 직접 요청한다(외부 브라우저 이탈 없이 인앱 로그인). 데스크톱 브라우저는
+                  requestNativeGoogleSignIn() 이 false 라 기존 웹 OAuth 서버 액션이 그대로 제출된다. */}
               <form action={signInWithOAuthAction}>
                 <input type="hidden" name="provider" value="google" />
                 <button
                   type="submit"
+                  onClick={(e) => {
+                    if (requestNativeGoogleSignIn()) {
+                      e.preventDefault();
+                    }
+                  }}
                   className="w-full border border-gray-300 rounded-lg py-3 flex items-center justify-center gap-3 hover:bg-gray-50 transition-colors"
                 >
                   <GoogleIcon />

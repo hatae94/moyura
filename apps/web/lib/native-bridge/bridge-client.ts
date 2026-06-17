@@ -22,6 +22,7 @@ import {
   serializeSyncedMessage,
   serializeNoneMessage,
   serializeClearedMessage,
+  serializeGoogleSignInRequest,
   verifyInboundMessage,
   BRIDGE_MESSAGE_TYPES,
   type TokenPayload,
@@ -67,6 +68,25 @@ function getTrustedOrigin(): string {
 /** 네이티브로 직렬화된 메시지를 회신한다(브리지 없으면 no-op — R-T4). */
 function postToNative(bridge: ReactNativeWebViewBridge, serialized: string): void {
   bridge.postMessage(serialized);
+}
+
+/**
+ * 네이티브 셸 안에서 Google 로그인 버튼을 탭했을 때, 네이티브 Google Sign-In SDK 실행을 요청한다
+ * (SPEC-MOBILE-004). 일반 브라우저(데스크톱)에서는 브리지가 없으므로 false 를 반환해 호출부가 기존
+ * 웹 OAuth 흐름을 그대로 진행하게 한다.
+ *
+ * 셸 안에서는 auth:google-request 명령(per-session nonce 동봉)을 postMessage 로 보내고 true 를 반환한다.
+ * 이로써 외부 브라우저 OAuth 네비게이션 없이 네이티브 인앱 로그인이 뜬다(OAuth 인터셉트 의존 제거).
+ *
+ * @returns 셸이라 네이티브로 요청을 보냈으면 true(호출부는 웹 OAuth 제출을 막아야 함), 데스크톱이면 false.
+ */
+export function requestNativeGoogleSignIn(): boolean {
+  const bridge = getNativeBridge();
+  if (!bridge) {
+    return false; // 데스크톱 브라우저 — 네이티브 경로 없음(기존 웹 OAuth 흐름 유지).
+  }
+  postToNative(bridge, serializeGoogleSignInRequest(getExpectedNonce()));
+  return true;
 }
 
 /**

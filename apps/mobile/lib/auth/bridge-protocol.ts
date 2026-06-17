@@ -32,6 +32,12 @@ export const BRIDGE_MESSAGE_TYPES = {
   CLEARED: "session:cleared",
   /** native→web: resume 시 토큰 재주입 + 재검증 신호(R-R1). */
   REVALIDATE: "resume:revalidate",
+  /**
+   * web→native: 셸 안에서 Google 버튼을 탭했을 때 네이티브 Google Sign-In SDK 실행을 요청하는 명령
+   * (SPEC-MOBILE-004). 토큰 없는 신호 메시지다 — 외부 브라우저 OAuth 이탈 없이 네이티브 인앱 로그인을
+   * 띄우기 위한 결정적 경로(웹의 OAuth 네비게이션 인터셉트 의존 제거). additive type 이므로 v1 유지.
+   */
+  GOOGLE_SIGNIN_REQUEST: "auth:google-request",
 } as const;
 
 /** 토큰 페이로드 — access/refresh 만(userId/프로필 미포함 — PII 최소화 OD-4). */
@@ -49,7 +55,8 @@ export type BridgeMessage =
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.SYNCED; nonce: string; payload: TokenPayload }
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.REVALIDATE; nonce: string; payload: TokenPayload }
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.NONE; nonce: string }
-  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.CLEARED; nonce: string };
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.CLEARED; nonce: string }
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.GOOGLE_SIGNIN_REQUEST; nonce: string };
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set<string>(
   Object.values(BRIDGE_MESSAGE_TYPES),
@@ -178,6 +185,8 @@ export type InboundAction =
    * 파괴하면 안 된다. synced-불완전(none 처럼 처리)도 false.
    */
   | { kind: "clear"; resolvesHandshake: boolean; clearCookies: boolean }
+  /** auth:google-request(nonce 인증 통과) → 네이티브 Google Sign-In SDK 실행(SPEC-MOBILE-004). */
+  | { kind: "google-signin" }
   /** 네이티브 발신 type(restore/revalidate) 수신, 또는 nonce 불일치(미인증) 등 — 무시. */
   | { kind: "ignore" };
 
@@ -240,6 +249,9 @@ export function decideInboundAction(
     case BRIDGE_MESSAGE_TYPES.CLEARED:
       // R-R4 (c): 명시 로그아웃 — clearTokens + WebView 쿠키 제거(부활 차단). 콜드스타트 결과 아님(M-1).
       return { kind: "clear", resolvesHandshake: false, clearCookies: true };
+    case BRIDGE_MESSAGE_TYPES.GOOGLE_SIGNIN_REQUEST:
+      // SPEC-MOBILE-004: 셸의 Google 버튼 탭 — 네이티브 Google Sign-In SDK 를 실행한다(nonce 인증 통과분만).
+      return { kind: "google-signin" };
     default:
       // session:restore / resume:revalidate 등 네이티브 발신 type — 수신 분기에서 무시.
       return { kind: "ignore" };
