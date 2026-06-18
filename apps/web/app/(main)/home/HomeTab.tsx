@@ -1,15 +1,17 @@
-// /home HomeTab (클라이언트 컴포넌트, SPEC-MOBILE-003 R-WB2) — Figma Make HomeTab 적응.
+// /home HomeTab (클라이언트 컴포넌트, SPEC-MOBILE-003 R-WB2 + SPEC-MOIM-003 REQ-MOIM3-001) — 실 모임 목록.
 //
-// 필터 칩(전체/예정/완료)이 클라이언트 상태(useState)로 카드 리스트를 필터링하므로 클라이언트
-// 컴포넌트다. 인사말/표시이름/아바타 이니셜은 서버에서 세션으로 도출해 prop 으로 받는다(page.tsx).
+// SPEC-MOIM-003: mock(MOCK_MEETUPS) → 실 모임(GET /moims, page.tsx 가 prop 주입). 카드는 이름 + 생성일만
+// 표시하고(실 Moim 은 { id, name, createdBy, createdAt } 뿐 — date/time/location/status/memberCount 출처
+// 없음, §5 그레이스풀 degrade), /home/{id} 링크로 상세 이동한다. status 필터 칩은 데이터 출처가 없어 제거한다
+// (status 필터 미구현 — Exclusions). 인사말/표시이름/아바타 이니셜은 서버에서 도출해 prop 으로 받는다.
 //
-// 모임 카드는 렌더 전용(Exclusions) — MeetupDetail 은 후속 SPEC 으로 제외이므로 onClick/네비게이션 없음.
+// 클라이언트 컴포넌트로 유지하는 이유: CreateMeetupButton(비기능 CTA) 등 셸 일관성. 필터 useState 는 제거됐다.
 "use client";
 
-import { Calendar, ChevronRight, Clock, MapPin, Plus, Users } from "lucide-react";
-import { useState } from "react";
+import Link from "next/link";
+import { Calendar, ChevronRight, Plus } from "lucide-react";
 
-import { MOCK_MEETUPS, type Meetup, type MeetupStatus } from "./_mock";
+import type { MoimResponse } from "@moyura/api-client";
 
 export interface HomeTabProps {
   /** 서버에서 세션 user 로 도출한 표시 이름(인사말 헤더). */
@@ -18,65 +20,42 @@ export interface HomeTabProps {
   avatarInitial: string;
   /** 인사말 — 시간대별 문구(서버 렌더 일관성을 위해 서버에서 계산해 전달). */
   greeting: string;
+  /** 실 모임 목록(GET /moims). 빈 배열이면 빈 상태 UI 를 표시한다(REQ-MOIM3-001). */
+  moims: MoimResponse[];
 }
 
-/** 필터 칩 정의 — 'all' 은 전체, 그 외는 MeetupStatus 매핑('ongoing' 은 mock 에 없어 미노출). */
-const FILTERS = [
-  { id: "all", label: "전체" },
-  { id: "upcoming", label: "예정" },
-  { id: "past", label: "완료" },
-] as const;
-
-type FilterId = (typeof FILTERS)[number]["id"];
-
-/** 상태 배지 — 텍스트/색상 매핑(Figma StatusBadge). */
-function StatusBadge({ status }: { status: MeetupStatus }) {
-  const styles: Record<MeetupStatus, { label: string; className: string }> = {
-    upcoming: { label: "예정", className: "bg-primary/10 text-primary" },
-    ongoing: { label: "진행중", className: "bg-green-100 text-green-700" },
-    past: { label: "완료", className: "bg-muted text-muted-foreground" },
-  };
-  const { label, className } = styles[status];
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>
-      {label}
-    </span>
-  );
+/** 생성일 표시 — ISO-8601 createdAt 을 한국어 날짜로 포맷(실 데이터 출처 있는 필드만, §5 degrade). */
+function formatCreatedDate(createdAt: string): string {
+  return new Date(createdAt).toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
-/** 모임 카드(렌더 전용 — 탭/네비게이션 없음, Exclusions). */
-function MeetupCard({ meetup }: { meetup: Meetup }) {
+/**
+ * 실 모임 카드 — 이름 + 생성일 표시, /home/{id} 상세 링크.
+ *
+ * mock 의 풍부한 필드(시간/장소/상태 배지/멤버 수)는 실 데이터 출처가 없어 렌더하지 않는다(§5 정직성 degrade).
+ * 카드 레이아웃 셸(rounded-2xl border, ChevronRight 진입 어포던스)은 유지해 시각적 일관성을 보존한다.
+ */
+function MeetupCard({ moim }: { moim: MoimResponse }) {
   return (
-    <div className="flex gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl ${meetup.coverColor}`}
-      >
-        {meetup.emoji}
-      </div>
+    <Link
+      href={`/home/${moim.id}`}
+      className="flex gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
+    >
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-center gap-2">
-          <h3 className="flex-1 truncate font-bold text-card-foreground">{meetup.title}</h3>
-          <StatusBadge status={meetup.status} />
+          <h3 className="flex-1 truncate font-bold text-card-foreground">{moim.name}</h3>
           <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
         </div>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Calendar size={14} />
-          <span>
-            {meetup.date} {meetup.time}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <MapPin size={14} />
-          <span className="truncate">{meetup.location}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Users size={14} />
-          <span>
-            {meetup.memberCount}/{meetup.maxMembers}
-          </span>
+          <span>{formatCreatedDate(moim.createdAt)} 개설</span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -98,16 +77,7 @@ function CreateMeetupButton() {
   );
 }
 
-export function HomeTab({ displayName, avatarInitial, greeting }: HomeTabProps) {
-  const [filter, setFilter] = useState<FilterId>("all");
-
-  const meetups =
-    filter === "all"
-      ? MOCK_MEETUPS
-      : MOCK_MEETUPS.filter((m) => m.status === filter);
-
-  const upcomingCount = MOCK_MEETUPS.filter((m) => m.status === "upcoming").length;
-
+export function HomeTab({ displayName, avatarInitial, greeting, moims }: HomeTabProps) {
   return (
     <div className="flex flex-1 flex-col bg-background">
       {/* 헤더: 인사말 + 표시 이름 + 아바타 이니셜. */}
@@ -121,42 +91,16 @@ export function HomeTab({ displayName, avatarInitial, greeting }: HomeTabProps) 
             {avatarInitial}
           </span>
         </div>
-        {upcomingCount > 0 && (
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm text-secondary-foreground">
-            <Clock size={16} />
-            <span>예정된 모임이 {upcomingCount}개 있어요</span>
-          </div>
-        )}
       </header>
 
-      {/* 스크롤 영역: CTA → 필터 칩 → 카드 리스트 / 빈 상태. */}
+      {/* 스크롤 영역: CTA → 카드 리스트 / 빈 상태. (status 필터 칩 제거 — 실 데이터 출처 없음, Exclusions.) */}
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6">
         <CreateMeetupButton />
 
-        <div className="flex gap-2">
-          {FILTERS.map((f) => {
-            const isActive = filter === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilter(f.id)}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {meetups.length > 0 ? (
+        {moims.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {meetups.map((meetup) => (
-              <MeetupCard key={meetup.id} meetup={meetup} />
+            {moims.map((moim) => (
+              <MeetupCard key={moim.id} moim={moim} />
             ))}
           </div>
         ) : (

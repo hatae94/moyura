@@ -13,6 +13,10 @@ export type ProfileResponse = components['schemas']['ProfileResponseDto'];
 // PATCH /me 요청 바디(UpdateNameDto) 타입 별칭(SPEC-MOBILE-004 T-002/T-003).
 export type UpdateNameRequest = components['schemas']['UpdateNameDto'];
 
+// GET /moims 가 반환하는 모임 DTO(MoimResponseDto)의 타입 별칭(SPEC-MOIM-003 REQ-MOIM3-006).
+// 현재 모델은 { id, name, createdBy, createdAt } — date/time/location/status 등 확장 필드는 없다(Exclusions).
+export type MoimResponse = components['schemas']['MoimResponseDto'];
+
 /**
  * 인증 토큰 공급자(SPEC-AUTH-001 R-D4 / OD-3).
  *
@@ -59,6 +63,7 @@ export class ApiError extends Error {
  * 범위(인프라 배선 + 인증)에 맞춰 최소한의 표면만 노출한다:
  * - getHealth(): /health 편의 메서드 (토큰 불필요 — public)
  * - getMe(): /me 편의 메서드 (Bearer 토큰 필요 — 보호 라우트, R-C1/R-D4)
+ * - listMoims(): /moims 편의 메서드 (Bearer 토큰 필요 — 모임 목록, REQ-MOIM3-006)
  * - request(): 임의 경로를 타입 안전하게 호출하는 제네릭 진입점
  */
 export class ApiClient {
@@ -145,6 +150,17 @@ export class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
     })) as ProfileResponse;
+  }
+
+  /**
+   * GET /moims — 인증 사용자가 속한 모임 목록을 반환한다(SPEC-MOIM-003 REQ-MOIM3-006).
+   * 백엔드가 멤버 스코핑을 강제하므로(자신이 속한 모임만) 클라이언트 필터링은 불필요하다.
+   * Bearer 토큰은 getToken 공급자로 주입된다(R-D4 — 토큰은 URL/query 가 아닌 Authorization 헤더로만, R-A9).
+   * 경로 키 `/moims` 는 리터럴이라 generic request 로 타입 안전하다(path 파라미터 조립 불필요 — 상세/멤버
+   * 조회는 템플릿 미치환 때문에 web 의 lib/moim/api.ts 가 구체 경로를 조립한다).
+   */
+  async listMoims(): Promise<MoimResponse[]> {
+    return (await this.request('/moims', 'get')) as MoimResponse[];
   }
 }
 

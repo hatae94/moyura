@@ -80,6 +80,73 @@ export function urlForRoute(route: AppRoute, webUrl: string): string {
   return new URL(`/${route}`, webUrl).toString();
 }
 
+// ── SPEC-MOIM-003 중첩 detail 라우트(`/home/[id]`) 분류 (REQ-MOIM3-003) ───────────────
+// routeForUrl 은 단일 세그먼트만 매핑하므로 /home/123 같은 2-세그먼트는 null 이다 — 그러면
+// isCrossRoute 도 false 가 되어 decideWebViewLoad 가 WebView 자체 이동(trusted-load)으로 떨어진다
+// (MOBILE-003 계약 위반). 아래 함수는 routeForUrl 동작을 보존하면서(회귀 0) 중첩 detail 분류를
+// 별도 순수 함수로 추가한다. decideWebViewLoad 가 이를 push 디스패치 판정에 쓴다.
+
+/** detailRouteForUrl 의 분류 결과 — detail 의 부모 앱 라우트 + id. */
+export interface DetailRoute {
+  /** detail 의 부모 앱 라우트(예: 홈 상세면 "home"). */
+  route: AppRoute;
+  /** detail id(URL-디코드된 경로 두 번째 세그먼트 — moim id 등). */
+  id: string;
+}
+
+/**
+ * URL 의 pathname 을 중첩 detail 라우트로 분류한다(REQ-MOIM3-003). 분류 불가면 null.
+ *
+ * 정확히 2 세그먼트이고 segment[0] 이 앱 라우트일 때 `{ route, id: segment[1] }` 를 반환한다.
+ * trailing slash 는 무시하고, query/hash 는 pathname 에 영향을 주지 않는다. id 는 URL-디코드한다.
+ * 단일 세그먼트(/home)·3+ 세그먼트(/moims/{id}/chat, /home/123/edit)·비-앱 prefix(/moims/{id},
+ * /auth/callback)·루트(/)·malformed 입력은 null 이다 — push 디스패치 대상에서 제외.
+ *
+ * @param url 판정할 절대 URL
+ * @returns 분류된 DetailRoute, 분류 불가/파싱 실패면 null
+ * @MX:NOTE: [AUTO] URL→중첩 detail 라우트 분류의 단일 진입점 — decideWebViewLoad(detail push 판정)가 호출.
+ *           분류 범위가 넓어지면 비-detail 경로(/moims/{id}/chat 등)까지 push 되어 MOBILE-003 인증/채팅
+ *           흐름(R-NC3)이 깨지고, 좁아지면 홈 카드 탭의 detail push(REQ-MOIM3-003)가 누락된다.
+ *           (파일당 ANCHOR 한도 3 준수 — 기존 APP_ROUTES/routeForUrl/urlForRoute 앵커 보존, fan_in 증가 시 승격.)
+ */
+export function detailRouteForUrl(url: string): DetailRoute | null {
+  const parsed = tryParseUrl(url);
+  if (!parsed) {
+    return null;
+  }
+  // pathname 을 세그먼트 배열로 정규화한다(선행 슬래시 제거 + trailing slash 무시).
+  const segments = parsed.pathname.split("/").filter((s) => s.length > 0);
+  if (segments.length !== 2) {
+    return null; // 단일/3+ 세그먼트는 detail 아님.
+  }
+  const prefix = segments[0];
+  if (!APP_ROUTE_SET.has(prefix)) {
+    return null; // prefix 가 앱 라우트가 아니면 detail 디스패치 대상 아님(/moims/{id} 등).
+  }
+  // id 는 URL-디코드해 돌려준다(공백/특수문자 안전). 디코드 실패는 원본 세그먼트로 폴백한다.
+  let id: string;
+  try {
+    id = decodeURIComponent(segments[1]);
+  } catch {
+    id = segments[1];
+  }
+  return { route: prefix as AppRoute, id };
+}
+
+/**
+ * 중첩 detail 라우트가 호스팅하는 웹 URL 을 조립한다(REQ-MOIM3-003 — detail WebView 의 source URL).
+ *
+ * urlForRoute 와 일관된 URL 결합(URL 생성자)을 쓴다. id 는 URL-인코딩해 안전하게 결합한다.
+ *
+ * @param route detail 의 부모 앱 라우트
+ * @param id detail id(moim id 등)
+ * @param webUrl 호스팅 웹 base(WEB_URL)
+ * @returns `${webUrl 호스트}/${route}/${encodeURIComponent(id)}` 형태의 절대 URL
+ */
+export function urlForDetailRoute(route: AppRoute, id: string, webUrl: string): string {
+  return new URL(`/${route}/${encodeURIComponent(id)}`, webUrl).toString();
+}
+
 /**
  * 현재 WebView URL 에서 타깃 URL 로의 로드가 "교차 라우트 디스패치 대상"인지 판정한다(R-NC2/R-NC3).
  *

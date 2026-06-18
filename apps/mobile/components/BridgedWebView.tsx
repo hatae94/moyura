@@ -108,6 +108,15 @@ export function BridgedWebView({
     [router],
   );
 
+  // MOIM-003 REQ-MOIM3-003: 같은 탭 내 중첩 detail 차단 시 네이티브 detail 라우트로 push(WebView 자체
+  // 이동 금지). replace 가 아니라 push 라 네이티브 back 이 list(예: (tabs)/home)로 복귀한다(expo-router Stack).
+  const onDetailPush = useCallback(
+    (route: AppRoute, id: string): void => {
+      router.push(`/(tabs)/${route}/${encodeURIComponent(id)}` as never);
+    },
+    [router],
+  );
+
   // R-O1~R-O4 보존 + R-T2/R-T5/R-T7/R-R1/R-R3/R-T8/R-T9 + R-NC2/R-AS2: OAuth 브리지 + 토큰 동기화 + 신호 보고.
   const { onShouldStartLoadWithRequest, onMessage, injectRestore, injectRevalidate } =
     useAuthBridge({
@@ -120,6 +129,8 @@ export function BridgedWebView({
       // R-NC2: 디스패치 변형 활성화(currentUrl 제공) + 교차 라우트 → router.replace.
       getCurrentUrl: () => currentUrlRef.current,
       onCrossRouteDispatch,
+      // MOIM-003 REQ-MOIM3-003: 같은 탭 내 detail → router.push((tabs)/home/[id]).
+      onDetailPush,
     });
 
   // R-T2/R-N5: 신뢰 origin 로드 완료 + 토큰 로드 완료 시 1회 session:restore 주입(App.tsx maybeInjectRestore 보존).
