@@ -1,7 +1,7 @@
 ---
 id: SPEC-MOIM-003
-version: 0.2.0
-status: in-progress
+version: 0.3.0
+status: completed
 created: 2026-06-17
 updated: 2026-06-18
 author: hatae
@@ -13,6 +13,7 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-18 (v0.3.0): AC-3 인앱 E2E (홈 실 카드 탭 → 네이티브 (tabs)/home/[id] push → 웹 상세 렌더 → 네이티브 back → 목록 복귀) 사용자 디바이스 검증 완료(2026-06-18) → status completed. 전 AC 충족.
 - 2026-06-18 (v0.2.0): sync 단계 — status `draft` → `in-progress` 전환. 구현 완료(HEAD = 74fd7fe). **자동 게이트 전부 GREEN**: mobile tsc 0, mobile vitest 215/215(+24 route-map detail-push 케이스), expo export(iOS) OK, web build 0(route /home/[id] 등록), web lint 0, web tsc 0, api-client tsc 0. **라이브 데이터 패스 검증(실 password-grant 토큰, 로컬 Supabase)**: `GET /moims` → 200 `[{id,name,createdBy,createdAt}]`(실 형상, fabricated 필드 없음); `GET /moims/:id` → 200; `GET /moims/:id/members` → 200 `[{userId,nickname,role:"owner",joinedAt}]`; `GET /moims/<missing>` → 404; 토큰 없음/위조 HS256 → 401(JWKS 가드 유지). **AC별 검증 상태**: AC-1(홈 실 데이터 배선) 라이브 PASS; AC-2(상세 콘텐츠) 라이브 PASS; AC-5(가드 + 404/인가) 라이브 PASS; AC-4(데스크톱 일반 라우팅) web build 등록 + 동일 코드 PASS; AC-6(품질 게이트) 전부 GREEN. **AC-3(모바일 인앱 카드 탭 E2E) 미완료**: push 로직은 vitest 24건으로 검증되고 번들도 빌드되었으나, Supabase 세션 만료(앞서 진행된 Google 로그인 토큰 유효 기간 경과)로 인해 이번 세션 중 실제 카드 탭 인앱 E2E를 수행하지 못함. 프로젝트 메모리 규칙(mobile-spec-device-gated)에 따라 라이브 인앱 탭 검증 완료 전까지 status = `in-progress`.
   - **주요 구현 내용**: 웹 홈 탭 mock→real 배선(`MOCK_MEETUPS` 제거, `GET /moims` 실 데이터), 카드 `/home/{id}` 링크 전환, 웹 상세 Server Component(`app/(main)/home/[id]/page.tsx`) 신규(`GET /moims/:id` + `GET /moims/:id/members`, `(main)` 가드 상속, 403/404 → `notFound()`), 웹 상세/멤버 헬퍼(`apps/web/lib/moim/api.ts` — `getMoim`/`getMoimMembers`, `chat/api.ts` 패턴), api-client `listMoims()` + `MoimResponse` 추가, 모바일 `detailRouteForUrl`/`urlForDetailRoute` 순수 함수 + `decideWebViewLoad` push 변형(additive), `useAuthBridge.ts` `onDetailPush` 콜백, `BridgedWebView.tsx` `router.push`(tabs)/home/[id], 홈 탭 디렉터리화(`(tabs)/home/` — `_layout.tsx`(Stack) + `index.tsx` + `[id].tsx`), `home.tsx` 플랫 파일 제거, `_mock.ts` 제거, 신규 vitest 2파일 +24 테스트.
   - **설계 결정 기록**: (1) 홈 카드 honest-fields-only — `{name, createdAt}`만 표시, fabricated 필드(date/time/location/status/memberCount) 제거; (2) 상세 = Server Component(클라이언트 인터랙션 불필요 — 링크만 있음); (3) 가드 = `(main)` 그룹 상속(별도 layout 불필요); (4) 비멤버 403 → `notFound()`(모임 존재 여부 비노출); (5) api-client `request()` 템플릿 미치환 확인 → `chat/api.ts` 패턴 미러; (6) 모바일 디렉터리화 — flat `home.tsx`와 `home/[id].tsx` 공존 불가로 `home/` 디렉터리 + Stack.

@@ -100,7 +100,7 @@ moyura/
 | `@moyura/web` | `apps/web` | 메인 UI 표면 (App Router) | Next.js `16.2.6`, react `19.2.4`, Tailwind v4, TypeScript `^5` | 스캐폴드 |
 | `@moyura/backend` | `apps/backend` | 백엔드 REST API | NestJS `11`(`@nestjs/common ^11`), TypeScript `^5.7.3`, Jest | 스캐폴드 |
 | `@moyura/config` | `packages/config` | 공유 tsconfig base 의도 | 현재 `package.json`만 존재(`version 0.0.0`, private) | 스텁(빈 패키지) |
-| `@moyura/api-client` | `packages/api-client` | OpenAPI 생성 타입드 API 클라이언트 | `openapi-typescript 7.13.0` 타입(`src/schema.d.ts`, gitignore) + 얇은 fetch 래퍼(`createApiClient`, `getHealth`, optional `getToken`→Bearer, `getMe`, `listMoims`(SPEC-MOIM-003)) | **구현됨** (SPEC-ENV-SETUP-001 + SPEC-AUTH-001 + SPEC-MOIM-003) |
+| `@moyura/api-client` | `packages/api-client` | OpenAPI 생성 타입드 API 클라이언트 | `openapi-typescript 7.13.0` 타입(`src/schema.d.ts`, gitignore) + 얇은 fetch 래퍼(`createApiClient`, `getHealth`, optional `getToken`→Bearer, `getMe`, `listMoims`(SPEC-MOIM-003 completed)) | **구현됨** (SPEC-ENV-SETUP-001 + SPEC-AUTH-001 + SPEC-MOIM-003) |
 
 검증 메모:
 - `@moyura/web`의 `version`은 `0.1.0`, 나머지 앱은 `1.0.0`(루트도 `1.0.0`).
@@ -156,7 +156,7 @@ web (Next.js 메인 UI 표면 — @supabase/ssr 세션 권위, native-bridge 수
 
 - `mobile shell → WebView → web surface → REST → backend` 가 데이터/제어 흐름.
 - 두 프런트엔드(`web`, `mobile`)는 동일 backend API를 소비한다.
-- **현 시점 구현 상태 (SPEC-MOBILE-003 in-progress — iOS 핵심 플로우 디바이스 검증 완료; SPEC-MOBILE-004 completed — iOS 시뮬레이터 라이브 E2E 2026-06-17 PASS)**:
+- **현 시점 구현 상태 (SPEC-MOBILE-003 in-progress — iOS 핵심 플로우 디바이스 검증 완료; SPEC-MOBILE-004 completed — iOS 시뮬레이터 라이브 E2E 2026-06-17 PASS; SPEC-MOIM-003 completed — 인앱 E2E 사용자 디바이스 검증 2026-06-18 PASS)**:
   - `apps/mobile`: expo-router 파일 기반 라우팅(`app/` 트리) — Root Stack + `(auth)`(로그인 WebView) + `(tabs)`(네이티브 Tabs, 각 탭 = `${WEB_URL}/<route>` 호스팅 WebView 래퍼). `App.tsx` 제거. `components/BridgedWebView.tsx` 공유 seam.
   - `apps/web`: `(main)` 탭 라우트 그룹(BottomTabBar + HomeTab + 플레이스홀더 3종). 셸 모드에서 웹 BottomTabBar 숨김(ShellModeEffect + ShellSessionAnnouncer). post-login redirect `/me`→`/home`.
   - 네이티브 인증 상태: `lib/auth/auth-state-core.ts`(SecureStore + bridge 신호 → isSignedIn 순수 결정, @MX:ANCHOR), `lib/auth/AuthContext.tsx`. `Stack.Protected`/`Tabs.Protected` 가드.

@@ -80,5 +80,5 @@
 - [x] 모바일 detail-push 순수 분류 + `decideWebViewLoad` push 변형(회귀 0) + vitest. *(mobile vitest 215/215 +24 route-map detail-push 케이스 GREEN)*
 - [x] expo-router 홈 탭 디렉터리화(Stack + index + [id]), 네이티브 back 복귀. *(iOS 시뮬레이터에서 앱 리로드 후 렌더 정상, 디렉터리화 구조적 안전 확인)*
 - [x] 자동 게이트(web build/lint, tsc 3패키지, mobile vitest, expo export) 0 error. *(AC-6 전부 GREEN)*
-- [ ] **디바이스 종단 검증 — AC-3 인앱 탭 E2E** (완료 전환 필수): iOS 시뮬레이터 dev build 에서 홈 실 목록 → 카드 탭 → 네이티브 상세 push → 웹 상세 렌더 → 네이티브 back → 목록 복귀 → "채팅 입장" 진입 라이브 확인. **device-gated — 라이브 인앱 탭 대기** (이번 세션 중 Supabase 세션 만료로 카드 탭 미수행; push 로직 vitest 검증됨, 번들 빌드됨). 검증 완료 전까지 status = `in-progress`.
+- [x] **디바이스 종단 검증 — AC-3 인앱 탭 E2E** (완료 전환 필수): iOS 시뮬레이터 dev build 에서 홈 실 목록 → 카드 탭 → 네이티브 상세 push → 웹 상세 렌더 → 네이티브 back → 목록 복귀 → "채팅 입장" 진입 라이브 확인. **사용자 인앱 검증 2026-06-18** — 홈 실 카드 탭 → 네이티브 (tabs)/home/[id] push → 웹 상세 렌더 → 네이티브 back → 목록 복귀 사용자 디바이스(iOS 시뮬레이터) 검증 완료.
 - [x] 스키마 확장 0(Moim 필드 미추가), 수정/삭제/생성 UI 미구현(Exclusions 준수).
