@@ -23,13 +23,13 @@ moyura/
 │  │  │  ├─ health/     # GET /health (PrismaService SELECT 1 프로브)
 │  │  │  ├─ auth/       # SupabaseAuthGuard(ES256 JWKS, jose) + TokenVerifierService + auth.config + @CurrentUser
 │  │  │  ├─ profile/    # ProfileService(upsertBySub + updateName — SPEC-MOBILE-004) + me.controller(GET /me 보호 + PATCH /me 이름 업데이트 — SPEC-MOBILE-004) + profile-response.dto(name 포함) + update-name.dto
-│  │  │  ├─ moim/       # 첫 기능 도메인 모듈 (SPEC-MOIM-001) — MoimModule/MoimService/MoimController + dto(create/response/member) + *.spec.ts + integration.spec.ts. assertMember/assertOwner 인가 단일 출처(@MX:ANCHOR). MoimService export — 하위 SPEC(CHAT-001/CHAT-002/MOIM-002) 재사용 계약.
+│  │  │  ├─ moim/       # 첫 기능 도메인 모듈 (SPEC-MOIM-001) — MoimModule/MoimService/MoimController + dto(create/response/member) + *.spec.ts + integration.spec.ts. assertMember/assertOwner 인가 단일 출처(@MX:ANCHOR). MoimService export — 하위 SPEC(CHAT-001/CHAT-002/MOIM-002) 재사용 계약. Moim.startsAt(DateTime?)+location(String?) additive nullable 추가(SPEC-MOIM-004 — 마이그레이션 20260619000000_add_moim_event_fields). CreateMoimDto optional startsAt/location. MoimResponseDto startsAt/location 직렬화. POST /moims optional 영속 + startsAt 무효 400. GET /moims·GET /moims/:id 응답에 두 필드 포함.
 │  │  │  ├─ invite/     # 초대 도메인 모듈 (SPEC-MOIM-002) — InviteModule/InviteService/InviteController + dto(create-invite/accept-invite/response) + *.spec.ts + invite.integration.spec.ts. MoimModule import(assertOwner 재사용). 발급/목록/폐기(owner 전용) + accept(멱등/원자 usedCount).
 │  │  │  ├─ chat/       # 채팅 도메인 모듈 (SPEC-CHAT-001) — ChatModule/ChatService/ChatController + chat-events.ts(이벤트 계약 소유·export, @MX:ANCHOR) + dto(send-message/get-history/message-response) + *.spec.ts + chat.integration.spec.ts. MoimModule import(assertMember 재사용). EventEmitterModule 인프라 선행 도입(CHAT-002가 구독할 chat.message.created 이벤트 계약).
 │  │  │  ├─ push/       # FCM 푸시 도메인 모듈 (SPEC-CHAT-002) — PushModule/PushListener(@OnEvent 단방향, chat↛push 의존 방향 없음) + FcmSender(firebase-admin, graceful no-op) + DeviceTokenService(upsert/unregisterByOwner owner-scoped) + DeviceTokenController(POST /devices, DELETE /devices/:token) + dto(register-device/device-token-response) + *.spec.ts + loose-coupling.spec.ts. chat 모듈은 push 존재 미인지 — push는 chat-events.ts(@MX:ANCHOR) 계약에만 단방향 의존.
 │  │  │  ├─ prisma/     # PrismaService (pg adapter, pingDatabase)
 │  │  │  └─ generated/  # Prisma 7 source-emit 클라이언트 (gitignore, 재생성)
-│  │  ├─ prisma/        # schema.prisma (Profile(name? 추가 — SPEC-MOBILE-004) + Moim + MoimMember + MoimInvite + ChatMessage + DeviceToken 모델) + migrations/20260602095934_init_profile + 20260613155202_add_moim + 20260613171209_add_moim_invite + 20260613175232_add_chat + 20260614_add_device_token + 20260615000000_add_profile_name(SPEC-MOBILE-004)
+│  │  ├─ prisma/        # schema.prisma (Profile(name? 추가 — SPEC-MOBILE-004) + Moim(startsAt?/location? 추가 — SPEC-MOIM-004) + MoimMember + MoimInvite + ChatMessage + DeviceToken 모델) + migrations/20260602095934_init_profile + 20260613155202_add_moim + 20260613171209_add_moim_invite + 20260613175232_add_chat + 20260614_add_device_token + 20260615000000_add_profile_name(SPEC-MOBILE-004) + 20260619000000_add_moim_event_fields(SPEC-MOIM-004)
 │  │  ├─ test/          # 수동 통합 검증 스크립트 — chat.live.mts(SPEC-CHAT-001 AC-1c/4/5 정식 수동 검증 스크립트, 라이브 E2E 2026-06-15 완료)
 │  │  ├─ prisma.config.ts  # Prisma 7 연결 URL 위치
 │  │  ├─ openapi.ts     # OpenAPI emit 스크립트
@@ -58,15 +58,19 @@ moyura/
 │  │  ├─ patches/       # @react-native-cookies__cookies.patch(jcenter→mavenCentral, Android Gradle 9 호환)
 │  │  └─ eas.json       # EAS local/prod 프로파일 스켈레톤
 │  └─ web/              # @moyura/web     — Next.js 16 (app/, public/)
-│     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback, require-named-session.ts(공유 서버 가드 — SPEC-MOBILE-004)), native-bridge/(bridge-client.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·NativeBridgeProvider.tsx·LogoutBridgeNotifier.tsx), invite/accept.ts(초대 수락 클라이언트 로직), chat/useChatChannel.ts(Supabase Realtime private channel 구독 훅 — SPEC-CHAT-001), moim/api.ts(신규 — getMoim/getMoimMembers 헬퍼, chat/api.ts 패턴 미러 — SPEC-MOIM-003)
+│     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback, require-named-session.ts(공유 서버 가드 — SPEC-MOBILE-004)), native-bridge/(bridge-client.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·NativeBridgeProvider.tsx·LogoutBridgeNotifier.tsx), invite/accept.ts(초대 수락 클라이언트 로직), chat/useChatChannel.ts(Supabase Realtime private channel 구독 훅 — SPEC-CHAT-001), moim/api.ts(신규 — getMoim/getMoimMembers 헬퍼, chat/api.ts 패턴 미러 — SPEC-MOIM-003; MoimDetail 인터페이스에 startsAt/location nullable 추가 — SPEC-MOIM-004)
 │     ├─ app/           # auth/callback/route.ts(PKCE 콜백), login/, me/(require-named-session 가드 적용 — SPEC-MOBILE-004), invite/[token]/(초대 랜딩 — 익명 로그인 → nickname → accept → /moims/[id]/chat), onboarding/(이름 입력 온보딩 — SPEC-MOBILE-004, (main) 그룹 외부, 루프 안전)
 │     │  ├─ (main)/     # 탭 라우트 그룹 (SPEC-MOBILE-003) — layout.tsx(BottomTabBar·인증가드·ShellSessionAnnouncer·ShellModeEffect·require-named-session 가드 — SPEC-MOBILE-004) + _components/(BottomTabBar·PlaceholderTab·ShellModeEffect·ShellSessionAnnouncer) + home/(page·HomeTab·[id]/page) + explore/notifications/profile(플레이스홀더)
 │     │  │  └─ home/   # 홈 탭 라우트 (SPEC-MOIM-003)
 │     │  │     ├─ page.tsx       # 서버 컴포넌트 — GET /moims 실 데이터 조회 → HomeTab prop 전달
-│     │  │     ├─ HomeTab.tsx    # mock→real 배선(MOCK_MEETUPS 제거), 카드 /home/{id} 링크
-│     │  │     └─ [id]/page.tsx  # 신규 — 모임 상세 Server Component(GET /moims/:id + /members, (main) 가드 상속, 403/404 → notFound())
+│     │  │     ├─ HomeTab.tsx    # mock→real 배선(MOCK_MEETUPS 제거), 카드 /home/{id} 링크; "새 모임 만들기" → /moims/new Link(비기능 → 기능형 — SPEC-MOIM-004); 카드에 일정/장소 정직 표시(SPEC-MOIM-004)
+│     │  │     └─ [id]/page.tsx  # 신규 — 모임 상세 Server Component(GET /moims/:id + /members, (main) 가드 상속, 403/404 → notFound()); 일정/장소 정직 표시 추가(SPEC-MOIM-004)
 │     │  └─ moims/            # moims 서브트리 — (main) 라우트 그룹 밖
 │     │     ├─ layout.tsx     # 서버 가드 (SPEC-WEB-GUARD-001) — requireNamedSession() await → children. 탭바 없음(chat 풀스크린)
+│     │     ├─ new/           # 모임 생성 라우트 (SPEC-MOIM-004) — moims 그룹 가드 상속
+│     │     │  ├─ page.tsx            # Server Component — 세션 access_token 도출 후 CreateMoimForm에 전달
+│     │     │  ├─ create-moim-form.tsx # Client Component, useActionState — 이름/닉네임/일정(datetime-local)/장소. Meetup 오렌지 토큰
+│     │     │  └─ actions.ts          # createMoimAction Server Action — FormData → api-client createMoim → redirect("/home/{id}") / 실패 시 폼 머무름+일반화 오류
 │     │     └─ [id]/chat/     # 모임 채팅 페이지 (SPEC-CHAT-001) — page.tsx(히스토리 로드 + useChatChannel 구독 + 실시간 수신 표시 + 메시지 전송). Meetup 디자인 시스템 리디자인(orange 토큰, 말풍선 own/other, sticky 헤더/입력바 — v0.3.1)
 │     └─ proxy.ts       # @supabase/ssr updateSession + per-request CSP (Next 16 미들웨어 컨벤션). connect-src: 호스트-핀 wss/ws(Supabase Realtime) + 백엔드 API origin + Supabase REST — SPEC-CHAT-001 v0.3.1 수정
 ├─ packages/
@@ -100,7 +104,7 @@ moyura/
 | `@moyura/web` | `apps/web` | 메인 UI 표면 (App Router) | Next.js `16.2.6`, react `19.2.4`, Tailwind v4, TypeScript `^5` | 스캐폴드 |
 | `@moyura/backend` | `apps/backend` | 백엔드 REST API | NestJS `11`(`@nestjs/common ^11`), TypeScript `^5.7.3`, Jest | 스캐폴드 |
 | `@moyura/config` | `packages/config` | 공유 tsconfig base 의도 | 현재 `package.json`만 존재(`version 0.0.0`, private) | 스텁(빈 패키지) |
-| `@moyura/api-client` | `packages/api-client` | OpenAPI 생성 타입드 API 클라이언트 | `openapi-typescript 7.13.0` 타입(`src/schema.d.ts`, gitignore) + 얇은 fetch 래퍼(`createApiClient`, `getHealth`, optional `getToken`→Bearer, `getMe`, `listMoims`(SPEC-MOIM-003 completed)) | **구현됨** (SPEC-ENV-SETUP-001 + SPEC-AUTH-001 + SPEC-MOIM-003) |
+| `@moyura/api-client` | `packages/api-client` | OpenAPI 생성 타입드 API 클라이언트 | `openapi-typescript 7.13.0` 타입(`src/schema.d.ts`, gitignore) + 얇은 fetch 래퍼(`createApiClient`, `getHealth`, optional `getToken`→Bearer, `getMe`, `listMoims`(SPEC-MOIM-003 completed), `createMoim`+`CreateMoimRequest`(SPEC-MOIM-004)) | **구현됨** (SPEC-ENV-SETUP-001 + SPEC-AUTH-001 + SPEC-MOIM-003 + SPEC-MOIM-004) |
 
 검증 메모:
 - `@moyura/web`의 `version`은 `0.1.0`, 나머지 앱은 `1.0.0`(루트도 `1.0.0`).

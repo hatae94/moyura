@@ -1,6 +1,6 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-06-15 (SPEC-MOBILE-004 sync — Profile.name nullable 추가)
+%% 최종 갱신: 2026-06-19 (SPEC-MOIM-004 sync — Moim.startsAt/location nullable 추가)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
@@ -13,6 +13,8 @@ erDiagram
         string name "모임 이름"
         string created_by "생성자 sub (= PROFILE.id)"
         timestamp created_at
+        timestamp starts_at "이벤트 시작 일시 (nullable — SPEC-MOIM-004)"
+        string location "이벤트 장소 자유 텍스트 (nullable — SPEC-MOIM-004)"
     }
 
     MOIM_MEMBER {

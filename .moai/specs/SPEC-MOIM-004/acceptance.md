@@ -71,15 +71,15 @@ backend jest 통과(신규 케이스 포함), backend+web+api-client tsc 0, web 
 
 ## Definition of Done (DoD)
 
-- [ ] `Moim` 에 `startsAt DateTime?` + `location String?` 추가, additive 마이그레이션 적용(기존 row null), prisma migrate clean. (AC-1)
-- [ ] `CreateMoimDto` optional startsAt/location, `MoimResponseDto` startsAt/location nullable 직렬화. (AC-2/AC-3)
-- [ ] `createMoim` service 가 두 필드를 영속하고 owner 멤버십 트랜잭션 불변. (AC-2)
-- [ ] controller 가 optional 필드 처리 + startsAt 무효 400 + name/nickname 누락 400 보존. (AC-2)
-- [ ] `GET /moims`·`GET /moims/:id` 응답에 두 필드 포함, 멤버 스코핑 약화 0. (AC-3)
-- [ ] backend jest 신규 케이스(포함/미포함 생성, 조회 필드, 무효 startsAt 400, 누락 400) 통과. (AC-1/AC-2/AC-3/AC-6)
-- [ ] `schema.d.ts` 재생성 + api-client `createMoim()` + `CreateMoimRequest` 별칭, tsc 0. (AC-2/AC-6)
-- [ ] `/moims/new` 생성 페이지 + 폼(useActionState) + Server Action(`createMoimAction`), 성공 시 `/home/{id}` 이동. (AC-4)
-- [ ] 홈 카드 + 상세에 일정/장소 정직 표시(null → 미정/생략), Meetup 오렌지 토큰. (AC-5)
-- [ ] web tsc 0 / web lint 0 / web build 0(`/moims/new` 등록). (AC-6)
-- [ ] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-6)
-- [ ] 디바이스 종단 검증: 홈 CTA → 생성 폼(일정/장소) → 제출 → 상세 push → 일정/장소 표시 라이브 확인. (AC-6, device-gated)
+- [x] `Moim` 에 `startsAt DateTime?` + `location String?` 추가, additive 마이그레이션 적용(기존 row null), prisma migrate clean. (AC-1) — 라이브 검증 2026-06-19
+- [x] `CreateMoimDto` optional startsAt/location, `MoimResponseDto` startsAt/location nullable 직렬화. (AC-2/AC-3) — 라이브 검증 2026-06-19
+- [x] `createMoim` service 가 두 필드를 영속하고 owner 멤버십 트랜잭션 불변. (AC-2) — 라이브 검증 2026-06-19
+- [x] controller 가 optional 필드 처리 + startsAt 무효 400 + name/nickname 누락 400 보존. (AC-2) — 라이브 검증 2026-06-19
+- [x] `GET /moims`·`GET /moims/:id` 응답에 두 필드 포함, 멤버 스코핑 약화 0. (AC-3) — 라이브 검증 2026-06-19
+- [x] backend jest 신규 케이스(포함/미포함 생성, 조회 필드, 무효 startsAt 400, 누락 400) 통과. (AC-1/AC-2/AC-3/AC-6) — backend jest 222/222
+- [x] `schema.d.ts` 재생성 + api-client `createMoim()` + `CreateMoimRequest` 별칭, tsc 0. (AC-2/AC-6) — tsc 0(backend/web/api-client/mobile)
+- [x] `/moims/new` 생성 페이지 + 폼(useActionState) + Server Action(`createMoimAction`), 성공 시 `/home/{id}` 이동. (AC-4) — 라이브 검증 2026-06-19
+- [x] 홈 카드 + 상세에 일정/장소 정직 표시(null → 미정/생략), Meetup 오렌지 토큰. (AC-5) — 라이브 검증 2026-06-19
+- [x] web tsc 0 / web lint 0 / web build 0(`/moims/new` 등록). (AC-6) — 게이트 통과
+- [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-6) — mobile vitest 215/215
+- [ ] 디바이스 종단 검증: 홈 CTA → 생성 폼(일정/장소) → 제출 → 상세 push → 일정/장소 표시 라이브 확인. (AC-6, device-gated) — iOS 시뮬레이터에서 server-action redirect → `/home/{id}` 시 SPEC-MOIM-003 `detailRouteForUrl` push 트리거 검증 대기

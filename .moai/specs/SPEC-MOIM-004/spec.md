@@ -1,9 +1,9 @@
 ---
 id: SPEC-MOIM-004
-version: 0.1.0
-status: draft
+version: 0.2.0
+status: in-progress
 created: 2026-06-18
-updated: 2026-06-18
+updated: 2026-06-19
 author: hatae
 priority: medium
 issue_number: 0
@@ -13,6 +13,7 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-19 (v0.2.0): 구현 완료 및 라이브 검증(커밋 3145ad1). 백엔드: `Moim.startsAt DateTime?` + `location String?` additive 마이그레이션(`20260619000000_add_moim_event_fields`) 적용, `CreateMoimDto`/`MoimResponseDto` 두 필드 반영, `POST /moims`에 optional 영속 + startsAt 무효 400, `GET /moims`·`GET /moims/:id` 응답에 두 필드 포함. api-client: `createMoim()` 편의 메서드 + `CreateMoimRequest` 별칭 추가. 웹(Meetup 오렌지 디자인): `app/moims/new` 생성 페이지(Server Component + `createMoimAction` Server Action + `useActionState` 폼 — 이름/호스트 표시 이름/일정/장소) → `POST /moims` → `/home/{id}` redirect; 홈 "새 모임 만들기" CTA → `/moims/new` Link(비기능 placeholder 대체); `HomeTab` 카드 + `/home/[id]` 상세에 일정/장소 정직 표시(null → "일정 미정"/장소 생략, 허위 값 없음). 라이브 검증(2026-06-19): 데스크톱 브라우저 + 실 세션 — 폼 제출(이름 "주말 등산 모임", 닉네임 "등산대장", 일정 2026-06-27 09:30, 장소 "북한산 우이역 집결") → 모임 startsAt+location 영속 → `/home/{id}` 이동 → 일정(📅 2026년 6월 27일 오전 9:30) + 장소(📍 북한산 우이역 집결) 렌더 확인. 백엔드 직접 POST로 두 필드 반환 확인, 무효 startsAt → 400 확인. 자동 게이트: backend jest 222/222, tsc 0(backend/web/api-client/mobile), web lint/build 0, mobile vitest 215/215(회귀 0), prisma migrate clean. **AC-1~5 라이브 검증 PASS, AC-6 게이트 통과.** 미완료 device-gated 항목: 모바일 WebView 셸에서 `createMoimAction` server-action redirect → `/home/{id}` 로드 시 기존 `detailRouteForUrl` push가 트리거되는지(SPEC-MOIM-003 계약 — server-action redirect 경로는 신규 트리거) iOS 시뮬레이터 검증 대기. 이 항목 완료 시 `completed` 전환. 참고: 초기 검증 시 stale 장기 실행 백엔드 프로세스(포트 3001 EADDRINUSE)가 이전 코드를 서빙해 "필드 미영속" 오증상이 발생했으나, 프로세스 재시작 후 정상 동작 확인 — 코드 결함 아님, 로컬 dev-env 프로세스 아티팩트.
 - 2026-06-18 (v0.1.0): 최초 draft. SPEC-MOIM-003(spec.md:122 "Moim 스키마 필드 확장 — 별도 후속 SPEC", :124 "모임 생성 기능 배선 — 본 SPEC 범위 아님")이 명시적으로 카브아웃한 두 항목을 **이번 SPEC에서 함께** 다룬다 — 단, 일정(date/time) + 장소(location)에 **한정**한다. 제품 방향(product.md MVP + 로그인 태그라인 "일정, 장소, 투표를 한곳에서")이 모임을 when/where/vote 를 갖는 실 이벤트로 가리키나, **투표(투표/poll)는 본 SPEC에서 명시적으로 제외**한다(별도·대형 후속 SPEC — poll 엔티티 + options + per-user votes + 결과 UI 가 필요). 핵심 결정: (1) 백엔드 — `Moim` 에 **additive nullable** `startsAt DateTime?` + `location String?` 추가(기존 모임은 null, 무중단 마이그레이션); `CreateMoimDto` 에 optional `startsAt`/`location` 추가, 생성 엔드포인트가 영속(no-ValidationPipe 패턴 보존 — name/nickname 비어 있음만 400, startsAt 는 존재 시 ISO 유효성 최소 검증); `GET /moims`·`GET /moims/:id` 응답에 두 필드 포함. (2) api-client — `createMoim()` 편의 메서드 추가(`POST /moims`, 기존 `listMoims`/`patchMe` 패턴), `schema.d.ts` 재생성. (3) **웹 생성 UI 기능화** — 홈 "새 모임 만들기" 비기능 CTA(SPEC-MOIM-003 Exclusions "실 모임 생성 없음")를 실제 생성 플로우로 전환(생성 페이지 + 폼: 이름/호스트 표시 이름/일정/장소) → `POST /moims` → 새 모임 상세 `/home/{id}` 로 이동. (4) 표시 — 홈 카드 + 상세에 일정/장소를 **정직하게** 표시(null → "일정 미정"/생략, 허위 값 금지). (5) 가드 — 생성 페이지는 기존 `moims` 그룹(`moims/layout.tsx` 의 `requireNamedSession()`, SPEC-WEB-GUARD-001)을 상속해 보호 라우트 일관, 모바일에서는 in-WebView 처리(생성 경로는 앱 라우트 아님 → 네이티브 라우트 무변경). **스코프 결정 기록**: (a) 생성 페이지 위치를 `app/moims/new` 로 둔다 — 원 요청의 "app/(main)/moims/new" 는 `(main)` 그룹 밖의 기존 `moims` 그룹(이미 가드 보유)으로 해석하는 것이 최소·일관(채팅 페이지 `moims/[id]/chat` 와 동일 그룹); (b) 모바일 네이티브 라우트 무변경 — `moims/*` 는 `APP_ROUTES` 에 없어 in-WebView 로 로드되므로 생성 페이지 자체는 네이티브 push 불필요(생성 후 이동 대상 `/home/{id}` 는 SPEC-MOIM-003 의 기존 detail-push 가 이미 처리); (c) 디자인은 Meetup 오렌지 시맨틱 토큰(`(main)/home/[id]` 및 `(main)/*` 와 동일 — login/onboarding 의 blue 흐름 아님, 확정된 디자인 결정).
 
 ---

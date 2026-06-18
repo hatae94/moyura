@@ -9,6 +9,16 @@
 
 ### Added
 
+- **모임 생성 UI 기능화 + 이벤트 일정/장소 필드** (SPEC-MOIM-004 — **in-progress** — backend jest 222/222, tsc 0(backend/web/api-client/mobile), web lint/build 0, mobile vitest 215/215(회귀 0), prisma migrate clean / 데스크톱 브라우저 라이브 검증 2026-06-19 PASS / 모바일 server-action redirect→push device-gated → in-progress 유지): 모임을 "이름만 있는 그룹"에서 일정과 장소를 가진 실 이벤트로 진전. 홈의 비기능 "새 모임 만들기" CTA를 실제 생성 플로우로 전환. 투표(poll)는 별도 후속 SPEC.
+  - **백엔드 스키마 확장**: `Moim`에 `startsAt DateTime?` + `location String?` additive nullable 추가. 마이그레이션 `20260619000000_add_moim_event_fields` 적용(기존 row null, 무중단). `CreateMoimDto` optional startsAt/location 필드 추가. `MoimResponseDto` startsAt(ISO 또는 null) + location(문자열 또는 null) 직렬화. `POST /moims`: optional 두 필드 영속, startsAt 존재 시 ISO 파싱 실패 → 400; `GET /moims`·`GET /moims/:id`: 두 필드 포함 응답.
+  - **api-client 확장**: `createMoim()` 편의 메서드(POST /moims, body: name/nickname + optional startsAt/location) + `CreateMoimRequest` 타입 별칭 추가. `schema.d.ts` 재생성으로 `CreateMoimDto`/`MoimResponseDto` 두 필드 반영.
+  - **웹 생성 UI 기능화**: `app/moims/new/` 신규 라우트 — Server Component(`page.tsx`) + `createMoimAction` Server Action + `useActionState` 클라이언트 폼(이름/호스트 표시 이름/일정 datetime-local/장소 자유 텍스트). 성공 시 `redirect("/home/{id}")`. 실패(name/nickname 빈 값·백엔드 400) 시 폼 머무름 + 일반화 오류. `moims` 그룹 가드(`requireNamedSession()` — SPEC-WEB-GUARD-001) 자동 상속.
+  - **홈 CTA 기능화**: `HomeTab.tsx` "새 모임 만들기" 버튼 → `/moims/new` Link 전환(비기능 placeholder 대체).
+  - **일정/장소 정직 표시**: `HomeTab` 카드 + `/home/[id]` 상세 — startsAt 있으면 한국어 포맷 표시, null이면 "일정 미정"; location 있으면 표시, null이면 생략. 허위/플레이스홀더 값 없음. Meetup 오렌지 디자인 시스템(`bg-primary` 등) 적용.
+  - **디자인 결정**: 생성 페이지 위치 `app/moims/new`(기존 moims 그룹 가드 상속, 채팅 페이지와 동일 그룹, 모바일 in-WebView 자연 처리). 투표(poll) 기능은 별도·대형 후속 SPEC(poll 엔티티 + options + per-user votes + 결과 UI 필요).
+  - **라이브 검증(2026-06-19)**: 데스크톱 브라우저 + 실 세션. 폼 제출(이름 "주말 등산 모임", 닉네임 "등산대장", 일정 2026-06-27 09:30, 장소 "북한산 우이역 집결") → 모임 startsAt+location 영속 → `/home/{id}` 이동 → 일정(📅 2026년 6월 27일 오전 9:30) + 장소(📍 북한산 우이역 집결) 상세 렌더 확인. AC-1~5 라이브 PASS.
+  - **AC-6 미완료(device-gated)**: `createMoimAction` server-action redirect → 모바일 WebView 셸에서 `/home/{id}` 로드 시 SPEC-MOIM-003 기존 `detailRouteForUrl` push 트리거 여부 iOS 시뮬레이터 검증 대기. device-gated 완료 시 `completed` 전환.
+
 - **모임 상세 화면 + 홈 실 데이터 배선** (SPEC-MOIM-003 — **completed** — mobile vitest 215/215(+24), tsc 0 errors, web build OK, expo export OK / 라이브 데이터 패스 검증 PASS / AC-3 모바일 인앱 카드 탭 E2E 사용자 디바이스 검증 2026-06-18 PASS): 홈 탭 mock→real 배선 + 모임 상세 화면(웹 Server Component) + 모바일 네이티브 detail push 로직 구현. 백엔드 무변경. 인앱 네비게이션 검증 완료.
   - **홈 탭 mock→real 배선**: `apps/web/app/(main)/home/page.tsx`가 서버에서 `GET /moims`를 실 호출해 `HomeTab`에 prop 전달. `HomeTab.tsx`에서 `MOCK_MEETUPS` 제거 및 실 데이터 바인딩; 카드를 `/home/{id}` 링크로 전환. honest-fields-only — `{name, createdAt}`만 표시(fabricated 필드 제거). `_mock.ts` 삭제.
   - **모임 상세 Server Component**: `apps/web/app/(main)/home/[id]/page.tsx` 신규. `GET /moims/:id` + `GET /moims/:id/members` 서버 조회 → 모임 이름 + 멤버 목록(nickname + role) + "채팅 입장" 링크 렌더. `(main)/layout.tsx` `requireNamedSession()` 가드 상속(별도 가드 불필요). 비멤버 403/404 → `notFound()`.

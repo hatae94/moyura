@@ -1,7 +1,7 @@
 ---
 engine: PostgreSQL 17.x (Supabase 관리형)
 orm: Prisma 7.8.0
-last_synced_at: 2026-06-15
+last_synced_at: 2026-06-19
 manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 ---
 
@@ -18,7 +18,7 @@ manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 | Table | Description |
 |-------|-------------|
 | `profile` | 앱 소유 사용자 프로필 — Supabase auth.users와 sub(uuid) 기반 연결. `name`(nullable) 추가(SPEC-MOBILE-004) |
-| `moim` | 모임 엔티티 — 모임 라이프사이클 루트 (SPEC-MOIM-001) |
+| `moim` | 모임 엔티티 — 모임 라이프사이클 루트 (SPEC-MOIM-001); `startsAt`(nullable) + `location`(nullable) 추가 (SPEC-MOIM-004) |
 | `moim_member` | 멤버십 + 모임별 표시 이름(nickname) — moim_id + user_id 복합 PK (SPEC-MOIM-001) |
 | `moim_invite` | 초대 링크 — token PK, moim_id FK, 만료·폐기·사용 횟수 관리 (SPEC-MOIM-002) |
 | `chat_message` | 모임 채팅 메시지 — BigInt PK, moim_id FK, RLS default-deny, content CHECK(1..2000) (SPEC-CHAT-001) |
@@ -36,7 +36,7 @@ Prisma 모델명: `Profile` | 첫 도메인 마이그레이션: `20260602095934_
 
 ### moim
 
-Prisma 모델명: `Moim` | 마이그레이션: `20260613155202_add_moim`
+Prisma 모델명: `Moim` | 마이그레이션: `20260613155202_add_moim` | 이벤트 필드 마이그레이션: `20260619000000_add_moim_event_fields` (SPEC-MOIM-004)
 
 | 컬럼 | 타입 | 제약 | 설명 |
 |------|------|------|------|
@@ -44,6 +44,8 @@ Prisma 모델명: `Moim` | 마이그레이션: `20260613155202_add_moim`
 | `name` | TEXT | NOT NULL | 모임 이름 (최소 컬럼, 설명/이미지는 비범위) |
 | `created_by` | TEXT | NOT NULL | 생성자 sub (= profile.id) |
 | `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 생성 시각 |
+| `starts_at` | TIMESTAMP(3) | NULLABLE | 이벤트 시작 일시 — NULL = 일정 미정. 생성 시 optional 입력, ISO-8601 직렬화(`startsAt`). additive nullable 추가(기존 row NULL, SPEC-MOIM-004) |
+| `location` | TEXT | NULLABLE | 이벤트 장소 — 자유 텍스트(예: "강남역 스타벅스"). NULL = 장소 미정. additive nullable 추가(기존 row NULL, SPEC-MOIM-004) |
 
 ### moim_member
 
