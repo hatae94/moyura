@@ -49,12 +49,13 @@ moyura/
 │  │  │     ├─ notifications.tsx # ${WEB_URL}/notifications 호스팅 WebView 래퍼
 │  │  │     └─ profile.tsx      # ${WEB_URL}/profile 호스팅 WebView 래퍼
 │  │  ├─ components/    # WebViewShell.tsx, LoadingOverlay.tsx, WebViewErrorOverlay.tsx, BridgedWebView.tsx(탭 공유 seam)
-│  │  ├─ hooks/         # useAppLifecycle.ts(Android 백/네비 이력), useAuthBridge.ts(oauth-intercept → 네이티브 Google Sign-In 경로 전환(SPEC-MOBILE-004) + 토큰 브리지 + 보안 + session:cleared 시 FCM 토큰 해제 연동 — SPEC-CHAT-002)
-│  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비), route-map-core.ts(@MX:ANCHOR, URL↔라우트 매핑), auth/(oauth.ts·oauth-bridge.ts·bridge-protocol.ts·nonce-core.ts·token-store.ts·token-store-core.ts·auth-bridge-core.ts·app-lifecycle-core.ts·auth-state-core.ts(@MX:ANCHOR)·AuthContext.tsx(로그인 후 FCM registerDevice 배선 — SPEC-CHAT-002)·google-signin-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·google-signin.ts(SDK 래퍼)·signin-id-token-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·supabase-mobile.ts(SDK 래퍼) + 보안/단위 테스트), push/(register-device-core.ts·register-device-core.test.ts·notification-core.ts·notification-core.test.ts·register-device.ts·notification-handler.ts — SPEC-CHAT-002)
+│  │  ├─ hooks/         # useAppLifecycle.ts(Android 백/네비 이력), useAuthBridge.ts(auth:google-request bridge command → 네이티브 Google Sign-In 경로(SPEC-MOBILE-004 v0.3.0 설계 변경) + 토큰 브리지 + 보안 + session:cleared 시 FCM 토큰 해제 연동 — SPEC-CHAT-002)
+│  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비), route-map-core.ts(@MX:ANCHOR, URL↔라우트 매핑), auth/(oauth.ts·oauth-bridge.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·nonce-core.ts·token-store.ts·token-store-core.ts·auth-bridge-core.ts·app-lifecycle-core.ts·auth-state-core.ts(@MX:ANCHOR)·AuthContext.tsx(로그인 후 FCM registerDevice 배선 — SPEC-CHAT-002)·google-signin-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·google-signin.ts(SDK 래퍼)·signin-id-token-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·supabase-mobile.ts(SDK 래퍼) + 보안/단위 테스트), push/(register-device-core.ts·register-device-core.test.ts·notification-core.ts·notification-core.test.ts·register-device.ts·notification-handler.ts — SPEC-CHAT-002)
+│  │  ├─ plugins/       # withModularHeaders.js(Expo config plugin — use_modular_headers! Podfile 주입, GoogleSignin 8.x AppCheckCore 정적 통합 pod install 오류 해소 — SPEC-MOBILE-004 v0.3.0)
 │  │  ├─ patches/       # @react-native-cookies__cookies.patch(jcenter→mavenCentral, Android Gradle 9 호환)
 │  │  └─ eas.json       # EAS local/prod 프로파일 스켈레톤
 │  └─ web/              # @moyura/web     — Next.js 16 (app/, public/)
-│     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback, require-named-session.ts(공유 서버 가드 — SPEC-MOBILE-004)), native-bridge/(bridge-client.ts·bridge-protocol.ts·NativeBridgeProvider.tsx·LogoutBridgeNotifier.tsx), invite/accept.ts(초대 수락 클라이언트 로직), chat/useChatChannel.ts(Supabase Realtime private channel 구독 훅 — SPEC-CHAT-001)
+│     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback, require-named-session.ts(공유 서버 가드 — SPEC-MOBILE-004)), native-bridge/(bridge-client.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·NativeBridgeProvider.tsx·LogoutBridgeNotifier.tsx), invite/accept.ts(초대 수락 클라이언트 로직), chat/useChatChannel.ts(Supabase Realtime private channel 구독 훅 — SPEC-CHAT-001)
 │     ├─ app/           # auth/callback/route.ts(PKCE 콜백), login/, me/(require-named-session 가드 적용 — SPEC-MOBILE-004), invite/[token]/(초대 랜딩 — 익명 로그인 → nickname → accept → /moims/[id]/chat), onboarding/(이름 입력 온보딩 — SPEC-MOBILE-004, (main) 그룹 외부, 루프 안전)
 │     │  ├─ (main)/     # 탭 라우트 그룹 (SPEC-MOBILE-003) — layout.tsx(BottomTabBar·인증가드·ShellSessionAnnouncer·ShellModeEffect·require-named-session 가드 — SPEC-MOBILE-004) + _components/(BottomTabBar·PlaceholderTab·ShellModeEffect·ShellSessionAnnouncer) + home/(page·HomeTab·_mock) + explore/notifications/profile(플레이스홀더)
 │     │  └─ moims/            # moims 서브트리 — (main) 라우트 그룹 밖
@@ -88,7 +89,7 @@ moyura/
 
 | 패키지 이름 | 경로 | 역할 | 스택 / 핵심 버전 | 상태 |
 |-------------|------|------|------------------|------|
-| `@moyura/mobile` | `apps/mobile` | 네이티브 앱 — expo-router 하이브리드 네비게이션 골격 + 라우트별 WebView + 토큰 기반 세션 브리지 | Expo `~56.0.6`, react `19.2.3`, react-native `0.85.3`, TypeScript `~6.0.3`, `react-native-webview@13.16.1`, `expo-secure-store ~56.0.4`, `expo-splash-screen ~56.0.10`, `expo-router ~56.2.10`, `react-native-safe-area-context`, `react-native-screens`, `expo-constants`, `@react-native-google-signin/google-signin@16.1.2`(SPEC-MOBILE-004), `@supabase/supabase-js@2.106.2`(SPEC-MOBILE-004) | **구현됨** (SPEC-MOBILE-001·SPEC-WEBVIEW-SHELL-001·SPEC-MOBILE-002·SPEC-MOBILE-003 iOS 핵심 플로우 디바이스 검증 완료 / SPEC-MOBILE-004 자동 게이트 GREEN — 네이티브 Google Sign-In + 이름 온보딩 / device-gated 검증 대기 — in-progress) |
+| `@moyura/mobile` | `apps/mobile` | 네이티브 앱 — expo-router 하이브리드 네비게이션 골격 + 라우트별 WebView + 토큰 기반 세션 브리지 | Expo `~56.0.6`, react `19.2.3`, react-native `0.85.3`, TypeScript `~6.0.3`, `react-native-webview@13.16.1`, `expo-secure-store ~56.0.4`, `expo-splash-screen ~56.0.10`, `expo-router ~56.2.10`, `react-native-safe-area-context`, `react-native-screens`, `expo-constants`, `@react-native-google-signin/google-signin@16.1.2`(SPEC-MOBILE-004), `@supabase/supabase-js@2.106.2`(SPEC-MOBILE-004) | **구현됨** (SPEC-MOBILE-001·SPEC-WEBVIEW-SHELL-001·SPEC-MOBILE-002·SPEC-MOBILE-003 iOS 핵심 플로우 디바이스 검증 완료 / SPEC-MOBILE-004 **completed** — 네이티브 Google Sign-In(bridge command) + 이름 온보딩 iOS 시뮬레이터 라이브 E2E 2026-06-17 PASS) |
 | `@moyura/web` | `apps/web` | 메인 UI 표면 (App Router) | Next.js `16.2.6`, react `19.2.4`, Tailwind v4, TypeScript `^5` | 스캐폴드 |
 | `@moyura/backend` | `apps/backend` | 백엔드 REST API | NestJS `11`(`@nestjs/common ^11`), TypeScript `^5.7.3`, Jest | 스캐폴드 |
 | `@moyura/config` | `packages/config` | 공유 tsconfig base 의도 | 현재 `package.json`만 존재(`version 0.0.0`, private) | 스텁(빈 패키지) |
@@ -148,7 +149,7 @@ web (Next.js 메인 UI 표면 — @supabase/ssr 세션 권위, native-bridge 수
 
 - `mobile shell → WebView → web surface → REST → backend` 가 데이터/제어 흐름.
 - 두 프런트엔드(`web`, `mobile`)는 동일 backend API를 소비한다.
-- **현 시점 구현 상태 (SPEC-MOBILE-003 in-progress — iOS 핵심 플로우 디바이스 검증 완료; SPEC-MOBILE-004 in-progress — 자동 게이트 GREEN, device-gated 검증 대기)**:
+- **현 시점 구현 상태 (SPEC-MOBILE-003 in-progress — iOS 핵심 플로우 디바이스 검증 완료; SPEC-MOBILE-004 completed — iOS 시뮬레이터 라이브 E2E 2026-06-17 PASS)**:
   - `apps/mobile`: expo-router 파일 기반 라우팅(`app/` 트리) — Root Stack + `(auth)`(로그인 WebView) + `(tabs)`(네이티브 Tabs, 각 탭 = `${WEB_URL}/<route>` 호스팅 WebView 래퍼). `App.tsx` 제거. `components/BridgedWebView.tsx` 공유 seam.
   - `apps/web`: `(main)` 탭 라우트 그룹(BottomTabBar + HomeTab + 플레이스홀더 3종). 셸 모드에서 웹 BottomTabBar 숨김(ShellModeEffect + ShellSessionAnnouncer). post-login redirect `/me`→`/home`.
   - 네이티브 인증 상태: `lib/auth/auth-state-core.ts`(SecureStore + bridge 신호 → isSignedIn 순수 결정, @MX:ANCHOR), `lib/auth/AuthContext.tsx`. `Stack.Protected`/`Tabs.Protected` 가드.

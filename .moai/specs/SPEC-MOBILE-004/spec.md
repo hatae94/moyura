@@ -1,9 +1,9 @@
 ---
 id: SPEC-MOBILE-004
-version: 0.2.0
-status: in-progress
+version: 0.3.0
+status: completed
 created: 2026-06-11
-updated: 2026-06-15
+updated: 2026-06-17
 author: hatae
 priority: high
 issue_number: 0
@@ -13,6 +13,12 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-17 (v0.3.0): sync 단계 — status `in-progress` → `completed` 전환. **디바이스 게이트(device-gate) 완전 충족**: iOS 시뮬레이터(iPhone 16 Pro, expo run:ios dev build) + 로컬 Supabase + 실 Google 계정으로 라이브 E2E 검증 완료(2026-06-17T17:19:03 UTC 세션 확인). 아래 3개 추가 변경사항이 두 커밋(0700e7d, a03fe75)에 포함됨:
+  - **GoogleSignin.configure 배선(0700e7d)**: `apps/mobile/app/_layout.tsx`에서 앱 부트 시 `GoogleSignin.configure` 호출(실제 OAuth 클라이언트 ID — `apps/mobile/.env`, gitignored). `app.json` `iosUrlScheme` 플레이스홀더를 실 reversed iOS client scheme으로 교체. `.gitignore /credentials/` 추가.
+  - **설계 변경 + 버그 수정(a03fe75): OAuth 네비게이션 인터셉트 → bridge 커맨드 `auth:google-request` 전환**: 원래 SPEC 설계는 WebView의 `onShouldStartLoadWithRequest(decideWebViewLoad)`에서 Google OAuth 네비게이션을 인터셉트하여 네이티브 SDK를 트리거하는 방식이었다. **라이브 테스트로 이 경로가 실패함을 확인**: Google 버튼(`signInWithOAuthAction` → GoTrue authorize URL)을 WebView 안에서 탭하면 `onShouldStartLoadWithRequest`가 해당 네비게이션에 대해 **발동하지 않음**(진단: `/login` 로드에만 발동 확인). 결과적으로 react-native-webview가 OAuth URL을 외부 브라우저로 열어버려 네이티브 SDK에 도달하지 못하고 로그인 완료 불가. **수정(결정론적, 취약한 인터셉션 대체)**: `auth:google-request`라는 추가적(additive) web→native bridge 커맨드 타입(토큰 없음, nonce 인증)을 **양쪽 bridge protocol에 동시 추가**(`apps/mobile/lib/auth/bridge-protocol.ts` + `apps/web/lib/native-bridge/bridge-protocol.ts` — BRIDGE_VERSION 1 유지, additive). 웹 로그인 폼의 Google 버튼은 네이티브 셸 내(`window.ReactNativeWebView` 존재 시) OAuth 네비게이션 대신 `window.ReactNativeWebView.postMessage`로 이 커맨드를 전송 + form submit preventDefault. 데스크톱 브라우저에서는 `requestNativeGoogleSignIn()`이 false를 반환하여 기존 웹 OAuth 흐름 유지(변경 없음). 모바일 `useAuthBridge.onMessage`가 nonce 검증 후 커맨드를 `{ kind: "google-signin" }`으로 매핑 → 네이티브 GoogleSignin SDK 실행. vitest 4건 신규 추가(bridge command).
+  - **use_modular_headers! build fix(a03fe75)**: Expo config plugin `apps/mobile/plugins/withModularHeaders.js` 추가(`app.json plugins` 진입) — `use_modular_headers!`를 Podfile에 주입. GoogleSignin 8.x가 AppCheckCore를 정적 라이브러리 통합 방식으로 끌어오는데 modular headers 없이는 `pod install` 실패.
+  - **라이브 E2E 검증 결과(2026-06-17)**: `expo run:ios`(iPhone 16 Pro, dev build) + 로컬 Supabase(external.google=true) 환경에서 실 Google 계정으로 종단 검증. "Google로 계속하기" 탭 → 네이티브 in-app Google 시트 표시(외부 브라우저 없음) → Google 계정 선택 및 로그인 → `signInWithIdToken`이 Supabase 세션 생성(`auth.users.last_sign_in_at: 2026-06-17T17:19:03`, `auth.sessions` 1행) → native→web bridge `session:restore` 주입 → 웹 `setSession` 성공 → 백엔드 `GET /me` Profile 생성(`name` 초기 null) → 앱이 이름 온보딩 화면 표시 + Google 계정 이름 "하태용" prefill. AC-1/AC-2/AC-3/AC-5 라이브 PASS. AC-4(이메일 signup 이름 배선) 자동 테스트 PASS. AC-6a/6b(취소·오류 → 미인증 유지) 순수 로직 vitest PASS + 로깅 없는 설계로 보장.
+  - mobile vitest 191/191(+4 auth:google-request bridge command), tsc 0, web build OK, expo export OK, backend jest 214/214(85.36% branch) 전부 GREEN.
 - 2026-06-15 (v0.2.0): sync 단계 — status `draft` → `in-progress` 전환. 자동화 가능한 게이트(backend jest 214/214 85.36% branch, mobile vitest 187/187, tsc 0 errors, web build OK, expo export OK, prisma migrate status clean, evaluator-active Overall PASS Func 75/Sec 75/Craft 75/Consistency 90) 전부 GREEN. **device-gated 미충족으로 `in-progress` 유지**: AC-1(Google 버튼 네이티브 SDK 진입), AC-2(signInWithIdToken Supabase 세션 획득), AC-3(session:restore 주입 + 웹 세션 확립), AC-5(구글 계정 이름 prefill), AC-6a(취소 시 로그인 페이지 복귀), AC-6b(signInWithIdToken 실패 에러 표시)는 EAS dev build + 실제 Google 계정 + Google Cloud OAuth 클라이언트 ID 없이 검증 불가. 이 패턴은 SPEC-MOBILE-001/002/003·SPEC-CHAT-001/002·SPEC-MOIM-001(OAuth) 동일 정책을 따른다. `completed` 전환 조건: spec.md §6 디바이스 종단 검증 게이트 항목(device-gated AC 전부) 실 기기/EAS dev build에서 통과 확인 후.
 - 2026-06-11 (v0.1.0): 최초 draft 작성. research.md(2026-06-11) 기반. SPEC-MOBILE-001(브라우저 OAuth 브리지)·SPEC-MOBILE-002(토큰 세션 기반)·SPEC-AUTH-002(Google OAuth 키 배선) 위에서 동작. 핵심 결정: (1) WebView 내 웹 로그인 UI 유지 + Google 버튼만 인터셉트 → 네이티브 SDK 실행, (2) 기존 `session:restore` 경로 재사용(bridge-protocol v1 무변경), (3) 이메일 가입과 Google(향후 Apple) 가입 모두 이름 수집, (4) Profile.name 미보유 시 온보딩 강제 리다이렉트로 신규/기존 분기. App Store 4.8 리스크로 Android(Google Play) 제출 우선 타깃.
 
@@ -139,3 +145,48 @@ issue_number: 0
 - vitest 통과 (모바일 순수 코어 / 웹)
 - web build 통과 / `expo export` 통과
 - **디바이스 종단 검증**: 본 SPEC은 자동 게이트 통과만으로 완료되지 않으며, 실제 디바이스에서 Google 네이티브 로그인 + 세션 주입 + 온보딩이 검증되어야 status가 완료로 전환된다(프로젝트 메모리 규칙).
+
+**[완료 — 2026-06-17 라이브 E2E로 모든 게이트 충족]**: 상기 자동 게이트 전부 GREEN + iOS 시뮬레이터(iPhone 16 Pro, expo run:ios dev build) 라이브 E2E로 디바이스 종단 검증 완료. HISTORY v0.3.0 참조.
+
+---
+
+## 7. 구현 노트 (Implementation Notes)
+
+> 본 섹션은 v0.3.0 completed 전환 시 추가되었다. 원래 SPEC 설계(§3 Delta Markers)에서 실제 구현이 달라진 지점을 기록한다.
+
+### Google 네이티브 로그인 트리거 방식 — 설계 변경 (v0.3.0)
+
+**원래 설계 (v0.1.0 § [MODIFY] useAuthBridge.ts):**
+
+`onShouldStartLoadWithRequest`(`decideWebViewLoad`) 에서 Google OAuth URL 네비게이션을 인터셉트하여 네이티브 SDK를 트리거하는 방식. 인터셉션 경로(`oauth-intercept`)가 Google 버튼 동작을 감지하면 외부 브라우저 대신 네이티브 GoogleSignin SDK를 실행하는 설계.
+
+**라이브 테스트에서 드러난 실패 원인:**
+
+iOS 시뮬레이터 + dev build + 실 Google 계정으로 검증 시, Google 버튼(`signInWithOAuthAction` → GoTrue `/authorize` URL로 redirect) 탭 시 `onShouldStartLoadWithRequest`가 **해당 네비게이션에 대해 발동하지 않음**을 진단으로 확인 (진단: `/login` 초기 로드에만 발동). react-native-webview가 OAuth URL을 외부 Safari로 열어 네이티브 SDK 진입 자체가 불가능했다.
+
+**채택된 수정 (v0.3.0 — 결정론적 bridge command 방식):**
+
+`auth:google-request` bridge 커맨드 타입을 **additive**로 양쪽 bridge protocol에 추가 (BRIDGE_VERSION 1 보존):
+
+- `apps/mobile/lib/auth/bridge-protocol.ts`: `"auth:google-request"` 커맨드 타입 추가
+- `apps/web/lib/native-bridge/bridge-protocol.ts`: 동일 커맨드 타입 추가
+
+웹 로그인 폼 Google 버튼: `window.ReactNativeWebView` 존재 시(= 네이티브 셸 내) `window.ReactNativeWebView.postMessage`로 `auth:google-request` 커맨드 전송 + form submit `preventDefault`. 데스크톱에서는 `requestNativeGoogleSignIn()` → false → 기존 웹 OAuth 흐름 유지.
+
+`useAuthBridge.onMessage`: nonce 검증 후 `auth:google-request` 커맨드를 `{ kind: "google-signin" }` 이벤트로 매핑 → 네이티브 GoogleSignin SDK 호출.
+
+**기존 인터셉션 경로 상태:**
+
+`decideWebViewLoad`의 `oauth-intercept` 분기는 코드에서 제거되지 않았으나 실질적으로 비활성(inert fallback) 상태다. Google OAuth URL이 `onShouldStartLoadWithRequest`에 도달하지 않으므로 이 경로는 실행되지 않는다. 향후 cleanup SPEC에서 정리 가능.
+
+### use_modular_headers! Expo config plugin (v0.3.0)
+
+`apps/mobile/plugins/withModularHeaders.js`: `use_modular_headers!`를 Podfile에 주입하는 Expo config plugin. `app.json plugins` 배열에 등록.
+
+배경: `@react-native-google-signin/google-signin` 8.x가 AppCheckCore를 의존으로 끌어오는데, AppCheckCore가 CocoaPods 정적 라이브러리 통합 시 modular headers를 요구한다. 이 plugin 없이는 `pod install`이 빌드 오류로 실패한다.
+
+### 관련 follow-up 참고
+
+- **Apple Sign-In**: Apple Developer Program 미가입으로 본 SPEC 제외(§4). iOS App Store 제출 시 App Store Guideline 4.8 적용. 별도 follow-up SPEC 필요.
+- **prod OAuth/redirect 일반화**: 로컬/dev 검증에 한정(SPEC-AUTH-002 OD-4). 프로덕션 Supabase Google provider 설정, prod 클라이언트 ID, prod 도메인 콜백은 follow-up(SPEC-AUTH-002 범위).
+- **SPEC-MOBILE-001/002/003 · SPEC-WEBVIEW-SHELL-001 cross-SPEC 후속**: 이번 라이브 Google 로그인 성공이 해당 SPEC들이 대기 중인 "Google OAuth 라운드트립 on device" 게이트를 실질적으로 충족하는 증거다. 각 SPEC의 per-AC 상태 검토를 별도 sync에서 수행 권장(본 sync에서 해당 SPEC status 변경 없음 — 각 SPEC별 전용 검증 필요).
