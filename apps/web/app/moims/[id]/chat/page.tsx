@@ -4,9 +4,16 @@
 // (3) private 실시간 채널 구독(useChatChannel)을 수행하고 메시지 입력/전송을 제공한다. broadcast 페이로드는
 // nickname을 포함하지 않으므로(thin trigger) sender 표시 이름은 멤버 목록에서 클라이언트가 해석한다.
 // 미지 senderId(멤버 목록에 없는 sender 수신) → 멤버 목록 재조회 폴백(acceptance 엣지).
+//
+// @MX:NOTE: 시각은 Meetup 디자인 시스템(모임 상세 /home/[id])과 동일한 시맨틱 토큰(bg-primary 오렌지,
+// bg-card/bg-muted, text-muted-foreground, border-border, rounded-2xl, lucide 아이콘)으로 통일한다.
+// own/other 버블 분기는 세션 user.id(supabase.auth.getSession)와 message.senderId 비교로 결정한다
+// (추가 백엔드 호출 없음 — 진입 시 이미 가져온 세션의 user.id 사용).
 "use client";
 
+import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, Send } from "lucide-react";
 
 import { createApiClient } from "@moyura/api-client";
 
@@ -36,6 +43,102 @@ function fromBroadcast(record: ChatBroadcastRecord): ChatMessage {
   };
 }
 
+// 타임스탬프 표시 — HH:MM(기존 toLocaleTimeString 접근 유지, 초 단위는 생략해 컴팩트하게).
+function formatTime(createdAt: string): string {
+  return new Date(createdAt).toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// 렌더용 메시지 행: 그룹핑 메타(연속 발신자 묶음의 첫 메시지 여부)를 메시지에 부착한다.
+interface RenderRow {
+  message: ChatMessage;
+  // own(현재 사용자) 메시지 여부 — 우측 정렬 + 오렌지 버블 분기 기준.
+  isOwn: boolean;
+  // 같은 발신자의 연속 묶음에서 첫 메시지인지(닉네임/타임스탬프를 묶음당 1회만 표시).
+  isGroupStart: boolean;
+}
+
+// 메시지 리스트를 렌더 행으로 가공한다(연속 발신자 그룹핑). 데이터 자체는 변형하지 않는다.
+function toRenderRows(
+  messages: ChatMessage[],
+  currentUserId: string | null,
+): RenderRow[] {
+  return messages.map((message, index) => {
+    const prev = messages[index - 1];
+    const isGroupStart = !prev || prev.senderId !== message.senderId;
+    return {
+      message,
+      isOwn: currentUserId != null && message.senderId === currentUserId,
+      isGroupStart,
+    };
+  });
+}
+
+// 상단 sticky 헤더 — ← 뒤로(모임 상세로 복귀) + "모임 채팅" 타이틀. 모임 상세 헤더와 동일 토큰.
+function ChatHeader({ moimId }: { moimId: string }) {
+  return (
+    <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
+      <Link
+        href={`/home/${moimId}`}
+        aria-label="모임 상세로 돌아가기"
+        className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
+      >
+        <ChevronLeft size={22} />
+      </Link>
+      <h1 className="text-lg font-bold text-foreground">모임 채팅</h1>
+    </header>
+  );
+}
+
+// 단일 메시지 버블 — own(오렌지 우측 정렬) / other(중립 좌측 정렬 + 닉네임). 그룹 첫 메시지에만 메타 표시.
+function MessageBubble({
+  row,
+  senderName,
+}: {
+  row: RenderRow;
+  senderName: string;
+}) {
+  const { message, isOwn, isGroupStart } = row;
+  const time = formatTime(message.createdAt);
+
+  return (
+    <li
+      className={`flex flex-col ${isOwn ? "items-end" : "items-start"} ${
+        isGroupStart ? "mt-3" : "mt-0.5"
+      }`}
+    >
+      {/* 상대 메시지의 그룹 첫 줄에만 발신자 닉네임 표시(own은 닉네임 불필요). */}
+      {!isOwn && isGroupStart ? (
+        <span className="mb-1 px-1 text-xs font-medium text-muted-foreground">
+          {senderName}
+        </span>
+      ) : null}
+
+      <div
+        className={`flex max-w-[78%] items-end gap-1.5 ${
+          isOwn ? "flex-row-reverse" : "flex-row"
+        }`}
+      >
+        <div
+          className={`whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm ${
+            isOwn
+              ? "rounded-tr-md bg-primary text-primary-foreground"
+              : "rounded-tl-md bg-muted text-card-foreground"
+          }`}
+        >
+          {message.content}
+        </div>
+        {/* 타임스탬프 — 버블 옆 컴팩트 표시. */}
+        <time className="shrink-0 pb-0.5 text-[11px] text-muted-foreground">
+          {time}
+        </time>
+      </div>
+    </li>
+  );
+}
+
 export default function ChatPage({
   params,
 }: {
@@ -44,6 +147,7 @@ export default function ChatPage({
   // Client Component page는 React use()로 params Promise를 푼다(Next 16).
   const { id: moimId } = use(params);
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<MoimMember[]>([]);
@@ -76,7 +180,7 @@ export default function ChatPage({
     [members],
   );
 
-  // 진입 시: 세션 토큰 + 멤버 목록 + 히스토리 로드.
+  // 진입 시: 세션(토큰 + user.id) + 멤버 목록 + 히스토리 로드.
   useEffect(() => {
     let cancelled = false;
     async function init() {
@@ -88,6 +192,8 @@ export default function ChatPage({
           return;
         }
         setAccessToken(session?.access_token ?? null);
+        // own/other 분기 기준: 이미 가져온 세션의 user.id를 그대로 사용(추가 백엔드 호출 없음).
+        setCurrentUserId(session?.user?.id ?? null);
 
         const [memberList, history] = await Promise.all([
           loadMembers(api, moimId),
@@ -143,6 +249,12 @@ export default function ChatPage({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // 렌더 행(own/other + 그룹 시작 메타) 가공. 메시지/세션 변화 시에만 재계산한다.
+  const rows = useMemo(
+    () => toRenderRows(messages, currentUserId),
+    [messages, currentUserId],
+  );
+
   async function handleSend(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const content = input.trim();
@@ -162,47 +274,63 @@ export default function ChatPage({
     }
   }
 
+  const canSend = input.trim().length > 0 && !pending;
+
   return (
-    <main className="flex flex-1 flex-col p-4 gap-3">
-      <h1 className="text-lg font-semibold">모임 채팅</h1>
+    <main className="flex min-h-0 flex-1 flex-col bg-background">
+      <ChatHeader moimId={moimId} />
 
       {error ? (
         <div
           role="alert"
-          className="bg-red-50 text-red-600 px-3 py-2 rounded text-sm"
+          className="mx-3 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600"
         >
           {error}
         </div>
       ) : null}
 
-      <ul className="flex-1 overflow-y-auto flex flex-col gap-2">
-        {messages.map((m) => (
-          <li key={m.id} className="text-sm">
-            <span className="font-medium">{nicknameOf(m.senderId)}</span>
-            <span className="text-gray-400 text-xs ml-2">
-              {new Date(m.createdAt).toLocaleTimeString()}
-            </span>
-            <p className="text-gray-800">{m.content}</p>
+      {/* 스크롤 영역: 남은 높이를 채우고 자동으로 맨 아래로 스크롤한다. */}
+      <ul className="flex flex-1 flex-col overflow-y-auto px-3 pb-3 pt-1">
+        {rows.length > 0 ? (
+          rows.map((row) => (
+            <MessageBubble
+              key={row.message.id}
+              row={row}
+              senderName={nicknameOf(row.message.senderId)}
+            />
+          ))
+        ) : (
+          <li className="flex flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
+            <p className="font-medium text-foreground">아직 메시지가 없어요</p>
+            <p className="text-sm text-muted-foreground">
+              첫 메시지를 보내보세요.
+            </p>
           </li>
-        ))}
+        )}
         <div ref={bottomRef} />
       </ul>
 
-      <form onSubmit={handleSend} className="flex gap-2">
+      {/* 하단 sticky 입력바: 둥근 입력 + 오렌지 전송 버튼(빈 입력/전송 중 비활성). */}
+      <form
+        onSubmit={handleSend}
+        className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-background/95 px-3 py-3 backdrop-blur"
+      >
         <input
           type="text"
           value={input}
           onChange={(ev) => setInput(ev.target.value)}
           placeholder="메시지를 입력하세요"
-          className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="메시지 입력"
+          className="min-w-0 flex-1 rounded-full border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           maxLength={2000}
         />
         <button
           type="submit"
-          disabled={pending}
-          className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50"
+          disabled={!canSend}
+          aria-label={pending ? "전송 중" : "전송"}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
         >
-          {pending ? "전송 중..." : "전송"}
+          <Send size={18} aria-hidden="true" />
         </button>
       </form>
     </main>
