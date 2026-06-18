@@ -48,6 +48,8 @@ model Moim {
   invites   MoimInvite[]
   // SPEC-CHAT-001 T-001: 채팅 메시지 역참조(additive). moim 테이블 자체는 무변경 — chat_message만 신규 CREATE.
   messages  ChatMessage[]
+  // SPEC-MOIM-005 REQ-MOIM5-001: 투표 역참조(additive). moim 테이블 자체는 무변경 — poll만 신규 CREATE.
+  polls     Poll[]
 
   @@map("moim")
 }
@@ -109,6 +111,59 @@ model ChatMessage {
   // keyset 페이지네이션 인덱스: (moimId, id desc)로 모임별 최신순 조회를 커버한다.
   @@index([moimId, id(sort: Desc)])
   @@map("chat_message")
+}
+
+// SPEC-MOIM-005 모임 투표(REQ-MOIM5-001). 모임당 다수의 투표(poll)를 둔다 — 질문 한 줄 + 선택지(option) 다수.
+// additive 신규 테이블만 추가하고 moim 테이블은 무변경(add_moim_invite/add_chat 선례). 삭제 시 moim→poll→option/vote
+// 가 Cascade 로 정리된다(데이터 무결성 — 삭제 UI 가 아니라 FK 제약, spec §4).
+model Poll {
+  id        String       @id @default(uuid())
+  moimId    String       @map("moim_id")
+  // 투표 질문(한 줄). trim 후 빈 값은 컨트롤러가 400 으로 거른다(ValidationPipe 부재 보완).
+  question  String
+  // 생성자 sub(= profile.id). 가드-검증 sub 만 들어온다(mass-assignment 차단 — moim/chat 패턴 동일).
+  createdBy String       @map("created_by")
+  createdAt DateTime     @default(now()) @map("created_at")
+  moim      Moim         @relation(fields: [moimId], references: [id], onDelete: Cascade)
+  options   PollOption[]
+  votes     PollVote[]
+
+  // 모임별 투표 목록 조회(GET /moims/:id/polls)를 커버한다.
+  @@index([moimId])
+  @@map("poll")
+}
+
+// SPEC-MOIM-005 투표 선택지(REQ-MOIM5-001). 한 poll 에 2개 이상. position 컬럼 없음(spec §4 — id 결정적 정렬).
+model PollOption {
+  id     String     @id @default(uuid())
+  pollId String     @map("poll_id")
+  // 선택지 라벨(자유 텍스트). trim 후 비지 않은 항목만 컨트롤러가 모아 ≥2 를 강제한다.
+  label  String
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes  PollVote[]
+
+  // poll 별 선택지 조회를 커버한다.
+  @@index([pollId])
+  @@map("poll_option")
+}
+
+// SPEC-MOIM-005 투표 표(REQ-MOIM5-001/003). 복합 PK (pollId, userId) 가 "멤버당 한 투표(변경 가능)" 불변식을
+// DB 레벨에서 강제한다(MoimMember 의 (moimId, userId) 선례 동일). 재투표 = (pollId, userId) 기준 upsert 로
+// optionId 교체(추가 아님). poll/option 삭제 시 표도 Cascade 로 정리된다.
+model PollVote {
+  pollId    String     @map("poll_id")
+  optionId  String     @map("option_id")
+  // 투표자 sub(= profile.id). 가드-검증 sub 만 들어온다(mass-assignment 차단).
+  userId    String     @map("user_id")
+  createdAt DateTime   @default(now()) @map("created_at")
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  // 옵션별 득표 수 집계(voteCount)를 커버한다.
+  @@index([optionId])
+  // 복합 PK = 멤버당 한 투표 불변식(재투표는 추가가 아니라 교체).
+  @@id([pollId, userId])
+  @@map("poll_vote")
 }
 
 // SPEC-CHAT-002 디바이스 토큰 레지스트리(REQ-PUSH-002/003). FCM 발송 대상 디바이스를 사용자에 연결한다.

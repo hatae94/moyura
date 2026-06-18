@@ -21,6 +21,16 @@ export type MoimResponse = components['schemas']['MoimResponseDto'];
 // name/nickname 필수 + startsAt(ISO-8601)/location optional.
 export type CreateMoimRequest = components['schemas']['CreateMoimDto'];
 
+// SPEC-MOIM-005 REQ-MOIM5-005: 투표 DTO 타입 별칭(CreateMoimRequest/MoimResponse 선례).
+// path-param 투표 라우트(/moims/:id/polls·/moims/:id/polls/:pollId/vote)는 편의 메서드를 추가하지 않고
+// web 의 구체-경로 헬퍼(lib/moim/polls.ts)가 request(path as never, ...) 로 호출한다 — 타입만 노출한다.
+// POST /moims/:id/polls 요청 바디(CreatePollDto): question(필수) + options(string[], 유효 ≥2).
+export type CreatePollRequest = components['schemas']['CreatePollDto'];
+// POST /moims/:id/polls/:pollId/vote 요청 바디(VoteDto): optionId(필수).
+export type VoteRequest = components['schemas']['VoteDto'];
+// GET/POST poll 응답(PollResponseDto): id/question/createdBy/createdAt + options[{id,label,voteCount}] + myVote.
+export type PollResponse = components['schemas']['PollResponseDto'];
+
 /**
  * 인증 토큰 공급자(SPEC-AUTH-001 R-D4 / OD-3).
  *

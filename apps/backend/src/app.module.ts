@@ -8,6 +8,7 @@ import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { InviteModule } from './invite/invite.module';
 import { MoimModule } from './moim/moim.module';
+import { PollModule } from './poll/poll.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfileModule } from './profile/profile.module';
 import { PushModule } from './push/push.module';
@@ -28,6 +29,8 @@ import { PushModule } from './push/push.module';
     MoimModule,
     InviteModule,
     ChatModule,
+    // SPEC-MOIM-005: 투표 도메인. MoimModule(assertMember 단일 출처)에 의존하므로 MoimModule 뒤에 등록한다.
+    PollModule,
     // SPEC-CHAT-002: 푸시는 ChatModule 뒤에 등록한다. push는 chat.message.created 이벤트 계약에만
     // 단방향 의존하고(@OnEvent 구독), chat은 push의 존재를 인식하지 않는다(REQ-PUSH-004 — 느슨한 결합 HARD).
     // FIREBASE_CREDENTIALS 부재 시 FcmSender는 no-op으로 동작해 자격증명 없이도 부팅이 성립한다(graceful degrade).

@@ -1,10 +1,14 @@
-// 모임 상세 페이지 (Server Component, SPEC-MOIM-003 REQ-MOIM3-002/004/005) — 이름·멤버·채팅 입장.
+// 모임 상세 페이지 (Server Component, SPEC-MOIM-003 REQ-MOIM3-002/004/005 + SPEC-MOIM-005 REQ-MOIM5-006) —
+// 이름·멤버·채팅 입장·투표.
 //
-// 읽기 전용 상세 화면이다(클라이언트 인터랙션 없음 — 링크만). 서버에서 세션 access_token 으로
-// GET /moims/:id + GET /moims/:id/members 를 조회해 모임 이름·멤버 목록(nickname + role)·"채팅 입장"
-// 링크(/moims/{id}/chat)를 렌더한다. (main) 그룹 하위라 (main)/layout.tsx 의 requireNamedSession() 가드를
-// 상속한다 — 여기서 다시 호출하는 것은 (1) access_token 확보 (2) 직접 URL 진입 시 가드 재확인(미인증→/login,
-// 이름 미보유→/onboarding) 목적이다(idempotent — 쿠키 세션 읽기). SPEC-WEB-GUARD-001 정책과 일관.
+// 서버에서 세션 access_token 으로 GET /moims/:id + GET /moims/:id/members + GET /moims/:id/polls 를 조회해
+// 모임 이름·멤버 목록·"채팅 입장" 링크와 투표 섹션을 렌더한다. (main) 그룹 하위라 (main)/layout.tsx 의
+// requireNamedSession() 가드를 상속한다 — 여기서 다시 호출하는 것은 (1) access_token 확보 (2) 직접 URL 진입 시
+// 가드 재확인 목적이다(idempotent — 쿠키 세션 읽기). SPEC-WEB-GUARD-001 정책과 일관.
+//
+// SPEC-MOIM-005: 투표/생성은 인터랙티브하므로 본체(이 Server Component)는 데이터 fetch + 가드를 유지하고,
+// 투표 컨트롤·생성 폼은 Client 하위 컴포넌트(<PollsSection/>) + Server Action(poll-actions.ts)으로 분리한다.
+// polls 는 plain object(직렬화 가능)만 Client 섬에 전달한다(함수/인스턴스 금지 — Server→Client 경계 보존).
 //
 // 비멤버/미존재 안전 처리(REQ-MOIM3-005): 백엔드가 비멤버 403·미존재 404 를 반환하며(인가 단일 출처,
 // 약화하지 않는다), 양쪽 모두 notFound() 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
@@ -32,6 +36,8 @@ import {
   getMoimMembers,
   moimErrorStatus,
 } from "@/lib/moim/api";
+import { type PollWithResults, listPolls } from "@/lib/moim/polls";
+import { PollsSection } from "./polls-section";
 
 /** 멤버 역할 배지(owner/member). owner 는 강조, 그 외는 muted. */
 function RoleBadge({ role }: { role: string }) {
@@ -95,6 +101,16 @@ export default async function MoimDetailPage({
     notFound();
   }
 
+  // SPEC-MOIM-005: 투표 목록 + 결과(호출자 myVote 포함)를 서버에서 조회한다. 멤버십은 위 getMoim 이 이미
+  // 통과시켰으므로(같은 assertMember 게이트) 정상 멤버에게는 성공한다. poll 조회 실패는 상세 전체를 막지 않고
+  // 빈 배열로 graceful degrade 한다("아직 투표가 없어요" — 허위 값 금지). 인가는 위에서 이미 강제됐다.
+  let polls: PollWithResults[];
+  try {
+    polls = await listPolls(api, id);
+  } catch {
+    polls = [];
+  }
+
   const createdDate = new Date(moim.createdAt).toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
@@ -154,6 +170,9 @@ export default async function MoimDetailPage({
             </p>
           )}
         </section>
+
+        {/* SPEC-MOIM-005: 투표 섹션(Client 섬). 투표 목록·득표 막대·내 표 강조·단일 선택 투표·생성 폼. */}
+        <PollsSection moimId={moim.id} polls={polls} />
       </div>
     </div>
   );

@@ -667,6 +667,167 @@
         ]
       }
     },
+    "/moims/{id}/polls": {
+      "post": {
+        "operationId": "PollController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePollDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "투표 생성 + 옵션(투표 0 직후 상태)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "빈 question / 유효 옵션 <2 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 멤버가 아님(또는 없는 모임) — 403/404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "polls"
+        ]
+      },
+      "get": {
+        "operationId": "PollController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "모임의 투표 목록(옵션별 voteCount + 호출자 myVote 포함)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PollResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 멤버가 아님(또는 없는 모임) — 403/404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "polls"
+        ]
+      }
+    },
+    "/moims/{id}/polls/{pollId}/vote": {
+      "post": {
+        "operationId": "PollController_vote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pollId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "투표 기록/교체 + 갱신된 단건 poll 결과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "빈 optionId / 해당 poll 의 선택지가 아닌 optionId — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 멤버가 아님 — 403"
+          },
+          "404": {
+            "description": "해당 모임에 속하지 않는(또는 없는) pollId — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "polls"
+        ]
+      }
+    },
     "/devices": {
       "post": {
         "operationId": "DeviceTokenController_register",
@@ -1087,6 +1248,115 @@
         "required": [
           "messages",
           "nextCursor"
+        ]
+      },
+      "CreatePollDto": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "투표 질문(trim 후 비어 있을 수 없음)",
+            "example": "다음 모임 날짜는?"
+          },
+          "options": {
+            "description": "선택지 라벨 배열(trim 후 비지 않은 항목 2개 이상 필요)",
+            "example": [
+              "토요일",
+              "일요일"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "question",
+          "options"
+        ]
+      },
+      "PollOptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "선택지 id",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          },
+          "label": {
+            "type": "string",
+            "description": "선택지 라벨",
+            "example": "토요일"
+          },
+          "voteCount": {
+            "type": "number",
+            "description": "이 선택지의 득표 수(표 0 이면 0)",
+            "example": 3
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "voteCount"
+        ]
+      },
+      "PollResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "투표 id(uuid)",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          },
+          "question": {
+            "type": "string",
+            "description": "투표 질문",
+            "example": "다음 모임 날짜는?"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "생성자 sub(= profile.id)",
+            "example": "00000000-0000-4000-8000-000000000001"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "투표 생성 시각(ISO-8601)",
+            "example": "2026-06-19T00:00:00.000Z"
+          },
+          "options": {
+            "description": "선택지 목록(각 선택지의 득표 수 포함)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PollOptionResponseDto"
+            }
+          },
+          "myVote": {
+            "type": "string",
+            "description": "호출자 자신이 고른 선택지 id. 아직 투표하지 않았으면 null.",
+            "nullable": true,
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          }
+        },
+        "required": [
+          "id",
+          "question",
+          "createdBy",
+          "createdAt",
+          "options",
+          "myVote"
+        ]
+      },
+      "VoteDto": {
+        "type": "object",
+        "properties": {
+          "optionId": {
+            "type": "string",
+            "description": "선택지 id(해당 poll 에 속해야 함 — 아니면 400)",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          }
+        },
+        "required": [
+          "optionId"
         ]
       },
       "RegisterDeviceDto": {
