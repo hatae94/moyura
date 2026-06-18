@@ -44,20 +44,27 @@ moyura/
 │  │  │  │  └─ login.tsx        # 기존 WebViewShell 재사용(이메일 로그인 in-WebView 흐름 보존)
 │  │  │  └─ (tabs)/             # 인증 그룹 — 네이티브 Tabs
 │  │  │     ├─ _layout.tsx      # expo-router Tabs(emoji-glyph 아이콘, notifications 배지 mock, Tabs.Protected)
-│  │  │     ├─ home.tsx         # ${WEB_URL}/home 호스팅 WebView 래퍼
+│  │  │     ├─ home/            # 홈 탭 디렉터리 (SPEC-MOIM-003 — flat home.tsx 대체)
+│  │  │     │  ├─ _layout.tsx  # expo-router Stack (네이티브 back → 목록 복귀 보장)
+│  │  │     │  ├─ index.tsx    # ${WEB_URL}/home 호스팅 WebView 래퍼 (기존 home.tsx 이전)
+│  │  │     │  └─ [id].tsx     # ${WEB_URL}/home/{id} 호스팅 BridgedWebView (상세 네이티브 라우트)
 │  │  │     ├─ explore.tsx      # ${WEB_URL}/explore 호스팅 WebView 래퍼
 │  │  │     ├─ notifications.tsx # ${WEB_URL}/notifications 호스팅 WebView 래퍼
 │  │  │     └─ profile.tsx      # ${WEB_URL}/profile 호스팅 WebView 래퍼
-│  │  ├─ components/    # WebViewShell.tsx, LoadingOverlay.tsx, WebViewErrorOverlay.tsx, BridgedWebView.tsx(탭 공유 seam)
-│  │  ├─ hooks/         # useAppLifecycle.ts(Android 백/네비 이력), useAuthBridge.ts(auth:google-request bridge command → 네이티브 Google Sign-In 경로(SPEC-MOBILE-004 v0.3.0 설계 변경) + 토큰 브리지 + 보안 + session:cleared 시 FCM 토큰 해제 연동 — SPEC-CHAT-002)
-│  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비), route-map-core.ts(@MX:ANCHOR, URL↔라우트 매핑), auth/(oauth.ts·oauth-bridge.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·nonce-core.ts·token-store.ts·token-store-core.ts·auth-bridge-core.ts·app-lifecycle-core.ts·auth-state-core.ts(@MX:ANCHOR)·AuthContext.tsx(로그인 후 FCM registerDevice 배선 — SPEC-CHAT-002)·google-signin-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·google-signin.ts(SDK 래퍼)·signin-id-token-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·supabase-mobile.ts(SDK 래퍼) + 보안/단위 테스트), push/(register-device-core.ts·register-device-core.test.ts·notification-core.ts·notification-core.test.ts·register-device.ts·notification-handler.ts — SPEC-CHAT-002)
+│  │  ├─ components/    # WebViewShell.tsx, LoadingOverlay.tsx, WebViewErrorOverlay.tsx, BridgedWebView.tsx(탭 공유 seam + router.push (tabs)/home/[id] — SPEC-MOIM-003)
+│  │  ├─ hooks/         # useAppLifecycle.ts(Android 백/네비 이력), useAuthBridge.ts(auth:google-request bridge command → 네이티브 Google Sign-In 경로(SPEC-MOBILE-004 v0.3.0 설계 변경) + onDetailPush 콜백(SPEC-MOIM-003) + 토큰 브리지 + 보안 + session:cleared 시 FCM 토큰 해제 연동 — SPEC-CHAT-002)
+│  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비), route-map-core.ts(@MX:ANCHOR, URL↔라우트 매핑 + detailRouteForUrl/urlForDetailRoute 순수 함수 — SPEC-MOIM-003), auth/(oauth.ts·oauth-bridge.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·nonce-core.ts·token-store.ts·token-store-core.ts·auth-bridge-core.ts(decideWebViewLoad detail-push 변형 추가 — SPEC-MOIM-003)·app-lifecycle-core.ts·auth-state-core.ts(@MX:ANCHOR)·AuthContext.tsx(로그인 후 FCM registerDevice 배선 — SPEC-CHAT-002)·google-signin-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·google-signin.ts(SDK 래퍼)·signin-id-token-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·supabase-mobile.ts(SDK 래퍼) + 보안/단위 테스트), push/(register-device-core.ts·register-device-core.test.ts·notification-core.ts·notification-core.test.ts·register-device.ts·notification-handler.ts — SPEC-CHAT-002)
 │  │  ├─ plugins/       # withModularHeaders.js(Expo config plugin — use_modular_headers! Podfile 주입, GoogleSignin 8.x AppCheckCore 정적 통합 pod install 오류 해소 — SPEC-MOBILE-004 v0.3.0)
 │  │  ├─ patches/       # @react-native-cookies__cookies.patch(jcenter→mavenCentral, Android Gradle 9 호환)
 │  │  └─ eas.json       # EAS local/prod 프로파일 스켈레톤
 │  └─ web/              # @moyura/web     — Next.js 16 (app/, public/)
-│     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback, require-named-session.ts(공유 서버 가드 — SPEC-MOBILE-004)), native-bridge/(bridge-client.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·NativeBridgeProvider.tsx·LogoutBridgeNotifier.tsx), invite/accept.ts(초대 수락 클라이언트 로직), chat/useChatChannel.ts(Supabase Realtime private channel 구독 훅 — SPEC-CHAT-001)
+│     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback, require-named-session.ts(공유 서버 가드 — SPEC-MOBILE-004)), native-bridge/(bridge-client.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·NativeBridgeProvider.tsx·LogoutBridgeNotifier.tsx), invite/accept.ts(초대 수락 클라이언트 로직), chat/useChatChannel.ts(Supabase Realtime private channel 구독 훅 — SPEC-CHAT-001), moim/api.ts(신규 — getMoim/getMoimMembers 헬퍼, chat/api.ts 패턴 미러 — SPEC-MOIM-003)
 │     ├─ app/           # auth/callback/route.ts(PKCE 콜백), login/, me/(require-named-session 가드 적용 — SPEC-MOBILE-004), invite/[token]/(초대 랜딩 — 익명 로그인 → nickname → accept → /moims/[id]/chat), onboarding/(이름 입력 온보딩 — SPEC-MOBILE-004, (main) 그룹 외부, 루프 안전)
-│     │  ├─ (main)/     # 탭 라우트 그룹 (SPEC-MOBILE-003) — layout.tsx(BottomTabBar·인증가드·ShellSessionAnnouncer·ShellModeEffect·require-named-session 가드 — SPEC-MOBILE-004) + _components/(BottomTabBar·PlaceholderTab·ShellModeEffect·ShellSessionAnnouncer) + home/(page·HomeTab·_mock) + explore/notifications/profile(플레이스홀더)
+│     │  ├─ (main)/     # 탭 라우트 그룹 (SPEC-MOBILE-003) — layout.tsx(BottomTabBar·인증가드·ShellSessionAnnouncer·ShellModeEffect·require-named-session 가드 — SPEC-MOBILE-004) + _components/(BottomTabBar·PlaceholderTab·ShellModeEffect·ShellSessionAnnouncer) + home/(page·HomeTab·[id]/page) + explore/notifications/profile(플레이스홀더)
+│     │  │  └─ home/   # 홈 탭 라우트 (SPEC-MOIM-003)
+│     │  │     ├─ page.tsx       # 서버 컴포넌트 — GET /moims 실 데이터 조회 → HomeTab prop 전달
+│     │  │     ├─ HomeTab.tsx    # mock→real 배선(MOCK_MEETUPS 제거), 카드 /home/{id} 링크
+│     │  │     └─ [id]/page.tsx  # 신규 — 모임 상세 Server Component(GET /moims/:id + /members, (main) 가드 상속, 403/404 → notFound())
 │     │  └─ moims/            # moims 서브트리 — (main) 라우트 그룹 밖
 │     │     ├─ layout.tsx     # 서버 가드 (SPEC-WEB-GUARD-001) — requireNamedSession() await → children. 탭바 없음(chat 풀스크린)
 │     │     └─ [id]/chat/     # 모임 채팅 페이지 (SPEC-CHAT-001) — page.tsx(히스토리 로드 + useChatChannel 구독 + 실시간 수신 표시 + 메시지 전송)
@@ -93,7 +100,7 @@ moyura/
 | `@moyura/web` | `apps/web` | 메인 UI 표면 (App Router) | Next.js `16.2.6`, react `19.2.4`, Tailwind v4, TypeScript `^5` | 스캐폴드 |
 | `@moyura/backend` | `apps/backend` | 백엔드 REST API | NestJS `11`(`@nestjs/common ^11`), TypeScript `^5.7.3`, Jest | 스캐폴드 |
 | `@moyura/config` | `packages/config` | 공유 tsconfig base 의도 | 현재 `package.json`만 존재(`version 0.0.0`, private) | 스텁(빈 패키지) |
-| `@moyura/api-client` | `packages/api-client` | OpenAPI 생성 타입드 API 클라이언트 | `openapi-typescript 7.13.0` 타입(`src/schema.d.ts`, gitignore) + 얇은 fetch 래퍼(`createApiClient`, `getHealth`, optional `getToken`→Bearer, `getMe`) | **구현됨** (SPEC-ENV-SETUP-001 + SPEC-AUTH-001) |
+| `@moyura/api-client` | `packages/api-client` | OpenAPI 생성 타입드 API 클라이언트 | `openapi-typescript 7.13.0` 타입(`src/schema.d.ts`, gitignore) + 얇은 fetch 래퍼(`createApiClient`, `getHealth`, optional `getToken`→Bearer, `getMe`, `listMoims`(SPEC-MOIM-003)) | **구현됨** (SPEC-ENV-SETUP-001 + SPEC-AUTH-001 + SPEC-MOIM-003) |
 
 검증 메모:
 - `@moyura/web`의 `version`은 `0.1.0`, 나머지 앱은 `1.0.0`(루트도 `1.0.0`).

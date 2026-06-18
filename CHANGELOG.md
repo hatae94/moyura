@@ -9,6 +9,17 @@
 
 ### Added
 
+- **모임 상세 화면 + 홈 실 데이터 배선** (SPEC-MOIM-003 — **in-progress**, device-gated — mobile vitest 215/215(+24), tsc 0 errors, web build OK, expo export OK / 라이브 데이터 패스 검증 PASS / AC-3 모바일 인앱 카드 탭 E2E 대기): 홈 탭 mock→real 배선 + 모임 상세 화면(웹 Server Component) + 모바일 네이티브 detail push 로직 구현. 백엔드 무변경.
+  - **홈 탭 mock→real 배선**: `apps/web/app/(main)/home/page.tsx`가 서버에서 `GET /moims`를 실 호출해 `HomeTab`에 prop 전달. `HomeTab.tsx`에서 `MOCK_MEETUPS` 제거 및 실 데이터 바인딩; 카드를 `/home/{id}` 링크로 전환. honest-fields-only — `{name, createdAt}`만 표시(fabricated 필드 제거). `_mock.ts` 삭제.
+  - **모임 상세 Server Component**: `apps/web/app/(main)/home/[id]/page.tsx` 신규. `GET /moims/:id` + `GET /moims/:id/members` 서버 조회 → 모임 이름 + 멤버 목록(nickname + role) + "채팅 입장" 링크 렌더. `(main)/layout.tsx` `requireNamedSession()` 가드 상속(별도 가드 불필요). 비멤버 403/404 → `notFound()`.
+  - **웹 모임 API 헬퍼**: `apps/web/lib/moim/api.ts` 신규 — `getMoim`/`getMoimMembers`(`chat/api.ts` 패턴 미러: 구체 경로 조립 + `request(path as never, "get")` 캐스팅).
+  - **api-client 확장**: `packages/api-client/src/index.ts`에 `listMoims()` 타입드 편의 메서드 + `MoimResponse` 타입 별칭 추가.
+  - **모바일 detail-push 로직(additive)**: `apps/mobile/lib/route-map-core.ts`에 `detailRouteForUrl`/`urlForDetailRoute` 순수 함수 추가. `apps/mobile/hooks/auth-bridge-core.ts` `decideWebViewLoad`에 같은 탭 내 detail 타깃 push 변형 additive 확장(`{ action: "push", route, id }`). `apps/mobile/hooks/useAuthBridge.ts` `onDetailPush` 콜백. `apps/mobile/components/BridgedWebView.tsx` `router.push`(tabs)/home/[id]. 기존 tab-switch dispatch 변형 + 회귀 0 보존.
+  - **홈 탭 디렉터리화**: `apps/mobile/app/(tabs)/home.tsx`(flat) → `apps/mobile/app/(tabs)/home/`(디렉터리) — `_layout.tsx`(Stack, 네이티브 back 복귀 보장) + `index.tsx`(탭 목록) + `[id].tsx`(상세 네이티브 라우트, `${WEB_URL}/home/{id}` BridgedWebView). iOS 시뮬레이터에서 앱 리로드 후 렌더 정상 확인(구조적 안전).
+  - **신규 vitest 파일 +24 테스트**: route-map detail-push 케이스(detailRouteForUrl/push 변형/회귀) 2파일. mobile vitest 215/215 GREEN.
+  - **라이브 데이터 패스 검증(실 password-grant 토큰, 로컬 Supabase)**: `GET /moims` → 200 실 형상; `GET /moims/:id` → 200; `GET /moims/:id/members` → 200 `[{userId,nickname,role:"owner",joinedAt}]`; `GET /moims/<missing>` → 404; 미인증/위조 토큰 → 401. AC-1/2/5 라이브 PASS. AC-4 web build 등록 PASS. AC-6 자동 게이트 전부 GREEN.
+  - **AC-3 미완료(device-gated)**: 모바일 홈 카드 탭 → 네이티브 `(tabs)/home/[id]` push → 웹 상세 렌더 → 네이티브 back → 목록 복귀. push 로직은 vitest 24건 검증됨; Supabase 세션 만료로 이번 세션 중 인앱 탭 미수행. 라이브 인앱 탭 E2E 완료 시 `completed` 전환.
+
 - **moims 서브트리 이름-온보딩 가드 확장** (SPEC-WEB-GUARD-001 — completed — nx run web:build 0 errors, nx run web:lint 0 errors, GET /moims/*/chat 세션 없음 → 307→/login 실 HTTP 확인): `app/(main)/` 라우트 그룹 밖에 위치한 `app/moims/` 서브트리에 이름 온보딩 가드를 적용하여 미인증·이름 미보유 사용자의 채팅 페이지 직접 진입을 차단. SPEC-MOBILE-004 sync 리포트가 기록한 cross-SPEC 후속(chat 페이지 `requireNamedSession()` 가드 미적용 MEDIUM) 해소.
   - **신규 파일**: `apps/web/app/moims/layout.tsx` — 서버 컴포넌트(async). 자식 렌더링 전 `requireNamedSession()`을 await. 탭바·셸 감지 없음(chat은 풀스크린 라우트).
   - **재사용**: `apps/web/lib/auth/require-named-session.ts` 무변경 — 기존 가드 정책(세션 없음 → /login, 이름 없음 → /onboarding, 정상 → children) 그대로 적용. 리다이렉트 루프 없음(/login·/onboarding이 app/moims/ 밖).

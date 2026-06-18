@@ -72,13 +72,13 @@
 
 ## Definition of Done (DoD)
 
-- [ ] REQ-MOIM3-001~006 전부 구현 + AC-1~AC-6 충족.
-- [ ] 백엔드 무변경(엔드포인트·인가 약화 없음) — 확인 체크포인트 통과.
-- [ ] 홈 탭이 실 `GET /moims` 데이터로 렌더(mock 미사용), 카드가 `/home/{id}` 링크.
-- [ ] `/home/{id}` 상세가 이름 + 멤버(nickname+role) + 채팅 입장 렌더, `(main)` 가드 상속.
-- [ ] api-client `listMoims()` + 웹 상세/멤버 헬퍼(chat/api.ts 패턴) 추가.
-- [ ] 모바일 detail-push 순수 분류 + `decideWebViewLoad` push 변형(회귀 0) + vitest.
-- [ ] expo-router 홈 탭 디렉터리화(Stack + index + [id]), 네이티브 back 복귀.
-- [ ] 자동 게이트(web build/lint, tsc 3패키지, mobile vitest, expo export) 0 error.
-- [ ] **디바이스 종단 검증**(완료 전환 필수): iOS 시뮬레이터 dev build 에서 홈 실 목록 → 카드 탭 → 네이티브 상세 push → 웹 상세 렌더 → 네이티브 back → 목록 복귀 → "채팅 입장" 진입 라이브 확인. 그 전까지 status = `in-progress`(프로젝트 메모리 규칙 mobile-spec-device-gated).
-- [ ] 스키마 확장 0(Moim 필드 미추가), 수정/삭제/생성 UI 미구현(Exclusions 준수).
+- [x] REQ-MOIM3-001~006 전부 구현 + AC-1~AC-6 충족. *(AC-3 인앱 E2E 제외 — 아래 참고)*
+- [x] 백엔드 무변경(엔드포인트·인가 약화 없음) — 확인 체크포인트 통과. *(GET /moims·/moims/:id·/moims/:id/members 라이브 검증 PASS, 401/404 응답 확인)*
+- [x] 홈 탭이 실 `GET /moims` 데이터로 렌더(mock 미사용), 카드가 `/home/{id}` 링크. *(AC-1 라이브 데이터 패스 PASS — 실 password-grant 토큰으로 검증)*
+- [x] `/home/{id}` 상세가 이름 + 멤버(nickname+role) + 채팅 입장 렌더, `(main)` 가드 상속. *(AC-2 라이브 PASS, AC-5 가드+403/404 PASS)*
+- [x] api-client `listMoims()` + 웹 상세/멤버 헬퍼(chat/api.ts 패턴) 추가. *(api-client tsc 0 PASS)*
+- [x] 모바일 detail-push 순수 분류 + `decideWebViewLoad` push 변형(회귀 0) + vitest. *(mobile vitest 215/215 +24 route-map detail-push 케이스 GREEN)*
+- [x] expo-router 홈 탭 디렉터리화(Stack + index + [id]), 네이티브 back 복귀. *(iOS 시뮬레이터에서 앱 리로드 후 렌더 정상, 디렉터리화 구조적 안전 확인)*
+- [x] 자동 게이트(web build/lint, tsc 3패키지, mobile vitest, expo export) 0 error. *(AC-6 전부 GREEN)*
+- [ ] **디바이스 종단 검증 — AC-3 인앱 탭 E2E** (완료 전환 필수): iOS 시뮬레이터 dev build 에서 홈 실 목록 → 카드 탭 → 네이티브 상세 push → 웹 상세 렌더 → 네이티브 back → 목록 복귀 → "채팅 입장" 진입 라이브 확인. **device-gated — 라이브 인앱 탭 대기** (이번 세션 중 Supabase 세션 만료로 카드 탭 미수행; push 로직 vitest 검증됨, 번들 빌드됨). 검증 완료 전까지 status = `in-progress`.
+- [x] 스키마 확장 0(Moim 필드 미추가), 수정/삭제/생성 UI 미구현(Exclusions 준수).
