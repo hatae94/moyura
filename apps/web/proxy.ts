@@ -47,13 +47,33 @@ function generateCspNonce(): string {
  */
 function realtimeWssSource(supabaseUrl: string | undefined): string {
   if (!supabaseUrl) {
-    return "wss:";
+    return "wss: ws:";
   }
   try {
-    return `wss://${new URL(supabaseUrl).host}`;
+    const host = new URL(supabaseUrl).host;
+    // 호스트-핀 + 양 스킴: prod(https Supabase)는 wss://, 로컬(http Supabase)은 ws:// 로 realtime 연결한다.
+    // http origin 토큰이 ws:// 연결을 허용하지 않으므로(브라우저 실측 — CSP 차단) ws:// 를 명시 추가한다.
+    return `wss://${host} ws://${host}`;
   } catch {
-    // 파싱 불가(잘못된 URL) — CSP 빌드를 깨뜨리지 않도록 bare wss:로 안전 폴백.
-    return "wss:";
+    // 파싱 불가(잘못된 URL) — CSP 빌드를 깨뜨리지 않도록 bare wss:/ws:로 안전 폴백.
+    return "wss: ws:";
+  }
+}
+
+/**
+ * 클라이언트 측 백엔드 API(NestJS) 호출을 허용할 connect-src origin 을 만든다.
+ * 채팅 페이지(Client Component)가 브라우저에서 직접 GET /moims/:id/messages·/members 를 호출하므로
+ * connect-src 에 API origin 이 없으면 CSP 가 차단한다. NEXT_PUBLIC_API_BASE_URL 의 origin 으로 핀한다
+ * (서버 컴포넌트 fetch 는 CSP 비대상이라 그동안 드러나지 않았다 — 채팅이 첫 클라이언트 측 API 호출).
+ */
+function apiOriginSource(apiBaseUrl: string | undefined): string {
+  if (!apiBaseUrl) {
+    return "";
+  }
+  try {
+    return new URL(apiBaseUrl).origin;
+  } catch {
+    return "";
   }
 }
 
@@ -63,18 +83,21 @@ function buildCsp(nonce: string): string {
     ? `'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval' 'unsafe-inline'`
     : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  // Supabase Realtime broadcast 구독은 wss://로 연결한다. http(s) origin + 호스트-핀 wss origin 둘 다 허용한다.
+  // Supabase Realtime broadcast 구독은 ws(s)://로 연결한다. http(s) origin + 호스트-핀 wss/ws origin 모두 허용한다.
   const wssSource = realtimeWssSource(
     supabaseUrl === "" ? undefined : supabaseUrl,
   );
+  // 채팅 등 클라이언트 측 백엔드 API 호출(localhost:3001)을 위한 origin(서버 fetch 는 CSP 비대상).
+  const apiSource = apiOriginSource(process.env.NEXT_PUBLIC_API_BASE_URL);
   return [
     `default-src 'self'`,
     `script-src ${scriptSrc}`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: blob: https:`,
     `font-src 'self' data:`,
-    // SPEC-CHAT-001 R-2 + MEDIUM-SEC: 기존 http(s) Supabase origin + 호스트-핀 wss origin(open-wss 표면 제거).
-    `connect-src 'self' ${wssSource} ${supabaseUrl}`.trim().replace(/\s+/g, " "),
+    // SPEC-CHAT-001 R-2 + MEDIUM-SEC: 호스트-핀 Supabase REST(http(s)) + realtime(wss/ws) + 백엔드 API origin
+    // 만 허용한다(open-wss/open-connect 표면 제거). 클라이언트 채팅 fetch + realtime 구독이 통과한다.
+    `connect-src 'self' ${wssSource} ${supabaseUrl} ${apiSource}`.trim().replace(/\s+/g, " "),
     `frame-ancestors 'self'`,
     `base-uri 'self'`,
     `form-action 'self'`,
