@@ -1,9 +1,9 @@
 ---
 id: SPEC-CHAT-001
-version: "0.3.0"
+version: "0.3.1"
 status: completed
 created: 2026-06-11
-updated: 2026-06-15
+updated: 2026-06-18
 author: hatae
 priority: high
 issue_number: 0
@@ -14,6 +14,13 @@ issue_number: 0
 > 수락 기준(Given/When/Then): [acceptance.md](./acceptance.md) | 구현 계획: [plan.md](./plan.md)
 
 ## HISTORY
+
+- 2026-06-18 (v0.3.1): 사후 강화 + AC-5 정직한 수정 — 상태 `completed` 유지.
+  - **채팅 UI 리디자인** (0aba5f3): `apps/web/app/moims/[id]/chat/page.tsx`를 Meetup 디자인 시스템에 맞게 재작성. orange semantic 토큰 (`bg-primary #ff6b35`, 모임 상세 `/home/[id]`와 동일 파레트), 말풍선(own = 우측/오렌지, other = 좌측/muted + sender nickname 런-기반 그룹핑), sticky 헤더(뒤로가기 → `/home/{moimId}`) + sticky 입력바, 타임스탬프, 빈 상태 표시. 데이터 레이어(`useChatChannel`, `lib/chat/api.ts`) 무변경.
+  - **CSP connect-src 수정** (b86a80c): `apps/web/proxy.ts` — realtime `ws://` 스킴(호스트-핀) 및 백엔드 API origin(`NEXT_PUBLIC_API_BASE_URL`)을 connect-src에 명시 추가. 기존 항목에는 `wss://host`만 있었으나 로컬 Supabase realtime은 `ws://127.0.0.1:54321`로 연결하며, 브라우저에서 `http://` origin 토큰은 `ws://`를 허용하지 않음(Chrome DevTools 실측). 백엔드 API origin 누락으로 클라이언트 측 채팅 fetch도 CSP 차단됨.
+  - **api-client fetch 바인딩 수정** (5e35248): `packages/api-client/src/index.ts` — 기본 fetch를 `globalThis.fetch.bind(globalThis)`로 변경. 분리된(detached) `globalThis.fetch` 참조는 브라우저에서 `TypeError: Failed to execute 'fetch' on 'Window': Illegal invocation`을 발생시킴(Node는 관대하여 미검출).
+  - **AC-5 정직한 수정**: v0.3.0 HISTORY에서 AC-5가 "CSP 정책 추론 + 프로토콜 수준 WS 연결"로 PASS 판정되었으나 이는 틀린 판단이었다. Node E2E는 CSP를 강제하지 않아 브라우저 전용 결함(CSP `ws://` 누락, api-client detached fetch)이 검출되지 않았다. 라이브 브라우저(chrome-devtools, 실제 moyura-verify 세션) 검증에서 두 결함이 모두 확인되어 채팅 페이지가 브라우저에서 동작 불가 상태였음이 드러남. b86a80c + 5e35248 수정 후 재검증: 멤버/히스토리 로드 정상, 말풍선(own/other + nickname 그룹핑) 렌더 정상, realtime WS CSP 위반 없이 연결 확인. **AC-5는 이제 라이브 브라우저 검증으로 PASS** — 이전의 "추론 PASS"가 아닌 실증 PASS.
+  - 발견 맥락: 채팅 페이지가 클라이언트 측에서 `api-client.request()` 및 Realtime을 호출하는 첫 번째 페이지. 홈/상세(MOIM-003)는 서버 사이드 fetch(Node, CSP 비대상, fetch 관대)라 이 결함들이 지금까지 드러나지 않았다.
 
 - 2026-06-15 (v0.3.0): sync 완료 — 상태 전이 `in-progress` → `completed`.
   - 라이브 E2E 검증 결과 (2026-06-15, 로컬 Supabase 스택 127.0.0.1:54321 API / 54322 DB + direct Postgres INSERT):

@@ -67,11 +67,11 @@ moyura/
 │     │  │     └─ [id]/page.tsx  # 신규 — 모임 상세 Server Component(GET /moims/:id + /members, (main) 가드 상속, 403/404 → notFound())
 │     │  └─ moims/            # moims 서브트리 — (main) 라우트 그룹 밖
 │     │     ├─ layout.tsx     # 서버 가드 (SPEC-WEB-GUARD-001) — requireNamedSession() await → children. 탭바 없음(chat 풀스크린)
-│     │     └─ [id]/chat/     # 모임 채팅 페이지 (SPEC-CHAT-001) — page.tsx(히스토리 로드 + useChatChannel 구독 + 실시간 수신 표시 + 메시지 전송)
-│     └─ proxy.ts       # @supabase/ssr updateSession + per-request CSP (Next 16 미들웨어 컨벤션)
+│     │     └─ [id]/chat/     # 모임 채팅 페이지 (SPEC-CHAT-001) — page.tsx(히스토리 로드 + useChatChannel 구독 + 실시간 수신 표시 + 메시지 전송). Meetup 디자인 시스템 리디자인(orange 토큰, 말풍선 own/other, sticky 헤더/입력바 — v0.3.1)
+│     └─ proxy.ts       # @supabase/ssr updateSession + per-request CSP (Next 16 미들웨어 컨벤션). connect-src: 호스트-핀 wss/ws(Supabase Realtime) + 백엔드 API origin + Supabase REST — SPEC-CHAT-001 v0.3.1 수정
 ├─ packages/
 │  ├─ config/           # @moyura/config  — 공유 tsconfig base (현재 스텁)
-│  └─ api-client/       # @moyura/api-client — openapi-typescript 타입 + fetch 클라이언트
+│  └─ api-client/       # @moyura/api-client — openapi-typescript 타입 + fetch 클라이언트. 기본 fetch를 `globalThis.fetch.bind(globalThis)`로 바인딩(브라우저 Illegal invocation 방지 — SPEC-CHAT-001 v0.3.1 수정)
 ├─ supabase/            # 로컬 Supabase CLI 스택 (config.toml — [auth.external.google|apple|kakao] enabled=false env() 스캐폴드, README.md, snippets/)
 ├─ docs/                # deploy-render.md (Render 배포 가이드)
 ├─ .github/workflows/   # ci.yml (install/build/lint/test/typecheck, migrate/deploy 없음)

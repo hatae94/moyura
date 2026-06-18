@@ -2,8 +2,9 @@
 
 **최초 생성**: 2026-06-14 (v0.2.0 — in-progress 전환)
 **완료 검증 추가**: 2026-06-15 (v0.3.0 — completed 전환)
+**사후 강화 + AC-5 수정 추가**: 2026-06-18 (v0.3.1 — completed 유지)
 **Branch**: feature/SPEC-MOBILE-004
-**Commit (run)**: f3fe178
+**Commits**: f3fe178 (run) / 0aba5f3 (UI redesign) / b86a80c (CSP fix) / 5e35248 (fetch fix)
 **Synced by**: manager-docs
 
 ---
@@ -14,6 +15,79 @@
 |------|------|------------|------------|------|
 | 2026-06-14 | v0.2.0 | `draft` | `in-progress` | run 완료, AC-1c/4/5 런타임 검증 대기 |
 | 2026-06-15 | v0.3.0 | `in-progress` | `completed` | 라이브 E2E 검증 AC-1c/AC-4/AC-5 전부 PASS |
+| 2026-06-18 | v0.3.1 | `completed` | `completed` (유지) | UI 리디자인 + 버그 2건 수정 + AC-5 추론→실증 PASS 정직한 수정 |
+
+---
+
+## [v0.3.1 추가] 라이브 브라우저 검증 + 사후 강화 — 2026-06-18
+
+### 개요
+
+v0.3.0에서 completed로 전환 후, 채팅 페이지 UI 리디자인 작업 중 라이브 브라우저(Chrome DevTools, 실제 moyura-verify 세션)에서 채팅 페이지가 동작하지 않는 두 가지 잠재 결함이 발견되어 수정됨. AC-5 판정 수정(추론 PASS → 실증 PASS). SPEC-CHAT-001은 completed 상태를 유지하며 이 수정들이 완성도를 강화함.
+
+### 근본 원인 분석
+
+#### 결함 1 — CSP connect-src `ws://` 누락 + 백엔드 API origin 누락 (b86a80c)
+
+**파일**: `apps/web/proxy.ts`
+
+**증상**: 브라우저 콘솔에서 CSP 위반 오류 발생
+- `ws://127.0.0.1:54321` 연결 차단 (Supabase Realtime)
+- `http://localhost:3001` fetch 차단 (백엔드 API)
+
+**근본 원인**:
+1. 로컬 Supabase Realtime은 `ws://127.0.0.1:54321`로 연결하지만 기존 connect-src에는 `wss://127.0.0.1:54321`만 있었음. Chrome에서 `http://host` origin 토큰은 `ws://`를 허용하지 않음(이전 v0.3.0 판단 "CSP3 scheme-matching에 의해 http origin이 ws:// 연결을 허용"은 오류).
+2. 채팅 페이지가 클라이언트 측에서 백엔드 API를 직접 호출하는 첫 번째 페이지. 홈/상세(MOIM-003)는 서버 사이드 fetch(CSP 비대상)라 API origin 누락이 드러나지 않았음.
+
+**수정**: `realtimeWssSource()` 함수가 `wss://${host} ws://${host}` 두 스킴을 모두 반환하도록 수정. `apiOriginSource()` 신규 함수 추가(`NEXT_PUBLIC_API_BASE_URL`의 origin 추출). connect-src에 두 값 모두 포함.
+
+#### 결함 2 — api-client detached fetch (`Illegal invocation`) (5e35248)
+
+**파일**: `packages/api-client/src/index.ts`
+
+**증상**: 채팅 히스토리/멤버 로드 실패 — `TypeError: Failed to execute 'fetch' on 'Window': Illegal invocation`
+
+**근본 원인**: 기본 fetch가 `globalThis.fetch`(detached 참조)로 지정되어 있었음. 브라우저에서는 `fetch`가 `window`에 바인딩되어 있어야 하며, 분리된 참조로 호출하면 Illegal invocation 발생. Node.js는 이를 관대하게 처리하므로 jest/E2E에서 미검출.
+
+**수정**: `globalThis.fetch.bind(globalThis)`로 변경.
+
+**크로스 컷팅 영향**: 이 수정은 `api-client`를 브라우저에서 사용하는 모든 소비자에 영향. chat은 현재 유일한 클라이언트 측 api-client 소비자이지만, 향후 추가되는 모든 브라우저 측 api-client 호출이 이 수정 덕에 정상 동작함.
+
+### AC-5 판정 정직한 수정
+
+| 항목 | v0.3.0 판정 | v0.3.1 실제 상태 |
+|------|------------|-----------------|
+| 판정 방법 | Node E2E + CSP 정책 추론 | 라이브 브라우저(Chrome DevTools) |
+| CSP ws:// | 허용된다고 추론(오류) | 차단됨 — b86a80c로 수정 |
+| api-client fetch | 정상 동작한다고 가정 | Illegal invocation — 5e35248로 수정 |
+| 최종 AC-5 판정 | PASS (추론, 잠재 결함 존재) | **PASS (실증 — 라이브 브라우저에서 realtime WS 연결, 히스토리/멤버 로드, 말풍선 렌더 모두 확인)** |
+
+Node E2E는 CSP를 강제하지 않으므로, CSP 관련 AC를 브라우저 전용 검증 없이 PASS 판정한 것이 근본적 오류였음. 향후 CSP 관련 AC는 실제 브라우저 검증이 필요함을 기록.
+
+### 채팅 UI 리디자인 (0aba5f3)
+
+**파일**: `apps/web/app/moims/[id]/chat/page.tsx`
+
+Meetup 디자인 시스템에 맞춰 채팅 UI를 재작성:
+- **색상**: orange semantic 토큰 (`bg-primary #ff6b35`) — 모임 상세 `/home/[id]`와 동일 파레트
+- **말풍선**: own(내 메시지) = 우측 정렬 + 오렌지 배경; other(상대 메시지) = 좌측 정렬 + muted 배경 + sender nickname 런(run)-기반 그룹핑
+- **레이아웃**: sticky 헤더(뒤로가기 버튼 → `/home/{moimId}`) + sticky 입력 바
+- **추가 UX**: 타임스탬프, 빈 상태 표시
+- **데이터 레이어 무변경**: `useChatChannel`, `lib/chat/api.ts` 수정 없음
+
+**테마 일관성 관찰**: 로그인/홈 페이지는 `bg-white` 하드코딩을 사용하나, 모임 상세/채팅은 theme-aware semantic 토큰을 사용. 다크 모드 전환 시 화면 간 색조 불일치 발생 가능. 선택적 후속 과제로 기록 — 이 sync에서 수정하지 않음.
+
+### v0.3.1 동기화 파일 목록
+
+| 파일 | 변경 유형 | 내용 요약 |
+|------|-----------|-----------|
+| `.moai/specs/SPEC-CHAT-001/spec.md` | 수정 | version 0.3.0→0.3.1, updated 2026-06-15→2026-06-18, HISTORY v0.3.1 추가(UI 리디자인, CSP 수정, fetch 수정, AC-5 정직한 수정) |
+| `CHANGELOG.md` | 수정 | CHAT-001 위에 "UI 리디자인 + CSP/fetch 버그 수정" 항목 추가(v0.3.1) |
+| `.moai/project/tech.md` | 수정 | 상단 CHAT-001 선언 블록 + 구현됨 표 행: v0.3.1로 갱신, AC-5 실증 PASS 기록, fetch bind 수정, UI 리디자인 언급 |
+| `.moai/project/structure.md` | 수정 | proxy.ts 설명에 connect-src 내용 추가; api-client 설명에 fetch bind 수정 언급; 채팅 페이지에 리디자인 언급 |
+| `.moai/reports/sync-report-SPEC-CHAT-001.md` | 수정 | 본 섹션 추가 |
+
+---
 
 ---
 
