@@ -76,7 +76,11 @@ export class ApiClient {
       throw new Error('@moyura/api-client: baseUrl 이 필요합니다.');
     }
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
-    this.fetchImpl = options.fetch ?? globalThis.fetch;
+    // 기본 fetch 는 globalThis 에 바인딩한다. 브라우저(WHATWG fetch)는 this===window 를 요구하므로
+    // detached 참조(`globalThis.fetch`)를 그대로 호출하면 "Illegal invocation" TypeError 가 난다
+    // (Node 의 fetch 는 관대해 서버 컴포넌트에서는 드러나지 않았다 — 채팅이 첫 브라우저 호출에서 노출).
+    // 커스텀 fetch(options.fetch)는 호출부가 바인딩 책임을 가지므로 그대로 사용한다.
+    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.getToken = options.getToken;
   }
 
