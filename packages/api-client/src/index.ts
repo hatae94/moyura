@@ -13,9 +13,13 @@ export type ProfileResponse = components['schemas']['ProfileResponseDto'];
 // PATCH /me 요청 바디(UpdateNameDto) 타입 별칭(SPEC-MOBILE-004 T-002/T-003).
 export type UpdateNameRequest = components['schemas']['UpdateNameDto'];
 
-// GET /moims 가 반환하는 모임 DTO(MoimResponseDto)의 타입 별칭(SPEC-MOIM-003 REQ-MOIM3-006).
-// 현재 모델은 { id, name, createdBy, createdAt } — date/time/location/status 등 확장 필드는 없다(Exclusions).
+// GET /moims·POST /moims 가 반환하는 모임 DTO(MoimResponseDto)의 타입 별칭(SPEC-MOIM-003 REQ-MOIM3-006).
+// SPEC-MOIM-004 REQ-MOIM4-003: startsAt(string | null) + location(string | null) 을 포함한다(재생성 반영).
 export type MoimResponse = components['schemas']['MoimResponseDto'];
+
+// POST /moims 요청 바디(CreateMoimDto) 타입 별칭(SPEC-MOIM-004 REQ-MOIM4-004).
+// name/nickname 필수 + startsAt(ISO-8601)/location optional.
+export type CreateMoimRequest = components['schemas']['CreateMoimDto'];
 
 /**
  * 인증 토큰 공급자(SPEC-AUTH-001 R-D4 / OD-3).
@@ -64,6 +68,7 @@ export class ApiError extends Error {
  * - getHealth(): /health 편의 메서드 (토큰 불필요 — public)
  * - getMe(): /me 편의 메서드 (Bearer 토큰 필요 — 보호 라우트, R-C1/R-D4)
  * - listMoims(): /moims 편의 메서드 (Bearer 토큰 필요 — 모임 목록, REQ-MOIM3-006)
+ * - createMoim(): POST /moims 편의 메서드 (Bearer 토큰 필요 — 모임 생성, REQ-MOIM4-004)
  * - request(): 임의 경로를 타입 안전하게 호출하는 제네릭 진입점
  */
 export class ApiClient {
@@ -165,6 +170,20 @@ export class ApiClient {
    */
   async listMoims(): Promise<MoimResponse[]> {
     return (await this.request('/moims', 'get')) as MoimResponse[];
+  }
+
+  /**
+   * POST /moims — 모임을 생성한다(SPEC-MOIM-004 REQ-MOIM4-004). 생성자가 owner 멤버십을 갖는다.
+   * body 는 name/nickname(필수) + startsAt(ISO-8601)/location(optional)을 받아 생성된 모임(MoimResponse)을 반환한다.
+   * Bearer 토큰은 getToken 공급자로 주입된다(R-D4 — 토큰은 URL/query 가 아닌 Authorization 헤더로만, R-A9).
+   * 경로 키 `/moims` 는 리터럴이라 generic request 로 타입 안전하다(patchMe 의 body 직렬화 패턴 동일).
+   * name/nickname 이 비어 있거나 startsAt 이 무효 ISO 면 백엔드가 400 → ApiError 로 전파한다.
+   */
+  async createMoim(body: CreateMoimRequest): Promise<MoimResponse> {
+    return (await this.request('/moims', 'post', {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })) as MoimResponse;
   }
 }
 

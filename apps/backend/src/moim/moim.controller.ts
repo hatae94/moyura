@@ -53,7 +53,17 @@ export class MoimController {
     // C-1: ValidationPipe 부재 → name/nickname 비어 있음을 명시적으로 검사(400).
     const name = requireNonEmpty(body?.name, 'name');
     const nickname = requireNonEmpty(body?.nickname, 'nickname');
-    const moim = await this.moimService.createMoim(user.sub, name, nickname);
+    // SPEC-MOIM-004 REQ-MOIM4-002: optional 일정/장소. startsAt 은 존재 시에만 ISO 유효성 최소 검증(400),
+    // 부재/빈 값은 undefined → service 가 null 로 저장한다. location 은 trim 후 빈 값이면 undefined.
+    const startsAt = parseOptionalStartsAt(body?.startsAt);
+    const location = optionalTrimmed(body?.location);
+    const moim = await this.moimService.createMoim(
+      user.sub,
+      name,
+      nickname,
+      startsAt,
+      location,
+    );
     return toMoimDto(moim);
   }
 
@@ -140,11 +150,36 @@ function requireNonEmpty(value: unknown, field: string): string {
   return value.trim();
 }
 
-// Moim 엔티티 → 공개 DTO(createdAt ISO-8601 직렬화).
+// SPEC-MOIM-004 REQ-MOIM4-002: optional startsAt 을 검증·파싱한다(no-ValidationPipe 보완).
+// 부재/빈 문자열 → undefined(null 저장). 존재하면 ISO-8601 로 파싱하고, 무효하면 400(BadRequestException).
+function parseOptionalStartsAt(value: unknown): Date | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return undefined;
+  }
+  const date = new Date(value.trim());
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException('startsAt 은(는) 유효한 ISO-8601 날짜여야 합니다');
+  }
+  return date;
+}
+
+// SPEC-MOIM-004 REQ-MOIM4-002: optional 문자열을 trim 한다. 부재/빈 값 → undefined(null 저장).
+function optionalTrimmed(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}
+
+// Moim 엔티티 → 공개 DTO(createdAt/startsAt ISO-8601 직렬화, location null 허용).
 function toMoimDto(moim: Moim): MoimResponseDto {
   return {
     id: moim.id,
     name: moim.name,
+    // SPEC-MOIM-004 REQ-MOIM4-003: 일정/장소 정직 직렬화(미정이면 null — 허위 값 금지).
+    startsAt: moim.startsAt ? moim.startsAt.toISOString() : null,
+    location: moim.location ?? null,
     createdBy: moim.createdBy,
     createdAt: moim.createdAt.toISOString(),
   };

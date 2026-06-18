@@ -12,6 +12,24 @@ export class MoimResponseDto {
   @ApiProperty({ description: '모임 이름', example: '주말 등산 모임' })
   name!: string;
 
+  // SPEC-MOIM-004 REQ-MOIM4-003: 이벤트 일정(ISO-8601 또는 null). 일정 미정 모임은 null.
+  @ApiProperty({
+    description: '이벤트 일정(ISO-8601) 또는 null(일정 미정)',
+    type: String,
+    nullable: true,
+    example: '2026-07-01T10:00:00.000Z',
+  })
+  startsAt!: string | null;
+
+  // SPEC-MOIM-004 REQ-MOIM4-003: 자유 텍스트 장소 또는 null(장소 미정).
+  @ApiProperty({
+    description: '이벤트 장소(자유 텍스트) 또는 null',
+    type: String,
+    nullable: true,
+    example: '강남역 스타벅스',
+  })
+  location!: string | null;
+
   @ApiProperty({
     description: '생성자 sub(= profile.id)',
     example: '00000000-0000-4000-8000-000000000001',

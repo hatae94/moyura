@@ -22,16 +22,28 @@ function memberKey(moimId: string, userId: string): string {
 function makeTxClient(tables: Tables, ids: { next: () => string }) {
   return {
     moim: {
-      create: jest.fn((arg: { data: { name: string; createdBy: string } }) => {
-        const created: Moim = {
-          id: ids.next(),
-          name: arg.data.name,
-          createdBy: arg.data.createdBy,
-          createdAt: new Date('2026-06-13T00:00:00.000Z'),
-        };
-        tables.moim.set(created.id, created);
-        return Promise.resolve(created);
-      }),
+      // SPEC-MOIM-004: data 에 optional startsAt/location 을 포함한다(전달 검증용).
+      create: jest.fn(
+        (arg: {
+          data: {
+            name: string;
+            createdBy: string;
+            startsAt?: Date | null;
+            location?: string | null;
+          };
+        }) => {
+          const created: Moim = {
+            id: ids.next(),
+            name: arg.data.name,
+            startsAt: arg.data.startsAt ?? null,
+            location: arg.data.location ?? null,
+            createdBy: arg.data.createdBy,
+            createdAt: new Date('2026-06-13T00:00:00.000Z'),
+          };
+          tables.moim.set(created.id, created);
+          return Promise.resolve(created);
+        },
+      ),
     },
     moimMember: {
       create: jest.fn(
@@ -184,6 +196,39 @@ describe('MoimService', () => {
       // 배열 형태가 아니라 콜백(함수) 인자여야 한다.
       expect(typeof transaction.mock.calls[0][0]).toBe('function');
     });
+
+    // SPEC-MOIM-004 AC-2: optional startsAt/location 을 받으면 tx.moim.create data 에 그대로 전달해 영속한다.
+    it('startsAt/location 을 받으면 모임에 영속한다(owner 멤버십 트랜잭션 불변)', async () => {
+      const { prisma, tables } = makePrisma();
+      const service = new MoimService(prisma);
+      const startsAt = new Date('2026-07-01T10:00:00.000Z');
+
+      const moim = await service.createMoim(
+        'sub-U',
+        '이벤트 모임',
+        '호스트',
+        startsAt,
+        '강남역 스타벅스',
+      );
+
+      expect(moim.startsAt).toEqual(startsAt);
+      expect(moim.location).toBe('강남역 스타벅스');
+      // owner 멤버십은 여전히 같은 트랜잭션에서 생성된다(불변).
+      const owner = tables.member.get(`${moim.id}:sub-U`);
+      expect(owner?.role).toBe('owner');
+      expect(owner?.nickname).toBe('호스트');
+    });
+
+    // SPEC-MOIM-004 AC-2: startsAt/location 미전달이면 null 로 저장한다.
+    it('startsAt/location 미전달이면 두 필드를 null 로 저장한다', async () => {
+      const { prisma } = makePrisma();
+      const service = new MoimService(prisma);
+
+      const moim = await service.createMoim('sub-U', '모임', '호스트');
+
+      expect(moim.startsAt).toBeNull();
+      expect(moim.location).toBeNull();
+    });
   });
 
   // 테스트용 시드 헬퍼: 모임 1개 + owner/멤버 구성.
@@ -195,6 +240,8 @@ describe('MoimService', () => {
     const moim: Moim = {
       id: 'moim-A',
       name: '모임 A',
+      startsAt: null,
+      location: null,
       createdBy: 'sub-owner',
       createdAt: new Date('2026-06-13T00:00:00.000Z'),
     };
@@ -336,18 +383,24 @@ describe('MoimService', () => {
       const moimA: Moim = {
         id: 'moim-A',
         name: '모임 A',
+        startsAt: null,
+        location: null,
         createdBy: 'sub-owner',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
       };
       const moimB: Moim = {
         id: 'moim-B',
         name: '모임 B',
+        startsAt: null,
+        location: null,
         createdBy: 'sub-U',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
       };
       const moimC: Moim = {
         id: 'moim-C',
         name: '모임 C',
+        startsAt: null,
+        location: null,
         createdBy: 'sub-other',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
       };

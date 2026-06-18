@@ -46,10 +46,14 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
     moimId: string,
     ownerSub: string,
     extraMembers: { userId: string; nickname: string }[] = [],
+    // SPEC-MOIM-004 AC-3: 일정/장소를 선택적으로 시드한다(값 있는 모임 vs null 모임 혼합 검증).
+    event: { startsAt?: Date; location?: string } = {},
   ): void {
     tables.moim.set(moimId, {
       id: moimId,
       name: `모임 ${moimId}`,
+      startsAt: event.startsAt ?? null,
+      location: event.location ?? null,
       createdBy: ownerSub,
       createdAt: new Date('2026-06-13T00:00:00.000Z'),
     });
@@ -88,12 +92,22 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
         (cb: (tx: unknown) => Promise<unknown>) =>
           cb({
             moim: {
+              // SPEC-MOIM-004: data 에 optional startsAt/location 을 포함한다.
               create: jest.fn(
-                (arg: { data: { name: string; createdBy: string } }) => {
+                (arg: {
+                  data: {
+                    name: string;
+                    createdBy: string;
+                    startsAt?: Date | null;
+                    location?: string | null;
+                  };
+                }) => {
                   seq += 1;
                   const created: Moim = {
                     id: `moim-${seq}`,
                     name: arg.data.name,
+                    startsAt: arg.data.startsAt ?? null,
+                    location: arg.data.location ?? null,
                     createdBy: arg.data.createdBy,
                     createdAt: new Date('2026-06-13T00:00:00.000Z'),
                   };
@@ -264,12 +278,87 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
       .send({ name: '주말 모임', nickname: '호스트' })
       .expect(201);
 
-    const created = res.body as { id: string; name: string; createdBy: string };
+    const created = res.body as {
+      id: string;
+      name: string;
+      createdBy: string;
+      startsAt: string | null;
+      location: string | null;
+    };
     expect(created.name).toBe('주말 모임');
     expect(created.createdBy).toBe(sub);
+    // 일정/장소 미포함 → null (SPEC-MOIM-004 AC-2).
+    expect(created.startsAt).toBeNull();
+    expect(created.location).toBeNull();
     const owner = tables.member.get(memberKey(created.id, sub));
     expect(owner?.role).toBe('owner');
     expect(owner?.nickname).toBe('호스트');
+  });
+
+  // ── SPEC-MOIM-004 AC-2: 일정/장소 포함 생성 201 + 두 필드 영속 ──
+  it('AC-2: POST /moims (startsAt+location) → 201 + 두 필드 영속/직렬화', async () => {
+    const sub = uniqueSub();
+    const token = await tokenFor(sub);
+
+    const res = await request(app.getHttpServer())
+      .post('/moims')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '이벤트 모임',
+        nickname: '호스트',
+        startsAt: '2026-07-01T10:00:00.000Z',
+        location: '강남역 스타벅스',
+      })
+      .expect(201);
+
+    const created = res.body as { startsAt: string | null; location: string | null };
+    expect(created.startsAt).toBe('2026-07-01T10:00:00.000Z');
+    expect(created.location).toBe('강남역 스타벅스');
+  });
+
+  // ── SPEC-MOIM-004 AC-2(Unwanted): 무효 startsAt → 400 ──
+  it('AC-2: POST /moims (무효 startsAt) → 400', async () => {
+    const token = await tokenFor(uniqueSub());
+    await request(app.getHttpServer())
+      .post('/moims')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: '모임', nickname: '호스트', startsAt: 'not-a-date' })
+      .expect(400);
+  });
+
+  // ── SPEC-MOIM-004 AC-3: 목록/상세 응답에 일정/장소 포함(값 있는 모임 + null 모임 혼합) ──
+  it('AC-3: GET /moims·GET /moims/:id 응답에 startsAt/location 포함(값/null 혼합)', async () => {
+    const ownerSub = uniqueSub();
+    seedMoimWithOwner('moim-EVT', ownerSub, [], {
+      startsAt: new Date('2026-07-01T10:00:00.000Z'),
+      location: '강남역 스타벅스',
+    });
+    seedMoimWithOwner('moim-NIL', ownerSub); // 일정/장소 없는 모임
+    const token = await tokenFor(ownerSub);
+
+    // 목록: 두 모임 모두 두 필드를 정확히 포함한다.
+    const list = await request(app.getHttpServer())
+      .get('/moims')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const byId = new Map(
+      (list.body as { id: string; startsAt: string | null; location: string | null }[]).map(
+        (m) => [m.id, m],
+      ),
+    );
+    expect(byId.get('moim-EVT')?.startsAt).toBe('2026-07-01T10:00:00.000Z');
+    expect(byId.get('moim-EVT')?.location).toBe('강남역 스타벅스');
+    expect(byId.get('moim-NIL')?.startsAt).toBeNull();
+    expect(byId.get('moim-NIL')?.location).toBeNull();
+
+    // 상세: 값 있는 모임도 정확히 포함한다.
+    const detail = await request(app.getHttpServer())
+      .get('/moims/moim-EVT')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const one = detail.body as { startsAt: string | null; location: string | null };
+    expect(one.startsAt).toBe('2026-07-01T10:00:00.000Z');
+    expect(one.location).toBe('강남역 스타벅스');
   });
 
   // ── AC-edge: 빈/누락 nickname·name → 400 ──

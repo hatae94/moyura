@@ -826,6 +826,16 @@
             "type": "string",
             "description": "생성자의 모임별 표시 이름(host nickname, 비어 있을 수 없음). owner 멤버십에 주입된다.",
             "example": "호스트"
+          },
+          "startsAt": {
+            "type": "string",
+            "description": "이벤트 일정(ISO-8601, optional). 부재/빈 값이면 일정 미정.",
+            "example": "2026-07-01T10:00:00.000Z"
+          },
+          "location": {
+            "type": "string",
+            "description": "이벤트 장소(자유 텍스트, optional).",
+            "example": "강남역 스타벅스"
           }
         },
         "required": [
@@ -846,6 +856,18 @@
             "description": "모임 이름",
             "example": "주말 등산 모임"
           },
+          "startsAt": {
+            "type": "string",
+            "description": "이벤트 일정(ISO-8601) 또는 null(일정 미정)",
+            "nullable": true,
+            "example": "2026-07-01T10:00:00.000Z"
+          },
+          "location": {
+            "type": "string",
+            "description": "이벤트 장소(자유 텍스트) 또는 null",
+            "nullable": true,
+            "example": "강남역 스타벅스"
+          },
           "createdBy": {
             "type": "string",
             "description": "생성자 sub(= profile.id)",
@@ -860,6 +882,8 @@
         "required": [
           "id",
           "name",
+          "startsAt",
+          "location",
           "createdBy",
           "createdAt"
         ]

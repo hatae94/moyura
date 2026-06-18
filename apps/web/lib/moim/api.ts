@@ -6,10 +6,13 @@
 // 상세/멤버 조회만 담는다. chat 모듈 의존을 피해 독립 헬퍼로 둔다(상세는 chat realtime 비의존 — Exclusions).
 import { ApiError, type ApiClient } from "@moyura/api-client";
 
-// 백엔드 MoimResponseDto — 현재 모델은 { id, name, createdBy, createdAt } 뿐이다(스키마 확장 없음 — Exclusions).
+// 백엔드 MoimResponseDto — SPEC-MOIM-004 로 startsAt/location(이벤트 일정/장소)이 additive 추가됐다.
 export interface MoimDetail {
   id: string;
   name: string;
+  // SPEC-MOIM-004 REQ-MOIM4-003: 이벤트 일정(ISO-8601) 또는 null(일정 미정), 장소 또는 null.
+  startsAt: string | null;
+  location: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -46,4 +49,26 @@ export async function getMoimMembers(
 /** 모임 상세 조회 실패를 status 로 분류한다(403 비멤버 / 404 미존재 분기 — 토큰/오류 상세 비노출, REQ-MOIM3-005). */
 export function moimErrorStatus(err: unknown): number {
   return err instanceof ApiError ? err.status : 0;
+}
+
+/**
+ * 이벤트 일정을 한국어로 정직 표시한다(SPEC-MOIM-004 REQ-MOIM4-006). 서버/클라이언트 컴포넌트가 공유한다.
+ * - startsAt 이 null/빈 값/무효 → "일정 미정"(허위 값 금지).
+ * - 유효 ISO → "YYYY년 M월 D일 오전/오후 H:MM" 형식.
+ */
+export function formatMoimSchedule(startsAt: string | null): string {
+  if (!startsAt) {
+    return "일정 미정";
+  }
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) {
+    return "일정 미정";
+  }
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }

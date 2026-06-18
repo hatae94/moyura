@@ -9,9 +9,11 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, ChevronRight, Plus } from "lucide-react";
+import { Calendar, ChevronRight, MapPin, Plus } from "lucide-react";
 
 import type { MoimResponse } from "@moyura/api-client";
+
+import { formatMoimSchedule } from "@/lib/moim/api";
 
 export interface HomeTabProps {
   /** 서버에서 세션 user 로 도출한 표시 이름(인사말 헤더). */
@@ -34,9 +36,10 @@ function formatCreatedDate(createdAt: string): string {
 }
 
 /**
- * 실 모임 카드 — 이름 + 생성일 표시, /home/{id} 상세 링크.
+ * 실 모임 카드 — 이름 + 일정 + 장소 + 생성일 표시, /home/{id} 상세 링크.
  *
- * mock 의 풍부한 필드(시간/장소/상태 배지/멤버 수)는 실 데이터 출처가 없어 렌더하지 않는다(§5 정직성 degrade).
+ * SPEC-MOIM-004 REQ-MOIM4-006(정직 표시): 일정(startsAt)은 있으면 한국어 포맷, 없으면 "일정 미정"으로
+ * 표시한다(허위 값 금지). 장소(location)는 있을 때만 라인을 렌더하고 없으면 생략한다(빈/허위 값 금지).
  * 카드 레이아웃 셸(rounded-2xl border, ChevronRight 진입 어포던스)은 유지해 시각적 일관성을 보존한다.
  */
 function MeetupCard({ moim }: { moim: MoimResponse }) {
@@ -50,8 +53,20 @@ function MeetupCard({ moim }: { moim: MoimResponse }) {
           <h3 className="flex-1 truncate font-bold text-card-foreground">{moim.name}</h3>
           <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
         </div>
+        {/* 일정 — startsAt 있으면 포맷, 없으면 "일정 미정"(정직 표시). */}
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Calendar size={14} />
+          <span>{formatMoimSchedule(moim.startsAt)}</span>
+        </div>
+        {/* 장소 — location 있을 때만 라인 렌더(없으면 생략). */}
+        {moim.location ? (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <MapPin size={14} />
+            <span className="truncate">{moim.location}</span>
+          </div>
+        ) : null}
+        {/* 개설일(보존 — 실 데이터 출처 있는 필드). */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
           <span>{formatCreatedDate(moim.createdAt)} 개설</span>
         </div>
       </div>
@@ -59,12 +74,12 @@ function MeetupCard({ moim }: { moim: MoimResponse }) {
   );
 }
 
-/** 새 모임 만들기 CTA 카드 — 비기능 버튼(Exclusions: 실 모임 생성 없음). */
+/** 새 모임 만들기 CTA 카드 — /moims/new 생성 폼으로 이동(SPEC-MOIM-004 REQ-MOIM4-005, 기능형 Link). */
 function CreateMeetupButton() {
   return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-between rounded-2xl bg-primary p-5 text-primary-foreground shadow-lg shadow-primary/20"
+    <Link
+      href="/moims/new"
+      className="flex w-full items-center justify-between rounded-2xl bg-primary p-5 text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90"
     >
       <span className="flex flex-col text-left">
         <span className="text-lg font-bold">새 모임 만들기</span>
@@ -73,7 +88,7 @@ function CreateMeetupButton() {
       <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
         <Plus size={22} />
       </span>
-    </button>
+    </Link>
   );
 }
 

@@ -10,7 +10,15 @@
 // 약화하지 않는다), 양쪽 모두 notFound() 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, Crown, MessageCircle, User, Users } from "lucide-react";
+import {
+  Calendar,
+  ChevronRight,
+  Crown,
+  MapPin,
+  MessageCircle,
+  User,
+  Users,
+} from "lucide-react";
 
 import { createApiClient } from "@moyura/api-client";
 
@@ -19,6 +27,7 @@ import { requireNamedSession } from "@/lib/auth/require-named-session";
 import {
   type MoimDetail,
   type MoimMember,
+  formatMoimSchedule,
   getMoim,
   getMoimMembers,
   moimErrorStatus,
@@ -94,10 +103,22 @@ export default async function MoimDetailPage({
 
   return (
     <div className="flex flex-1 flex-col bg-background">
-      {/* 헤더: 모임 이름 + 생성일(실 데이터 출처 있는 필드만 — date/location/status 미표시, Exclusions). */}
+      {/* 헤더: 모임 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일. */}
       <header className="px-5 pb-5 pt-12">
         <h1 className="text-2xl font-extrabold text-foreground">{moim.name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{createdDate} 개설</p>
+        {/* 일정 — startsAt 있으면 포맷, 없으면 "일정 미정"(허위 값 금지). */}
+        <div className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Calendar size={15} className="text-primary" />
+          <span>{formatMoimSchedule(moim.startsAt)}</span>
+        </div>
+        {/* 장소 — location 있을 때만 라인 렌더(없으면 생략). */}
+        {moim.location ? (
+          <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <MapPin size={15} className="text-primary" />
+            <span>{moim.location}</span>
+          </div>
+        ) : null}
+        <p className="mt-1 text-xs text-muted-foreground/70">{createdDate} 개설</p>
       </header>
 
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6">

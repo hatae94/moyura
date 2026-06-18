@@ -17,11 +17,19 @@ export class MoimService {
   // @MX:REASON: moim과 owner moim_member는 항상 함께 존재해야 한다는 불변식의 단일 출처. owner row가
   // moim.id에 의존하므로 인터랙티브 $transaction(tx) 콜백을 쓴다(배열 형태 불가). createdBy/userId는
   // 가드-검증된 sub만 받는다(mass-assignment 차단 — profile 패턴 동일).
-  async createMoim(sub: string, name: string, nickname: string): Promise<Moim> {
+  // SPEC-MOIM-004 REQ-MOIM4-002: optional startsAt(Date)/location 을 additive 로 받아 영속한다.
+  // 미전달이면 Prisma 가 nullable 컬럼을 null 로 저장한다(트랜잭션 구조·owner 멤버십 생성 불변).
+  async createMoim(
+    sub: string,
+    name: string,
+    nickname: string,
+    startsAt?: Date,
+    location?: string,
+  ): Promise<Moim> {
     return this.prisma.$transaction(async (tx) => {
-      // 1) 모임 생성 — id는 DB가 발급(@default(uuid)).
+      // 1) 모임 생성 — id는 DB가 발급(@default(uuid)). startsAt/location 은 additive(미전달 시 null).
       const moim = await tx.moim.create({
-        data: { name, createdBy: sub },
+        data: { name, createdBy: sub, startsAt, location },
       });
       // 2) 생성자 owner 멤버십 — moim.id에 의존하므로 같은 트랜잭션 내 순차 생성.
       await tx.moimMember.create({

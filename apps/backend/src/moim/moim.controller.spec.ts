@@ -13,6 +13,18 @@ const USER: VerifiedUser = { sub: 'sub-U', role: 'authenticated' };
 const MOIM: Moim = {
   id: 'moim-A',
   name: '모임 A',
+  startsAt: null,
+  location: null,
+  createdBy: 'sub-U',
+  createdAt: new Date('2026-06-13T00:00:00.000Z'),
+};
+
+// SPEC-MOIM-004 AC-2/AC-3: 일정/장소가 채워진 모임(직렬화 검증용).
+const MOIM_WITH_EVENT: Moim = {
+  id: 'moim-E',
+  name: '이벤트 모임',
+  startsAt: new Date('2026-07-01T10:00:00.000Z'),
+  location: '강남역 스타벅스',
   createdBy: 'sub-U',
   createdAt: new Date('2026-06-13T00:00:00.000Z'),
 };
@@ -41,7 +53,7 @@ function makeService(): {
 
 describe('MoimController', () => {
   describe('POST /moims (createMoim, REQ-MOIM-004 / AC-1)', () => {
-    it('검증된 sub + name + nickname으로 createMoim을 호출하고 DTO를 반환한다', async () => {
+    it('검증된 sub + name + nickname으로 createMoim을 호출하고 DTO를 반환한다(일정/장소 미포함 → null)', async () => {
       const { service, mocks } = makeService();
       const controller = new MoimController(service);
 
@@ -50,17 +62,88 @@ describe('MoimController', () => {
         nickname: '호스트',
       });
 
+      // SPEC-MOIM-004 AC-2: startsAt/location 미포함 → service 에 undefined 전달.
       expect(mocks.createMoim).toHaveBeenCalledWith(
         'sub-U',
         '모임 A',
         '호스트',
+        undefined,
+        undefined,
       );
       expect(res).toEqual({
         id: 'moim-A',
         name: '모임 A',
+        startsAt: null,
+        location: null,
         createdBy: 'sub-U',
         createdAt: '2026-06-13T00:00:00.000Z',
       });
+    });
+
+    // SPEC-MOIM-004 AC-2: optional 일정/장소 포함 생성 → service 가 Date/문자열로 받고 DTO 가 두 필드 직렬화.
+    it('startsAt(ISO)/location 포함 생성 시 Date/문자열로 service 에 전달하고 DTO 에 두 필드를 반환한다', async () => {
+      const { service, mocks } = makeService();
+      mocks.createMoim.mockResolvedValueOnce(MOIM_WITH_EVENT);
+      const controller = new MoimController(service);
+
+      const res = await controller.create(USER, {
+        name: '이벤트 모임',
+        nickname: '호스트',
+        startsAt: '2026-07-01T10:00:00.000Z',
+        location: '강남역 스타벅스',
+      });
+
+      expect(mocks.createMoim).toHaveBeenCalledWith(
+        'sub-U',
+        '이벤트 모임',
+        '호스트',
+        new Date('2026-07-01T10:00:00.000Z'),
+        '강남역 스타벅스',
+      );
+      expect(res).toEqual({
+        id: 'moim-E',
+        name: '이벤트 모임',
+        startsAt: '2026-07-01T10:00:00.000Z',
+        location: '강남역 스타벅스',
+        createdBy: 'sub-U',
+        createdAt: '2026-06-13T00:00:00.000Z',
+      });
+    });
+
+    // SPEC-MOIM-004 AC-2(Unwanted): startsAt 이 유효 ISO 가 아니면 400, service 미호출.
+    it('startsAt 이 무효 문자열이면 400(BadRequestException), 서비스 미호출', async () => {
+      const { service, mocks } = makeService();
+      const controller = new MoimController(service);
+
+      await expect(
+        controller.create(USER, {
+          name: '모임 A',
+          nickname: '호스트',
+          startsAt: 'not-a-date',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mocks.createMoim).not.toHaveBeenCalled();
+    });
+
+    // SPEC-MOIM-004 AC-2: 빈 location 은 검증 대상이 아니라 null 로 흘러간다(undefined 전달).
+    it('빈 startsAt/location 은 검증하지 않고 service 에 undefined 로 전달한다', async () => {
+      const { service, mocks } = makeService();
+      const controller = new MoimController(service);
+
+      await controller.create(USER, {
+        name: '모임 A',
+        nickname: '호스트',
+        startsAt: '',
+        location: '   ',
+      });
+
+      expect(mocks.createMoim).toHaveBeenCalledWith(
+        'sub-U',
+        '모임 A',
+        '호스트',
+        undefined,
+        undefined,
+      );
     });
 
     it('name이 빈 문자열이면 400(BadRequestException), 서비스 미호출', async () => {
@@ -108,6 +191,8 @@ describe('MoimController', () => {
         {
           id: 'moim-A',
           name: '모임 A',
+          startsAt: null,
+          location: null,
           createdBy: 'sub-U',
           createdAt: '2026-06-13T00:00:00.000Z',
         },

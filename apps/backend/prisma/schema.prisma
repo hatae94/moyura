@@ -36,6 +36,10 @@ model Profile {
 model Moim {
   id        String       @id @default(uuid())
   name      String
+  // SPEC-MOIM-004 REQ-MOIM4-001: 이벤트 일정/장소(additive nullable). 기존 row 는 두 값 모두 null 이며
+  // 무중단 마이그레이션으로 추가된다. 일정 없는/장소 없는 모임도 유효(생성 시 optional — 정직 표시 대상).
+  startsAt  DateTime?    @map("starts_at")
+  location  String?
   // 생성자 sub(= profile.id). owner 멤버십은 MoimMember(role=owner)에 별도 기록된다(REQ-MOIM-004).
   createdBy String       @map("created_by")
   createdAt DateTime     @default(now()) @map("created_at")
