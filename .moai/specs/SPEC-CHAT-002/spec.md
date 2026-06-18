@@ -1,9 +1,9 @@
 ---
 id: SPEC-CHAT-002
-version: "0.2.0"
+version: "0.3.0"
 status: in-progress
 created: 2026-06-11
-updated: 2026-06-13
+updated: 2026-06-18
 author: hatae
 priority: medium
 issue_number: 0
@@ -15,6 +15,15 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-18 (v0.3.0): firebase-admin 백엔드 배선 + 인증·FCM 도달 라이브 검증 — status in-progress 유지.
+  - `FIREBASE_CREDENTIALS` 배선 완료: `credentials/GoogleServiceAccount.json`(Firebase 서비스 계정, `project_id=moyura-498500`)을 `apps/backend/.env`의 `FIREBASE_CREDENTIALS` env에 단일 행 JSON 문자열로 주입(gitignore — 비밀 키 미커밋). `FcmSender`는 `JSON.parse(FIREBASE_CREDENTIALS)` → `admin.credential.cert()` 경로로 초기화.
+  - firebase-admin 초기화 성공 확인: 백엔드 재시작 후 "FIREBASE_CREDENTIALS 미설정 no-op" 경고 소멸 + init-failure 경고 없음. no-op 경로 해제, 실 FCM 발송 활성화.
+  - 라이브 발송 경로 검증(standalone firebase-admin + 서비스 계정, `sendEachForMulticast`): admin 초기화 OK(project `moyura-498500`), 요청이 Google 인증을 통과해 FCM에 실제 도달함. 가짜 토큰에 대해 per-token 실패 코드 `messaging/mismatched-credential` 반환 — "Firebase Cloud Messaging API has not been used in project moyura-498500 before or it is disabled." **이는 서비스 계정 자격증명이 유효하며 백엔드 발송 경로가 FCM 경계까지 정상 동작함을 증명한다**. 실패 원인은 자격증명 오류가 아니라 FCM API 자체가 비활성화됨.
+  - 정밀 잔여 게이트 3개 (아래 §8 "보류 — 잔여 게이트" 참조):
+    1. [사용자 — Google Cloud Console] project `moyura-498500`에서 Cloud Messaging API(`fcm.googleapis.com`) 활성화 필요.
+    2. [사용자 — 프로젝트 일관성] Firebase 프로젝트 불일치: 서비스 계정은 `moyura-498500`, 모바일 클라이언트 config(`credentials/GoogleService-Info.dev.plist`)는 `moyura-6c430`(`PROJECT_ID=moyura-6c430`). 종단 FCM을 위해 서버 서비스 계정과 모바일 클라이언트 config가 **동일 Firebase 프로젝트**여야 함. `moyura-498500`용 `GoogleService-Info.plist` 확보 + `app.json` `ios.googleServicesFile` 배선 필요(현재 `app.json`에 `googleServicesFile`/FCM 배선 없음 — 잘못된 프로젝트의 plist를 의도적으로 추가하지 않음).
+    3. [실기기] AC-5 실기기 FCM→APNs 백그라운드 수신 + 알림 탭은 물리적 iOS 기기 필요. iOS 시뮬레이터는 실 FCM/APNs 라운드트립 불가(`xcrun simctl push` 주입 페이로드와 다름).
+  - 서버 절반 기능 완료: firebase-admin 배선 + 인증 + FCM 도달가능성 라이브 검증. `PushListener` → `FcmSender` 통합 로직은 기존 jest 검증 완료. 클라이언트 설정(게이트 1·2)과 실기기 수신(게이트 3) 해소 시 `completed` 전환 가능.
 - 2026-06-13 (v0.2.0): run 자동화 가능 표면 완료 — status draft → in-progress.
   - DeviceToken 모델 + 마이그레이션(`20260614_add_device_token`) + 등록/해제 REST API(owner-scoped IDOR 차단) 구현.
   - PushListener(`@OnEvent` 단방향 구독, sender/게스트 제외, 서버 측 nickname 조회) + FcmSender(firebase-admin, FIREBASE_CREDENTIALS 부재 시 graceful no-op) 구현.
@@ -179,9 +188,16 @@ ChatService.sendMessage()
 - 대응: `prisma migrate resolve --applied 20260613175232_add_chat` 실행 후 `20260614_add_device_token` 마이그레이션 `db execute` + `migrate resolve --applied`로 적용.
 - `prisma migrate status`: clean(드리프트 없음, 2026-06-13 기준).
 
-### 보류 — device-gated AC-5 (T-011)
+### 보류 — 잔여 게이트 (v0.3.0 기준)
 
-- **Firebase 프로젝트 셋업**: 서비스 계정 키(`FIREBASE_CREDENTIALS`) + `google-services.json`(Android) + APNs 자격증명(iOS, EAS credentials) 미설정.
-- **dev build 필요**: Expo Go는 원격 푸시 불가(알려진 제약). EAS dev build 또는 `expo run:ios`/`expo run:android` 필요.
-- **실기기 수동 검증**: 앱 백그라운드 상태에서 메시지 전송 → FCM 수신(REQ-PUSH-005) + 알림 탭 → 앱 열림 + 대상 모임 WebView URL(REQ-PUSH-007).
-- 이 검증 완료 전까지 **status = in-progress 유지**.
+**완료된 서버 절반**: `FIREBASE_CREDENTIALS` 배선 + firebase-admin 초기화 + Google 인증 통과 + FCM 도달가능성 라이브 검증(2026-06-18). `PushListener` → `FcmSender` 통합 jest 검증 기완료. 서버 발송 경로는 기능적으로 완성.
+
+**잔여 게이트 3개** (이 중 1·2는 사용자 액션, 3은 실기기 필요):
+
+1. **[사용자 — Google Cloud Console] FCM API 활성화 필요**: Google Cloud Console → project `moyura-498500` → API 및 서비스 → `Firebase Cloud Messaging API` (`fcm.googleapis.com`) 활성화. 현재 모든 FCM 발송이 `messaging/mismatched-credential: Firebase Cloud Messaging API has not been used in project moyura-498500 before or it is disabled.`로 실패. 서비스 계정 자격증명 자체는 유효함(Google 인증 통과 확인됨).
+
+2. **[사용자 — 프로젝트 일관성] Firebase 프로젝트 불일치 해소 필요**: 서비스 계정 `project_id=moyura-498500` vs 모바일 클라이언트 `credentials/GoogleService-Info.dev.plist` `PROJECT_ID=moyura-6c430`. 종단 FCM 동작을 위해 동일 Firebase 프로젝트 필요. 사용자 액션: `moyura-498500` Firebase 프로젝트의 `GoogleService-Info.plist` 확보 → `apps/mobile/credentials/`에 배치 → `app.json` `ios.googleServicesFile` + expo-notifications FCM config 배선. `google-services.json`(Android) + APNs 자격증명(iOS, EAS credentials)도 동일 프로젝트 기준으로 설정.
+
+3. **[실기기] dev build 백그라운드 수신·탭 수동 검증 필요**: Expo Go는 원격 푸시 불가. EAS dev build 또는 `expo run:ios`. 앱 백그라운드 상태에서 메시지 전송 → FCM 수신(REQ-PUSH-005) + 알림 탭 → 앱 열림 + 대상 모임 WebView URL(REQ-PUSH-007). 물리적 iOS 기기 필요(iOS 시뮬레이터는 실 FCM/APNs 라운드트립 불가).
+
+이 3개 게이트 완료 전까지 **status = in-progress 유지**.
