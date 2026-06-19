@@ -1,7 +1,7 @@
 ---
 id: SPEC-MOIM-006
-version: 0.1.0
-status: draft
+version: 0.2.0
+status: in-progress
 created: 2026-06-20
 updated: 2026-06-20
 author: hatae
@@ -13,6 +13,7 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-20 (v0.2.0): 구현 완료 + 라이브 검증(AC-1~7 자동 게이트 + 데스크톱·API 라이브) → status in-progress(device-gated). **구현 요약**: (1) 백엔드 — `Poll.multiSelect Boolean @default(false)` additive 추가, `PollVote` 복합 PK `(pollId,userId)` → `(pollId,optionId,userId)` 비파괴 마이그레이션(`add_poll_multi_select` — 기존 단일 선택 표 row 손실 0 검증, 1 row 보존 / PK 위반 0). `PollService.vote` 단일(deleteMany+create 교체)/다중(findUnique→토글) 분기, `aggregatePolls` myVote→myVotes 목록 변환. `PollResponseDto`(`multiSelect`+`myVotes[]`, `myVote` 제거), `CreatePollDto.multiSelect?`. jest 269/269(+11, 단일 선택 회귀: 재투표 교체·총 1표 불변 케이스 포함). tsc 0(backend/web/api-client). (2) api-client — `PollResponse`(`multiSelect`+`myVotes[]`) + `CreatePollRequest`(`multiSelect`) 타입 갱신, `schema.d.ts` 재생성. (3) 웹 — 생성 폼 "여러 개 선택 허용" 토글, 다중 선택 poll 체크박스형 렌더(토글·여러 선택지 동시 강조·myVotes.includes), 단일 선택 무변경(버튼·교체). myVote 전 소비처 → myVotes 마이그레이션(api-client 타입·lib/moim/polls.ts·polls-section.tsx). Server Component + Client 섬 + Server Action 구조 보존. web lint/build 0. **라이브 검증(2026-06-20)**: 데스크톱 브라우저 + API 실 세션, 모임 "주말 등산 모임". 다중 선택 poll "가능한 날짜 모두 선택"(토요일/일요일/월요일) 생성 → 토요일+월요일 토글(BOTH 강조, 50%/50%, 총 2표) → 토글 off 동작 확인. 단일 선택 poll "다음 산행 어디로 갈까요?" 버튼 렌더·교체 동작(총 1표 불변) 회귀 0 확인. API: myVotes 목록 증가(2)/감소(1) 토글 확인. AC-2~7(자동 게이트)·AC-3(단일 회귀)·AC-4(다중 토글)·AC-5(myVotes)·AC-6(웹 체크박스 UI) 라이브 PASS. AC-1(모델+비파괴 PK 마이그레이션) backend jest + migrate clean PASS. **미완료 device-gated**: 모바일 WebView poll 인터랙션(Server Action + revalidatePath WebView 컨텍스트)이 iOS 시뮬레이터에서 미검증. 자동 게이트 단독으로 completed 전환 불가(프로젝트 메모리 규칙: mobile-spec-device-gated). mobile vitest 215/215(회귀 0 — 모바일 무변경).
 - 2026-06-20 (v0.1.0): 최초 draft. SPEC-MOIM-005(단일 선택 투표)의 직속 후속. MOIM-005 가 만든 poll 도메인(`Poll`/`PollOption`/`PollVote`, `@Controller('moims/:id/polls')`, 단일 투표 = 교체, 웹 Server Component + Client 섬 + Server Action)을 verified 기준으로 확장한다. **WHY**: 모임에서 가장 자주 쓰이는 투표는 날짜/가용성 투표("가능한 날짜 모두 선택")이며, 이는 멤버당 **다수 선택**을 필요로 한다 — 단일 선택(현재)으로는 표현할 수 없다. 본 SPEC은 **poll 별 opt-in 다중 선택**을 추가한다. 핵심 결정: (1) **모델** — `Poll.multiSelect Boolean @default(false)` additive 추가(기존 row 는 모두 false 로 단일 선택 보존), `PollVote` 복합 PK 를 `(pollId, userId)` → `(pollId, optionId, userId)` 로 변경해 한 멤버가 한 poll 에 옵션당 한 표씩 0..N 표를 보유 가능하게 한다. **데이터 안전성**: 기존 단일 선택 표는 (pollId,userId) 당 정확히 한 row 이므로 그 (pollId,optionId,userId) 조합이 이미 유일하다 → 새 PK 를 NO data loss 로 만족한다(비파괴: migrate diff/db execute/migrate resolve/verify clean 로 정확 SQL 생성·적용). (2) **투표 의미론** — `PollService.vote` 가 `poll.multiSelect` 로 분기한다. 단일(false)은 **변경 없음**(표 교체, 최대 1). 다중(true)은 **토글**(없으면 추가/있으면 제거, 0..N). 엔드포인트는 `POST .../vote {optionId}` 그대로(단일→교체, 다중→토글). (3) **읽기 모델 변경(genuine break)** — 호출자 자신의 선택이 단일 `myVote: string | null` 에서 **목록 `myVotes: string[]`** 로 바뀐다. 이는 PollResponseDto·api-client `PollResponse`·web `PollWithResults`·web `OptionRow` 강조 비교(`myVote === option.id` → `myVotes.includes(option.id)`)를 모두 깨는 변경이며, 마이그레이션 게이트로 고정한다. (4) **생성** — `POST /moims/:id/polls` 가 optional `multiSelect`(기본 false)를 받는다. 단일 선택 생성은 무변경. (5) **웹** — 생성 폼에 "여러 개 선택 허용" 토글 추가, 다중 선택 poll 은 체크박스형(토글, 다중 강조) 렌더, 단일 선택 poll 은 무변경(교체). 모두 Meetup 오렌지 토큰 + Server Component/Client 섬/Server Action 구조 보존. (6) **api-client** — 백엔드 OpenAPI 변경 반영해 `schema.d.ts` 재생성. **스코프 결정 기록**: (a) multiSelect 는 **poll 별 opt-in** 플래그(전역 모드 아님); (b) PK 변경은 데이터 안전(기존 표 보존, 비파괴); (c) 단일=교체 / 다중=토글, 엔드포인트 동일; (d) 마감/종료·수정/삭제·익명·실시간·날짜 특수화·모바일 코드는 모두 **제외**(§4) — 마감·실시간은 향후 후속.
 
 ---

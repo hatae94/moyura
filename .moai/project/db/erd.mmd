@@ -1,6 +1,6 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-06-19 (SPEC-MOIM-005 sync — Poll/PollOption/PollVote 3 테이블 추가)
+%% 최종 갱신: 2026-06-20 (SPEC-MOIM-006 sync — Poll.multiSelect 추가 + PollVote PK 변경)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
@@ -58,6 +58,7 @@ erDiagram
         string question "투표 질문"
         string created_by "생성자 sub (= PROFILE.id)"
         timestamp created_at
+        boolean multi_select "poll별 다중 선택 opt-in (default false — SPEC-MOIM-006)"
     }
 
     POLL_OPTION {
@@ -68,8 +69,8 @@ erDiagram
 
     POLL_VOTE {
         string poll_id PK,FK "→ POLL.id onDelete Cascade"
+        string option_id PK,FK "→ POLL_OPTION.id onDelete Cascade (SPEC-MOIM-006 PK 변경)"
         string user_id PK "투표자 sub (= PROFILE.id)"
-        string option_id FK "→ POLL_OPTION.id onDelete Cascade"
         timestamp created_at
     }
 

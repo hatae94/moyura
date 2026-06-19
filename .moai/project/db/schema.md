@@ -1,9 +1,9 @@
 ---
 engine: PostgreSQL 17.x (Supabase 관리형)
 orm: Prisma 7.8.0
-last_synced_at: 2026-06-19
+last_synced_at: 2026-06-20
 manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
-spec: SPEC-MOIM-005 sync (Poll/PollOption/PollVote 3 테이블 추가)
+spec: SPEC-MOIM-006 sync (Poll.multiSelect 컬럼 추가 + PollVote PK 변경 — add_poll_multi_select 비파괴 마이그레이션)
 ---
 
 
@@ -24,9 +24,9 @@ spec: SPEC-MOIM-005 sync (Poll/PollOption/PollVote 3 테이블 추가)
 | `moim_invite` | 초대 링크 — token PK, moim_id FK, 만료·폐기·사용 횟수 관리 (SPEC-MOIM-002) |
 | `chat_message` | 모임 채팅 메시지 — BigInt PK, moim_id FK, RLS default-deny, content CHECK(1..2000) (SPEC-CHAT-001) |
 | `device_token` | FCM 디바이스 토큰 레지스트리 — token PK, userId(=profile.id), platform, upsert 중복 없음 (SPEC-CHAT-002) |
-| `poll` | 모임 투표 — uuid PK, moimId FK→moim Cascade, question, createdBy, createdAt (SPEC-MOIM-005) |
+| `poll` | 모임 투표 — uuid PK, moimId FK→moim Cascade, question, createdBy, createdAt, multiSelect(boolean, SPEC-MOIM-006) |
 | `poll_option` | 투표 선택지 — uuid PK, pollId FK→poll Cascade, label (SPEC-MOIM-005) |
-| `poll_vote` | 투표 기록 — 복합 PK (pollId, userId), optionId FK→poll_option Cascade; 멤버당 한 투표 불변식 DB 강제 (SPEC-MOIM-005) |
+| `poll_vote` | 투표 기록 — 복합 PK (pollId, optionId, userId), optionId FK→poll_option Cascade; 멤버당 옵션당 한 표 불변식(SPEC-MOIM-006 PK 변경) |
 
 ### profile
 
@@ -118,7 +118,7 @@ Prisma 모델명: `DeviceToken` | 마이그레이션: `20260614_add_device_token
 
 ### poll
 
-Prisma 모델명: `Poll` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005)
+Prisma 모델명: `Poll` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005) | multiSelect 추가 마이그레이션: `add_poll_multi_select` (SPEC-MOIM-006)
 
 | 컬럼 | 타입 | 제약 | 설명 |
 |------|------|------|------|
@@ -127,6 +127,7 @@ Prisma 모델명: `Poll` | 마이그레이션: `20260619100000_add_poll` (SPEC-M
 | `question` | TEXT | NOT NULL | 투표 질문 (trim 후 빈 값 → 400) |
 | `created_by` | TEXT | NOT NULL | 생성자 sub (= profile.id, 가드 검증) |
 | `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 생성 시각 |
+| `multi_select` | BOOLEAN | NOT NULL DEFAULT false | poll별 다중 선택 opt-in 플래그. false = 단일 교체(MOIM-005 동작 보존), true = 토글(0..N 선택). 기존 모든 poll row는 false(additive 추가, SPEC-MOIM-006) |
 
 ### poll_option
 
@@ -142,16 +143,18 @@ Prisma 모델명: `PollOption` | 마이그레이션: `20260619100000_add_poll` (
 
 ### poll_vote
 
-Prisma 모델명: `PollVote` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005)
+Prisma 모델명: `PollVote` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005) | PK 변경 마이그레이션: `add_poll_multi_select` (SPEC-MOIM-006)
 
 | 컬럼 | 타입 | 제약 | 설명 |
 |------|------|------|------|
 | `poll_id` | TEXT | PK(복합), FK → poll.id onDelete Cascade | 소속 투표 id |
+| `option_id` | TEXT | PK(복합), FK → poll_option.id onDelete Cascade | 선택한 옵션 id |
 | `user_id` | TEXT | PK(복합) | 투표자 sub (= profile.id) |
-| `option_id` | TEXT | NOT NULL, FK → poll_option.id onDelete Cascade | 선택한 옵션 id |
 | `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 투표 시각 |
 
-**복합 PK `(poll_id, user_id)`**: 멤버당 한 투표 불변식을 DB 레벨에서 강제. 재투표 = `(pollId,userId)` 기준 upsert로 `option_id` 교체(추가 표 아님). `MoimMember(moim_id,user_id)` 복합 PK 패턴과 동일.
+**복합 PK `(poll_id, option_id, user_id)`** (SPEC-MOIM-006 변경): 멤버당 옵션당 한 표 불변식을 DB 레벨에서 강제. 단일 선택 poll — 서비스 레이어(deleteMany+create)가 한 멤버의 기존 표를 모두 삭제 후 새 표를 생성해 최대 1표 유지(교체 동작). 다중 선택 poll — findUnique(pollId,optionId,userId) 토글: 없으면 create, 있으면 delete(0..N 표). **비파괴 PK 변경 근거**: 기존 (pollId,userId) PK는 멤버당 정확히 1 row를 강제했으므로 그 (pollId,optionId,userId)도 자동 유일 → 신규 PK 위반 0 → row 손실 0.
+
+**`@@index([optionId])` 보존**: PK 변경 후에도 option_id 기반 집계/조회 최적화 인덱스 유지.
 
 **Cascade 체인**: moim 삭제 → poll Cascade → poll_option Cascade, poll_vote Cascade. poll 삭제 → poll_option/poll_vote Cascade.
 
@@ -188,7 +191,8 @@ Prisma 모델명: `PollVote` | 마이그레이션: `20260619100000_add_poll` (SP
 | `device_token` | `user_id` | INDEX (`@@index([userId])`) | 사용자별 토큰 목록 조회 최적화(PushListener 수신자 토큰 일괄 조회) |
 | `poll` | `id` | PK (기본) | 단일 PK 조회 |
 | `poll_option` | `id` | PK (기본) | 단일 PK 조회 |
-| `poll_vote` | `(poll_id, user_id)` | PK 복합 (기본) | 멤버당 한 투표 불변식 — 한 사용자는 한 투표에서 한 번만 (SPEC-MOIM-005) |
+| `poll_vote` | `(poll_id, option_id, user_id)` | PK 복합 (기본) | 멤버당 옵션당 한 표 불변식 — 한 사용자는 한 poll의 한 옵션에 한 표(SPEC-MOIM-006 PK 변경, 비파괴) |
+| `poll_vote` | `option_id` | INDEX (`@@index([optionId])`) | 옵션 기반 집계/조회 최적화 (SPEC-MOIM-006 PK 변경 후 보존) |
 
 ---
 
@@ -210,6 +214,6 @@ Prisma 모델명: `PollVote` | 마이그레이션: `20260619100000_add_poll` (SP
 | `poll` | `poll_moim_id_fkey` | FK | `moim_id → moim(id) ON DELETE CASCADE` |
 | `poll_option` | `poll_option_pkey` | PK | `id` |
 | `poll_option` | `poll_option_poll_id_fkey` | FK | `poll_id → poll(id) ON DELETE CASCADE` |
-| `poll_vote` | `poll_vote_pkey` | PK | `(poll_id, user_id)` |
+| `poll_vote` | `poll_vote_pkey` | PK | `(poll_id, option_id, user_id)` (SPEC-MOIM-006 변경 — 기존 `(poll_id, user_id)`) |
 | `poll_vote` | `poll_vote_poll_id_fkey` | FK | `poll_id → poll(id) ON DELETE CASCADE` |
 | `poll_vote` | `poll_vote_option_id_fkey` | FK | `option_id → poll_option(id) ON DELETE CASCADE` |

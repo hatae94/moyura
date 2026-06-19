@@ -95,14 +95,14 @@ backend jest 통과(다중 신규 + 단일 회귀), backend+web+api-client tsc 0
 
 ## Definition of Done (DoD)
 
-- [ ] `Poll.multiSelect`(기본 false, additive) 추가 + `PollVote` PK `(pollId,optionId,userId)` 비파괴 변경(기존 표 보존, row 손실 0), prisma migrate clean. (AC-1)
-- [ ] `POST /moims/:id/polls` 가 optional multiSelect(기본 false) 수용 + 단일 선택 생성 무변경 + question 빈/옵션<2 400 + 비멤버 403. (AC-2)
-- [ ] `POST .../vote` 가 poll.multiSelect 분기 — 단일=교체(총 1표 불변, MOIM-005 회귀 0) / 다중=토글(추가/제거, 0..N) + 잘못된 optionId 400 + 다른 모임 pollId 404 + 비멤버 403. (AC-3)
-- [ ] `GET /moims/:id/polls` 가 multiSelect + 옵션 voteCount(다중=멤버 수, 표 0 포함) + myVotes(목록, 미투표 빈 배열) + 비멤버 403 + poll 없으면 빈 배열. (AC-4)
-- [ ] DTO(`CreatePollDto.multiSelect`, `PollResponseDto.multiSelect`+`myVotes`, myVote 제거) + service vote 분기/aggregate myVotes 갱신. (AC-2/3/4)
-- [ ] backend jest 신규(다중 생성/토글/voteCount/myVotes) + 단일 회귀(생성/교체/총 1표 불변) + 400/403/404 통과. (AC-1~4/AC-7)
-- [ ] `schema.d.ts` 재생성 + api-client `PollResponse`(multiSelect/myVotes, myVote 제거) + 별칭 유지, tsc 0. (AC-5)
-- [ ] web `PollWithResults`(multiSelect/myVotes) + `OptionRow` 강조(`myVotes.includes`) + `PollCard` 단일/다중 분기 + `CreatePollForm` "여러 개 선택 허용" 토글, Meetup 오렌지. (AC-6)
-- [ ] web tsc 0(myVote→myVotes 전 소비처) / web lint 0 / web build 0. (AC-7)
-- [ ] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-7)
-- [ ] 디바이스 종단 검증: 상세 → "여러 개 선택 허용" 켜고 생성 → 다중 토글(추가/제거/여러 강조) → 득표/퍼센트 갱신 → 단일 poll 회귀(한 강조, 교체) 라이브 확인. (AC-7, device-gated) — iOS 시뮬레이터에서 Server Action(`revalidatePath`)이 WebView 안에서 다중 결과를 갱신하는지 검증 대기
+- [x] `Poll.multiSelect`(기본 false, additive) 추가 + `PollVote` PK `(pollId,optionId,userId)` 비파괴 변경(기존 표 보존, row 손실 0), prisma migrate clean. (AC-1) — 라이브 검증 2026-06-20
+- [x] `POST /moims/:id/polls` 가 optional multiSelect(기본 false) 수용 + 단일 선택 생성 무변경 + question 빈/옵션<2 400 + 비멤버 403. (AC-2) — 라이브 검증 2026-06-20
+- [x] `POST .../vote` 가 poll.multiSelect 분기 — 단일=교체(총 1표 불변, MOIM-005 회귀 0) / 다중=토글(추가/제거, 0..N) + 잘못된 optionId 400 + 다른 모임 pollId 404 + 비멤버 403. (AC-3) — 라이브 검증 2026-06-20
+- [x] `GET /moims/:id/polls` 가 multiSelect + 옵션 voteCount(다중=멤버 수, 표 0 포함) + myVotes(목록, 미투표 빈 배열) + 비멤버 403 + poll 없으면 빈 배열. (AC-4) — 라이브 검증 2026-06-20
+- [x] DTO(`CreatePollDto.multiSelect`, `PollResponseDto.multiSelect`+`myVotes`, myVote 제거) + service vote 분기/aggregate myVotes 갱신. (AC-2/3/4) — 라이브 검증 2026-06-20
+- [x] backend jest 신규(다중 생성/토글/voteCount/myVotes) + 단일 회귀(생성/교체/총 1표 불변) + 400/403/404 통과. (AC-1~4/AC-7) — jest 269/269 (+11)
+- [x] `schema.d.ts` 재생성 + api-client `PollResponse`(multiSelect/myVotes, myVote 제거) + 별칭 유지, tsc 0. (AC-5) — tsc 0(all)
+- [x] web `PollWithResults`(multiSelect/myVotes) + `OptionRow` 강조(`myVotes.includes`) + `PollCard` 단일/다중 분기 + `CreatePollForm` "여러 개 선택 허용" 토글, Meetup 오렌지. (AC-6) — 라이브 검증 2026-06-20
+- [x] web tsc 0(myVote→myVotes 전 소비처) / web lint 0 / web build 0. (AC-7) — tsc 0, lint 0, build 0
+- [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-7) — mobile vitest 215/215(회귀 0)
+- [ ] 디바이스 종단 검증: 상세 → "여러 개 선택 허용" 켜고 생성 → 다중 토글(추가/제거/여러 강조) → 득표/퍼센트 갱신 → 단일 poll 회귀(한 강조, 교체) 라이브 확인. (AC-7, device-gated) — iOS 시뮬레이터에서 모바일 WebView poll 인터랙션(Server Action + revalidatePath)이 WebView 컨텍스트에서 다중 결과를 갱신하는지 검증 대기
