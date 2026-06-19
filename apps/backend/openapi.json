@@ -734,7 +734,7 @@
         ],
         "responses": {
           "200": {
-            "description": "모임의 투표 목록(옵션별 voteCount + 호출자 myVote 포함)",
+            "description": "모임의 투표 목록(옵션별 voteCount + multiSelect + 호출자 myVotes 포함)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1268,6 +1268,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "multiSelect": {
+            "type": "boolean",
+            "description": "여러 개 선택 허용 여부(poll 별 옵트인). true 면 다중 선택(토글), 생략/false 면 단일 선택(교체).",
+            "default": false,
+            "example": false
           }
         },
         "required": [
@@ -1321,7 +1327,12 @@
           "createdAt": {
             "type": "string",
             "description": "투표 생성 시각(ISO-8601)",
-            "example": "2026-06-19T00:00:00.000Z"
+            "example": "2026-06-20T00:00:00.000Z"
+          },
+          "multiSelect": {
+            "type": "boolean",
+            "description": "여러 개 선택 허용 여부(true=다중 선택/토글, false=단일 선택/교체).",
+            "example": false
           },
           "options": {
             "description": "선택지 목록(각 선택지의 득표 수 포함)",
@@ -1330,11 +1341,15 @@
               "$ref": "#/components/schemas/PollOptionResponseDto"
             }
           },
-          "myVote": {
-            "type": "string",
-            "description": "호출자 자신이 고른 선택지 id. 아직 투표하지 않았으면 null.",
-            "nullable": true,
-            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          "myVotes": {
+            "description": "호출자 자신이 고른 선택지 id 목록(미투표 시 빈 배열). 단일 선택은 0/1요소, 다중 선택은 0..N요소.",
+            "example": [
+              "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -1342,8 +1357,9 @@
           "question",
           "createdBy",
           "createdAt",
+          "multiSelect",
           "options",
-          "myVote"
+          "myVotes"
         ]
       },
       "VoteDto": {

@@ -18,8 +18,10 @@ export class PollOptionResponseDto {
   voteCount!: number;
 }
 
-// @MX:NOTE: [AUTO] 투표 공개 표현(SPEC-MOIM-005 REQ-MOIM5-004). @nestjs/swagger가 이 DTO로 OpenAPI 모델을 만든다.
-// options 는 각 선택지의 voteCount(집계, 표 0 포함)를 담고, myVote 는 호출자 자신이 고른 optionId(미투표 시 null)다.
+// @MX:NOTE: [AUTO] 투표 공개 표현(SPEC-MOIM-006 REQ-MOIM6-004). @nestjs/swagger가 이 DTO로 OpenAPI 모델을 만든다.
+// options 는 각 선택지의 voteCount(집계, 표 0 포함)를 담고, myVotes 는 호출자 자신이 고른 optionId 목록이다
+// (단일 선택은 0/1요소, 다중 선택은 0..N요소, 미투표 시 빈 배열). multiSelect 는 poll 별 다중 선택 여부다.
+// SPEC-MOIM-006: 단일 myVote(string|null)를 myVotes(string[])로 대체한다 — 다중 선택은 단일 값으로 담을 수 없다.
 // 누가 무엇에 투표했는지(타인 식별)는 노출하지 않는다(spec §4 익명/공개 토글 비범위 — 집계 + 자기 표만).
 export class PollResponseDto {
   @ApiProperty({
@@ -39,9 +41,15 @@ export class PollResponseDto {
 
   @ApiProperty({
     description: '투표 생성 시각(ISO-8601)',
-    example: '2026-06-19T00:00:00.000Z',
+    example: '2026-06-20T00:00:00.000Z',
   })
   createdAt!: string;
+
+  @ApiProperty({
+    description: '여러 개 선택 허용 여부(true=다중 선택/토글, false=단일 선택/교체).',
+    example: false,
+  })
+  multiSelect!: boolean;
 
   @ApiProperty({
     description: '선택지 목록(각 선택지의 득표 수 포함)',
@@ -50,10 +58,10 @@ export class PollResponseDto {
   options!: PollOptionResponseDto[];
 
   @ApiProperty({
-    description: '호출자 자신이 고른 선택지 id. 아직 투표하지 않았으면 null.',
-    type: String,
-    nullable: true,
-    example: '15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8',
+    description:
+      '호출자 자신이 고른 선택지 id 목록(미투표 시 빈 배열). 단일 선택은 0/1요소, 다중 선택은 0..N요소.',
+    type: [String],
+    example: ['15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8'],
   })
-  myVote!: string | null;
+  myVotes!: string[];
 }

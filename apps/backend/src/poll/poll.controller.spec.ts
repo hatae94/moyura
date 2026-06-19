@@ -3,9 +3,9 @@ import type { VerifiedUser } from '../auth/token-verifier.service';
 import { PollController } from './poll.controller';
 import type { PollWithResults, PollService } from './poll.service';
 
-// PollController 단위 테스트(SPEC-MOIM-005). PollService 는 mock 으로 대체해 라우팅 + DTO 매핑 +
-// 수동 400 검증(C-1: class-validator/ValidationPipe 부재)만 검증한다. 401/403/404 가드/인가 배선은
-// poll.integration.spec.ts(AppModule + 실제 가드)에서 검증한다.
+// PollController 단위 테스트(SPEC-MOIM-006 — MOIM-005 확장). PollService 는 mock 으로 대체해 라우팅 + DTO 매핑
+// (multiSelect + myVotes) + 수동 400 검증(C-1: class-validator/ValidationPipe 부재)만 검증한다. 401/403/404
+// 가드/인가 배선은 poll.integration.spec.ts(AppModule + 실제 가드)에서 검증한다.
 
 const USER: VerifiedUser = { sub: 'sub-U', role: 'authenticated' };
 
@@ -13,27 +13,29 @@ const POLL_RESULT: PollWithResults = {
   id: 'poll-1',
   question: '점심?',
   createdBy: 'sub-U',
-  createdAt: new Date('2026-06-19T00:00:00.000Z'),
+  createdAt: new Date('2026-06-20T00:00:00.000Z'),
+  multiSelect: false,
   options: [
     { id: 'opt-A', label: '김밥', voteCount: 2 },
     { id: 'opt-B', label: '라면', voteCount: 0 },
   ],
-  myVote: 'opt-A',
+  myVotes: ['opt-A'],
 };
 
 const POLL_DTO = {
   id: 'poll-1',
   question: '점심?',
   createdBy: 'sub-U',
-  createdAt: '2026-06-19T00:00:00.000Z',
+  createdAt: '2026-06-20T00:00:00.000Z',
+  multiSelect: false,
   options: [
     { id: 'opt-A', label: '김밥', voteCount: 2 },
     { id: 'opt-B', label: '라면', voteCount: 0 },
   ],
-  myVote: 'opt-A',
+  myVotes: ['opt-A'],
 };
 
-function makeService(): {
+function makeService(createdMultiSelect = false): {
   service: PollService;
   mocks: {
     createPoll: jest.Mock;
@@ -47,8 +49,9 @@ function makeService(): {
       id: 'poll-1',
       moimId: 'moim-A',
       question: '점심?',
+      multiSelect: createdMultiSelect,
       createdBy: 'sub-U',
-      createdAt: new Date('2026-06-19T00:00:00.000Z'),
+      createdAt: new Date('2026-06-20T00:00:00.000Z'),
       options: [
         { id: 'opt-A', pollId: 'poll-1', label: '김밥' },
         { id: 'opt-B', pollId: 'poll-1', label: '라면' },
@@ -61,8 +64,8 @@ function makeService(): {
 }
 
 describe('PollController', () => {
-  describe('POST /moims/:id/polls (create, REQ-MOIM5-002 / AC-2)', () => {
-    it('question + 유효 옵션 ≥2 로 createPoll 을 호출하고 DTO 를 반환한다(201)', async () => {
+  describe('POST /moims/:id/polls (create, REQ-MOIM6-002 / AC-2)', () => {
+    it('question + 유효 옵션 ≥2 로 createPoll(multiSelect 기본 false)을 호출하고 DTO 를 반환한다(201)', async () => {
       const { service, mocks } = makeService();
       const controller = new PollController(service);
 
@@ -71,19 +74,45 @@ describe('PollController', () => {
         options: ['김밥', '라면'],
       });
 
-      expect(mocks.createPoll).toHaveBeenCalledWith('sub-U', 'moim-A', '점심?', [
-        '김밥',
-        '라면',
-      ]);
-      // 갓 생성된 poll 은 투표 0 + myVote null 로 매핑된다.
+      // multiSelect 생략 → false 로 정규화해 전달한다.
+      expect(mocks.createPoll).toHaveBeenCalledWith(
+        'sub-U',
+        'moim-A',
+        '점심?',
+        ['김밥', '라면'],
+        false,
+      );
+      // 갓 생성된 poll 은 투표 0 + myVotes 빈 배열 + multiSelect:false 로 매핑된다.
       expect(res.id).toBe('poll-1');
       expect(res.question).toBe('점심?');
+      expect(res.multiSelect).toBe(false);
       expect(res.options).toEqual([
         { id: 'opt-A', label: '김밥', voteCount: 0 },
         { id: 'opt-B', label: '라면', voteCount: 0 },
       ]);
-      expect(res.myVote).toBeNull();
-      expect(res.createdAt).toBe('2026-06-19T00:00:00.000Z');
+      expect(res.myVotes).toEqual([]);
+      expect(res.createdAt).toBe('2026-06-20T00:00:00.000Z');
+    });
+
+    it('multiSelect:true 를 전달하면 그 값으로 createPoll 을 호출하고 multiSelect:true DTO 를 반환한다', async () => {
+      const { service, mocks } = makeService(true);
+      const controller = new PollController(service);
+
+      const res = await controller.create(USER, 'moim-A', {
+        question: '가능한 날짜?',
+        options: ['토', '일'],
+        multiSelect: true,
+      });
+
+      expect(mocks.createPoll).toHaveBeenCalledWith(
+        'sub-U',
+        'moim-A',
+        '가능한 날짜?',
+        ['토', '일'],
+        true,
+      );
+      expect(res.multiSelect).toBe(true);
+      expect(res.myVotes).toEqual([]);
     });
 
     it('빈 옵션 항목은 무시하고 trim 후 유효 항목만 전달한다', async () => {
@@ -95,10 +124,13 @@ describe('PollController', () => {
         options: ['  김밥 ', '', '   ', '라면'],
       });
 
-      expect(mocks.createPoll).toHaveBeenCalledWith('sub-U', 'moim-A', '점심?', [
-        '김밥',
-        '라면',
-      ]);
+      expect(mocks.createPoll).toHaveBeenCalledWith(
+        'sub-U',
+        'moim-A',
+        '점심?',
+        ['김밥', '라면'],
+        false,
+      );
     });
 
     it('question 이 빈 문자열이면 400, 서비스 미호출', async () => {

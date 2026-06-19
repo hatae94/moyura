@@ -1,4 +1,4 @@
-// 모임 투표 생성/투표 Server Action (SPEC-MOIM-005 REQ-MOIM5-006 / AC-5).
+// 모임 투표 생성/투표 Server Action (SPEC-MOIM-006 REQ-MOIM6-006 / AC-6).
 //
 // moims/new/actions.ts(createMoimAction) 의 useActionState + Server Action 패턴을 구조적으로 미러한다:
 //   - 빈 question/유효 옵션<2 → 폼에 머무르며 일반화된 오류 반환(poll 미생성).
@@ -55,6 +55,8 @@ export async function createPollAction(
     .getAll("option")
     .map((v) => String(v).trim())
     .filter((v) => v.length > 0);
+  // "여러 개 선택 허용" 체크박스 — 체크 시 "on", 미체크 시 null. 다중 선택 옵트인(기본 false).
+  const multiSelect = formData.get("multiSelect") === "on";
 
   if (!moimId) {
     // moimId 는 hidden 필드로 항상 동봉되지만, 누락 시 안전하게 일반화 오류로 처리한다.
@@ -72,7 +74,7 @@ export async function createPollAction(
       baseUrl: API_BASE_URL,
       getToken: () => token,
     });
-    await createPoll(api, moimId, { question, options });
+    await createPoll(api, moimId, { question, options, multiSelect });
   } catch (err) {
     // AC-5 Unwanted: 백엔드 생성 실패 → 머무르며 일반화된 오류(토큰/상세 비노출 — R-A9). 재제출 가능.
     const status = err instanceof ApiError ? err.status : "unknown";
@@ -86,7 +88,8 @@ export async function createPollAction(
 }
 
 /**
- * 한 선택지에 투표한다(클라이언트 onClick 에서 호출). 단일 선택 — 재투표 시 백엔드가 표를 교체한다.
+ * 한 선택지에 투표한다(클라이언트 onClick 에서 호출). 단일 선택은 백엔드가 표를 교체, 다중 선택은 토글(추가/제거)한다
+ * — 요청 시그니처는 동일({ moimId, pollId, optionId }), 의미론은 poll.multiSelect 로 백엔드가 분기한다.
  * 성공 시 상세를 revalidatePath 로 재검증해 득표 수·내 표 강조가 갱신되게 한다.
  */
 export async function voteAction(

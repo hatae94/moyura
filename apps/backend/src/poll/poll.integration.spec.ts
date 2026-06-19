@@ -22,25 +22,28 @@ import type {
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-// 투표 통합 테스트(SPEC-MOIM-005 M3). 실제 Nest app + 실제 가드 배선 + 실제 PollService/PollController.
+// 투표 통합 테스트(SPEC-MOIM-006 M3 — MOIM-005 확장). 실제 Nest app + 실제 가드 배선 + 실제 PollService/PollController.
 // chat/moim integration 패턴을 확장한다: fakePrisma 에 poll/pollOption/pollVote(+moim/moimMember),
 // TokenVerifierService 를 로컬-JWKS 로 오버라이드한다. Prisma 7 WASM 이 jest VM 에서 동작하지 않으므로 DB 는 fake.
-//   - 전 라우트 가드(401) + 멤버/비멤버(403) + question 빈/옵션<2/잘못 optionId 400 + 재투표 교체(합산 아님).
-//   - 옵션별 voteCount(표 0 포함) + 호출자 myVote(null/optionId) end-to-end.
+//   - 전 라우트 가드(401) + 멤버/비멤버(403) + question 빈/옵션<2/잘못 optionId 400.
+//   - 단일 선택 재투표 교체(합산 아님 — MOIM-005 회귀 0) end-to-end.
+//   - 다중 선택 생성(multiSelect:true) → 토글(추가/제거) → 목록 myVotes/voteCount end-to-end.
+//   - 옵션별 voteCount(표 0 포함) + 호출자 myVotes(빈 배열/목록) + multiSelect end-to-end.
+// fake vote 테이블은 (pollId,optionId,userId) 복합 PK 를 흉내내 키로 삼는다(새 PK — 멤버당 옵션당 한 표).
 
 interface Tables {
   moim: Map<string, Moim>;
   member: Map<string, MoimMember>; // key: `${moimId}:${userId}`
   poll: Map<string, Poll>;
   option: Map<string, PollOption>;
-  vote: Map<string, PollVote>; // key: `${pollId}:${userId}`
+  vote: Map<string, PollVote>; // key: `${pollId}:${optionId}:${userId}` — 새 복합 PK
 }
 
 function memberKey(moimId: string, userId: string): string {
   return `${moimId}:${userId}`;
 }
-function voteKey(pollId: string, userId: string): string {
-  return `${pollId}:${userId}`;
+function voteKey(pollId: string, optionId: string, userId: string): string {
+  return `${pollId}:${optionId}:${userId}`;
 }
 
 describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', () => {
@@ -88,13 +91,15 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
     moimId: string,
     question: string,
     labels: string[],
+    multiSelect = false,
   ): { poll: Poll; options: PollOption[] } {
     const poll: Poll = {
       id: nextId('poll'),
       moimId,
       question,
+      multiSelect,
       createdBy: 'owner',
-      createdAt: new Date('2026-06-19T00:00:00.000Z'),
+      createdAt: new Date('2026-06-20T00:00:00.000Z'),
     };
     tables.poll.set(poll.id, poll);
     const options = labels.map((label) => {
@@ -124,6 +129,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
             moimId: string;
             question: string;
             createdBy: string;
+            multiSelect?: boolean;
             options?: { create: { label: string }[] };
           };
         }) => {
@@ -131,8 +137,9 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
             id: nextId('poll'),
             moimId: arg.data.moimId,
             question: arg.data.question,
+            multiSelect: arg.data.multiSelect ?? false,
             createdBy: arg.data.createdBy,
-            createdAt: new Date('2026-06-19T00:00:00.000Z'),
+            createdAt: new Date('2026-06-20T00:00:00.000Z'),
           };
           tables.poll.set(created.id, created);
           const opts = (arg.data.options?.create ?? []).map((o) => {
@@ -171,25 +178,73 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       ),
     };
     const pollVoteDelegate = {
-      upsert: jest.fn(
+      // create — 한 표 기록(단일=교체 후, 다중=토글 on).
+      create: jest.fn(
         (arg: {
-          where: { pollId_userId: { pollId: string; userId: string } };
-          create: { pollId: string; optionId: string; userId: string };
-          update: { optionId: string };
+          data: { pollId: string; optionId: string; userId: string };
         }) => {
-          const { pollId, userId } = arg.where.pollId_userId;
-          const key = voteKey(pollId, userId);
-          const existing = tables.vote.get(key);
-          const next: PollVote = existing
-            ? { ...existing, optionId: arg.update.optionId }
-            : {
-                pollId: arg.create.pollId,
-                optionId: arg.create.optionId,
-                userId: arg.create.userId,
-                createdAt: new Date('2026-06-19T00:00:00.000Z'),
-              };
-          tables.vote.set(key, next);
+          const next: PollVote = {
+            pollId: arg.data.pollId,
+            optionId: arg.data.optionId,
+            userId: arg.data.userId,
+            createdAt: new Date('2026-06-20T00:00:00.000Z'),
+          };
+          tables.vote.set(
+            voteKey(next.pollId, next.optionId, next.userId),
+            next,
+          );
           return Promise.resolve(next);
+        },
+      ),
+      // deleteMany({ where: { pollId, userId } }) — 단일 선택 교체 시 그 멤버의 그 poll 표를 모두 제거.
+      deleteMany: jest.fn(
+        (arg: { where: { pollId: string; userId: string } }) => {
+          let count = 0;
+          for (const [key, v] of [...tables.vote.entries()]) {
+            if (
+              v.pollId === arg.where.pollId &&
+              v.userId === arg.where.userId
+            ) {
+              tables.vote.delete(key);
+              count += 1;
+            }
+          }
+          return Promise.resolve({ count });
+        },
+      ),
+      // findUnique({ where: { pollId_optionId_userId } }) — 다중 토글 시 표 존재 여부 판정.
+      findUnique: jest.fn(
+        (arg: {
+          where: {
+            pollId_optionId_userId: {
+              pollId: string;
+              optionId: string;
+              userId: string;
+            };
+          };
+        }) => {
+          const { pollId, optionId, userId } = arg.where.pollId_optionId_userId;
+          return Promise.resolve(
+            tables.vote.get(voteKey(pollId, optionId, userId)) ?? null,
+          );
+        },
+      ),
+      // delete({ where: { pollId_optionId_userId } }) — 다중 토글 off.
+      delete: jest.fn(
+        (arg: {
+          where: {
+            pollId_optionId_userId: {
+              pollId: string;
+              optionId: string;
+              userId: string;
+            };
+          };
+        }) => {
+          const { pollId, optionId, userId } = arg.where.pollId_optionId_userId;
+          const key = voteKey(pollId, optionId, userId);
+          const existing = tables.vote.get(key);
+          tables.vote.delete(key);
+          return Promise.resolve(existing ?? null);
         },
       ),
       groupBy: jest.fn((arg: { where: { pollId: { in: string[] } } }) => {
@@ -324,16 +379,38 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       id: string;
       question: string;
       createdBy: string;
+      multiSelect: boolean;
       options: { id: string; label: string; voteCount: number }[];
-      myVote: string | null;
+      myVotes: string[];
     };
     expect(body.question).toBe('점심?');
     expect(body.createdBy).toBe(memberSub);
+    // multiSelect 생략 → false(단일 선택, MOIM-005 동작 동일).
+    expect(body.multiSelect).toBe(false);
     expect(body.options.map((o) => o.label)).toEqual(['김밥', '라면']);
     expect(body.options.every((o) => o.voteCount === 0)).toBe(true);
-    expect(body.myVote).toBeNull();
+    expect(body.myVotes).toEqual([]);
     expect(tables.poll.size).toBe(1);
     expect(tables.option.size).toBe(2);
+  });
+
+  // ── AC-2: multiSelect:true 생성 → multiSelect:true poll ──
+  it('AC-2: multiSelect:true POST → 201 + multiSelect:true poll', async () => {
+    const memberSub = uniqueSub();
+    seedMoimWithMembers('moim-A', [memberSub]);
+    const token = await tokenFor(memberSub);
+
+    const res = await request(app.getHttpServer())
+      .post('/moims/moim-A/polls')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ question: '가능한 날짜?', options: ['토', '일', '월'], multiSelect: true })
+      .expect(201);
+
+    const body = res.body as { multiSelect: boolean; myVotes: string[] };
+    expect(body.multiSelect).toBe(true);
+    expect(body.myVotes).toEqual([]);
+    expect(tables.poll.size).toBe(1);
+    expect(tables.option.size).toBe(3);
   });
 
   // ── AC-2(Unwanted): 빈 question → 400 + 미생성 ──
@@ -381,11 +458,11 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
     expect(tables.poll.size).toBe(0);
   });
 
-  // ── AC-3: 투표 기록 + 재투표 교체(합산 아님) ──
-  it('AC-3: 멤버 투표 → 200 + 표 기록, 재투표 시 교체(여전히 1표)', async () => {
+  // ── AC-3: 단일 선택 투표 기록 + 재투표 교체(합산 아님 — MOIM-005 회귀 0) ──
+  it('AC-3: 단일 멤버 투표 → 200 + 표 기록, 재투표 시 교체(여전히 1표)', async () => {
     const memberSub = uniqueSub();
     seedMoimWithMembers('moim-A', [memberSub]);
-    const { poll, options } = seedPoll('moim-A', '점심?', ['A', 'B']);
+    const { poll, options } = seedPoll('moim-A', '점심?', ['A', 'B'], false);
     const token = await tokenFor(memberSub);
 
     // 1차: A 에 투표.
@@ -395,10 +472,12 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       .send({ optionId: options[0].id })
       .expect(200);
     const firstBody = first.body as {
+      multiSelect: boolean;
       options: { id: string; voteCount: number }[];
-      myVote: string;
+      myVotes: string[];
     };
-    expect(firstBody.myVote).toBe(options[0].id);
+    expect(firstBody.multiSelect).toBe(false);
+    expect(firstBody.myVotes).toEqual([options[0].id]);
     expect(
       firstBody.options.find((o) => o.id === options[0].id)?.voteCount,
     ).toBe(1);
@@ -412,9 +491,9 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       .expect(200);
     const secondBody = second.body as {
       options: { id: string; voteCount: number }[];
-      myVote: string;
+      myVotes: string[];
     };
-    expect(secondBody.myVote).toBe(options[1].id);
+    expect(secondBody.myVotes).toEqual([options[1].id]);
     expect(
       secondBody.options.find((o) => o.id === options[0].id)?.voteCount,
     ).toBe(0);
@@ -422,6 +501,59 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       secondBody.options.find((o) => o.id === options[1].id)?.voteCount,
     ).toBe(1);
     // 합산이 아니라 교체 — 표는 여전히 1개.
+    expect(tables.vote.size).toBe(1);
+  });
+
+  // ── AC-3: 다중 선택 토글(추가/제거) end-to-end ──
+  it('AC-3: 다중 멤버 투표 → 토글(A 추가 → B 추가 둘 다 보유 → A 다시 제거)', async () => {
+    const memberSub = uniqueSub();
+    seedMoimWithMembers('moim-A', [memberSub]);
+    const { poll, options } = seedPoll('moim-A', '가능?', ['A', 'B', 'C'], true);
+    const token = await tokenFor(memberSub);
+    const voteUrl = `/moims/moim-A/polls/${poll.id}/vote`;
+
+    // A 추가.
+    await request(app.getHttpServer())
+      .post(voteUrl)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ optionId: options[0].id })
+      .expect(200);
+    expect(tables.vote.size).toBe(1);
+
+    // B 추가 → A,B 동시 보유.
+    const afterB = await request(app.getHttpServer())
+      .post(voteUrl)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ optionId: options[1].id })
+      .expect(200);
+    const afterBBody = afterB.body as {
+      multiSelect: boolean;
+      myVotes: string[];
+    };
+    expect(afterBBody.multiSelect).toBe(true);
+    expect(afterBBody.myVotes.sort()).toEqual(
+      [options[0].id, options[1].id].sort(),
+    );
+    expect(tables.vote.size).toBe(2);
+
+    // A 다시 → 토글 off(B 만 남음).
+    const afterToggleOff = await request(app.getHttpServer())
+      .post(voteUrl)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ optionId: options[0].id })
+      .expect(200);
+    const offBody = afterToggleOff.body as {
+      options: { id: string; voteCount: number }[];
+      myVotes: string[];
+    };
+    expect(offBody.myVotes).toEqual([options[1].id]);
+    // A voteCount 감소, B 유지.
+    expect(offBody.options.find((o) => o.id === options[0].id)?.voteCount).toBe(
+      0,
+    );
+    expect(offBody.options.find((o) => o.id === options[1].id)?.voteCount).toBe(
+      1,
+    );
     expect(tables.vote.size).toBe(1);
   });
 
@@ -476,24 +608,38 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
     expect(tables.vote.size).toBe(0);
   });
 
-  // ── AC-4: 목록 + 결과 집계 + myVote ──
-  it('AC-4: 멤버의 GET → 200 + 옵션별 voteCount(표 0 포함) + myVote', async () => {
+  // ── AC-4: 목록 + 결과 집계 + myVotes(단일 + 다중) ──
+  it('AC-4: 멤버의 GET → 200 + 옵션별 voteCount(표 0 포함) + multiSelect + myVotes', async () => {
     const memberSub = uniqueSub();
     const otherSub = uniqueSub();
     seedMoimWithMembers('moim-A', [memberSub, otherSub]);
-    const { poll, options } = seedPoll('moim-A', '점심?', ['A', 'B']);
-    // A 에 2표(member, other), B 에 0표. 호출자(member)는 A.
-    tables.vote.set(voteKey(poll.id, memberSub), {
-      pollId: poll.id,
-      optionId: options[0].id,
+    // 단일 poll: A 에 2표(member, other), B 0표. 호출자는 A.
+    const single = seedPoll('moim-A', '점심?', ['A', 'B'], false);
+    tables.vote.set(voteKey(single.poll.id, single.options[0].id, memberSub), {
+      pollId: single.poll.id,
+      optionId: single.options[0].id,
       userId: memberSub,
-      createdAt: new Date('2026-06-19T00:00:00.000Z'),
+      createdAt: new Date('2026-06-20T00:00:00.000Z'),
     });
-    tables.vote.set(voteKey(poll.id, otherSub), {
-      pollId: poll.id,
-      optionId: options[0].id,
+    tables.vote.set(voteKey(single.poll.id, single.options[0].id, otherSub), {
+      pollId: single.poll.id,
+      optionId: single.options[0].id,
       userId: otherSub,
-      createdAt: new Date('2026-06-19T00:00:00.000Z'),
+      createdAt: new Date('2026-06-20T00:00:00.000Z'),
+    });
+    // 다중 poll: 호출자가 A,C 동시 보유.
+    const multi = seedPoll('moim-A', '가능?', ['A', 'B', 'C'], true);
+    tables.vote.set(voteKey(multi.poll.id, multi.options[0].id, memberSub), {
+      pollId: multi.poll.id,
+      optionId: multi.options[0].id,
+      userId: memberSub,
+      createdAt: new Date('2026-06-20T00:00:00.000Z'),
+    });
+    tables.vote.set(voteKey(multi.poll.id, multi.options[2].id, memberSub), {
+      pollId: multi.poll.id,
+      optionId: multi.options[2].id,
+      userId: memberSub,
+      createdAt: new Date('2026-06-20T00:00:00.000Z'),
     });
     const token = await tokenFor(memberSub);
 
@@ -504,14 +650,32 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
 
     const body = res.body as {
       id: string;
+      multiSelect: boolean;
       options: { id: string; label: string; voteCount: number }[];
-      myVote: string | null;
+      myVotes: string[];
     }[];
-    expect(body).toHaveLength(1);
-    const optionMap = new Map(body[0].options.map((o) => [o.label, o.voteCount]));
-    expect(optionMap.get('A')).toBe(2);
-    expect(optionMap.get('B')).toBe(0);
-    expect(body[0].myVote).toBe(options[0].id);
+    expect(body).toHaveLength(2);
+
+    const singleDto = body.find((p) => p.id === single.poll.id)!;
+    expect(singleDto.multiSelect).toBe(false);
+    const singleCounts = new Map(
+      singleDto.options.map((o) => [o.label, o.voteCount]),
+    );
+    expect(singleCounts.get('A')).toBe(2);
+    expect(singleCounts.get('B')).toBe(0);
+    expect(singleDto.myVotes).toEqual([single.options[0].id]);
+
+    const multiDto = body.find((p) => p.id === multi.poll.id)!;
+    expect(multiDto.multiSelect).toBe(true);
+    expect(multiDto.myVotes.sort()).toEqual(
+      [multi.options[0].id, multi.options[2].id].sort(),
+    );
+    const multiCounts = new Map(
+      multiDto.options.map((o) => [o.label, o.voteCount]),
+    );
+    expect(multiCounts.get('A')).toBe(1);
+    expect(multiCounts.get('B')).toBe(0);
+    expect(multiCounts.get('C')).toBe(1);
   });
 
   // ── AC-4: poll 없는 모임 → 빈 배열 ──

@@ -58,20 +58,23 @@ export class PollController {
     // C-1: ValidationPipe 부재 → question 빈/옵션<2 를 명시적으로 검사(400).
     const question = requireNonEmpty(body?.question, 'question');
     const options = normalizeOptions(body?.options);
+    // multiSelect 옵트인 — 명시적으로 true 일 때만 다중 선택(생략/falsy → false 단일 선택).
+    const multiSelect = body?.multiSelect === true;
     const poll = await this.pollService.createPoll(
       user.sub,
       moimId,
       question,
       options,
+      multiSelect,
     );
-    // 갓 생성된 poll 은 투표 0(voteCount:0) + myVote null 로 매핑한다.
+    // 갓 생성된 poll 은 투표 0(voteCount:0) + myVotes 빈 배열로 매핑한다.
     return newPollToDto(poll);
   }
 
   // GET /moims/:id/polls — 투표 목록 + 결과 집계(멤버 한정, REQ-MOIM5-004 / AC-4). 200.
   @Get()
   @ApiOkResponse({
-    description: '모임의 투표 목록(옵션별 voteCount + 호출자 myVote 포함)',
+    description: '모임의 투표 목록(옵션별 voteCount + multiSelect + 호출자 myVotes 포함)',
     type: [PollResponseDto],
   })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
@@ -142,34 +145,36 @@ function normalizeOptions(value: unknown): string[] {
   return cleaned;
 }
 
-// 갓 생성된 poll(투표 전) → DTO. 모든 옵션 voteCount:0, myVote:null.
+// 갓 생성된 poll(투표 전) → DTO. 모든 옵션 voteCount:0, myVotes 빈 배열, multiSelect 는 생성값 반영.
 function newPollToDto(poll: PollWithOptions): PollResponseDto {
   return {
     id: poll.id,
     question: poll.question,
     createdBy: poll.createdBy,
     createdAt: poll.createdAt.toISOString(),
+    multiSelect: poll.multiSelect,
     options: poll.options.map((o) => ({
       id: o.id,
       label: o.label,
       voteCount: 0,
     })),
-    myVote: null,
+    myVotes: [],
   };
 }
 
-// 집계 결과 poll → DTO(createdAt ISO-8601 직렬화, myVote null 허용).
+// 집계 결과 poll → DTO(createdAt ISO-8601 직렬화, multiSelect + myVotes 목록).
 function resultToDto(poll: PollWithResults): PollResponseDto {
   return {
     id: poll.id,
     question: poll.question,
     createdBy: poll.createdBy,
     createdAt: poll.createdAt.toISOString(),
+    multiSelect: poll.multiSelect,
     options: poll.options.map((o) => ({
       id: o.id,
       label: o.label,
       voteCount: o.voteCount,
     })),
-    myVote: poll.myVote,
+    myVotes: poll.myVotes,
   };
 }

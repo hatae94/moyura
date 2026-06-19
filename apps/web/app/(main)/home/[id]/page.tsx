@@ -101,7 +101,7 @@ export default async function MoimDetailPage({
     notFound();
   }
 
-  // SPEC-MOIM-005: 투표 목록 + 결과(호출자 myVote 포함)를 서버에서 조회한다. 멤버십은 위 getMoim 이 이미
+  // SPEC-MOIM-006: 투표 목록 + 결과(multiSelect + 호출자 myVotes 포함)를 서버에서 조회한다. 멤버십은 위 getMoim 이 이미
   // 통과시켰으므로(같은 assertMember 게이트) 정상 멤버에게는 성공한다. poll 조회 실패는 상세 전체를 막지 않고
   // 빈 배열로 graceful degrade 한다("아직 투표가 없어요" — 허위 값 금지). 인가는 위에서 이미 강제됐다.
   let polls: PollWithResults[];
@@ -171,7 +171,7 @@ export default async function MoimDetailPage({
           )}
         </section>
 
-        {/* SPEC-MOIM-005: 투표 섹션(Client 섬). 투표 목록·득표 막대·내 표 강조·단일 선택 투표·생성 폼. */}
+        {/* SPEC-MOIM-006: 투표 섹션(Client 섬). 투표 목록·득표 막대·내 표 강조·단일/다중 선택 투표·생성 폼. */}
         <PollsSection moimId={moim.id} polls={polls} />
       </div>
     </div>

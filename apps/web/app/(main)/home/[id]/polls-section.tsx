@@ -1,18 +1,23 @@
-// 모임 투표 섹션 (Client Component, SPEC-MOIM-005 REQ-MOIM5-006 / AC-5).
+// 모임 투표 섹션 (Client Component, SPEC-MOIM-006 REQ-MOIM6-006 / AC-6).
 //
 // 읽기 전용이던 상세(page.tsx, Server Component)에 도입하는 인터랙티브 섬이다 — page.tsx 는 가드 + 데이터
 // fetch 를 유지하고(Server), 이 컴포넌트가 투표 컨트롤·생성 폼을 렌더한다(Client). Server Action 은
 // poll-actions.ts("use server") 에서 import 한다(직렬화 가능한 props 만 page→여기로 전달 — 함수/인스턴스 금지).
 //
+// SPEC-MOIM-006 다중 선택: poll.multiSelect 로 렌더 분기한다.
+//   - 단일(false): MOIM-005 그대로 — 한 강조, 탭=교체(myVotes 0/1요소). 회귀 0.
+//   - 다중(true): 체크박스형 — 멤버가 고른 여러 선택지 동시 강조(myVotes.includes), 탭=토글(추가/제거),
+//     "여러 개 선택 가능" 안내. 두 경우 모두 isMine = poll.myVotes.includes(option.id) 로 통일(분기 최소화).
+//
 // 디자인: (main)/home/[id] 와 동일한 Meetup 오렌지 시맨틱 토큰(bg-primary/text-primary-foreground/
 // border-border/bg-card/bg-muted/text-muted-foreground/rounded-2xl) — login/onboarding 의 blue 흐름 아님.
 //   - 득표 막대: bg-muted(배경) 위에 bg-primary(채움, 총표 대비 퍼센트 너비).
-//   - 내 표 강조: myVote === option.id 인 행에 ring-primary + bg-primary/5.
+//   - 내 표 강조: myVotes 에 포함된 행에 ring-primary + bg-primary/5(단일/다중 공통, 다중은 여러 행 동시).
 //   - 빈 상태: poll 0개면 "아직 투표가 없어요"(허위/플레이스홀더 값 금지).
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { BarChart3, Check, Plus, Vote, X } from "lucide-react";
+import { BarChart3, Check, CheckSquare, Plus, Square, Vote, X } from "lucide-react";
 
 import type { PollWithResults } from "@/lib/moim/polls";
 import {
@@ -21,17 +26,22 @@ import {
   type CreatePollActionState,
 } from "./poll-actions";
 
-/** 한 선택지 행 — 라벨 + 득표 수 + 총표 대비 퍼센트 막대 + 내 표 강조. 클릭하면 그 선택지에 투표한다. */
+/**
+ * 한 선택지 행 — 라벨 + 득표 수 + 총표 대비 퍼센트 막대 + 내 표 강조. 클릭하면 그 선택지에 투표한다.
+ * multiSelect 면 체크박스형(CheckSquare/Square) 아포던스, 단일이면 선택 시 Check 아이콘(MOIM-005).
+ */
 function OptionRow({
   option,
   totalVotes,
   isMine,
+  multiSelect,
   pending,
   onVote,
 }: {
   option: { id: string; label: string; voteCount: number };
   totalVotes: number;
   isMine: boolean;
+  multiSelect: boolean;
   pending: boolean;
   onVote: (optionId: string) => void;
 }) {
@@ -42,7 +52,10 @@ function OptionRow({
       type="button"
       disabled={pending}
       onClick={() => onVote(option.id)}
-      aria-pressed={isMine}
+      // 다중 선택은 체크박스 의미(role=checkbox + aria-checked), 단일은 toggle 버튼(aria-pressed).
+      role={multiSelect ? "checkbox" : undefined}
+      aria-checked={multiSelect ? isMine : undefined}
+      aria-pressed={multiSelect ? undefined : isMine}
       className={`relative w-full overflow-hidden rounded-xl border p-3 text-left transition-colors disabled:opacity-60 ${
         isMine
           ? "border-primary bg-primary/5 ring-2 ring-primary/40"
@@ -57,7 +70,15 @@ function OptionRow({
       />
       <span className="relative flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
-          {isMine ? (
+          {multiSelect ? (
+            // 다중: 체크박스형 — 고른 선택지는 채워진 체크박스, 아니면 빈 박스(여러 강조 동시 가능).
+            isMine ? (
+              <CheckSquare size={16} className="shrink-0 text-primary" />
+            ) : (
+              <Square size={16} className="shrink-0 text-muted-foreground" />
+            )
+          ) : isMine ? (
+            // 단일: 고른 선택지에만 Check(MOIM-005 그대로).
             <Check size={16} className="shrink-0 text-primary" />
           ) : null}
           <span
@@ -76,12 +97,17 @@ function OptionRow({
   );
 }
 
-/** 한 투표 카드 — 질문 + 옵션들(득표 막대 + 내 표 강조) + 단일 선택 투표 컨트롤. */
+/**
+ * 한 투표 카드 — 질문 + (다중 선택이면 "여러 개 선택 가능" 안내) + 옵션들(득표 막대 + 내 표 강조) + 투표 컨트롤.
+ * 단일/다중은 poll.multiSelect 로 분기 — 강조 판정은 둘 다 poll.myVotes.includes(option.id) 로 통일한다.
+ * 다중 선택은 총표 합이 멤버 수보다 클 수 있어(멤버당 옵션당 1표) 퍼센트 합이 100%가 아닐 수 있다(총표 대비 표시).
+ */
 function PollCard({ moimId, poll }: { moimId: string; poll: PollWithResults }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | undefined>(undefined);
 
   const totalVotes = poll.options.reduce((sum, o) => sum + o.voteCount, 0);
+  const hasVoted = poll.myVotes.length > 0;
 
   function handleVote(optionId: string): void {
     setError(undefined);
@@ -100,6 +126,14 @@ function PollCard({ moimId, poll }: { moimId: string; poll: PollWithResults }) {
         <span className="min-w-0">{poll.question}</span>
       </h3>
 
+      {/* 다중 선택 안내 — 여러 항목을 동시에 고를 수 있음을 명시한다(단일은 표시 안 함). */}
+      {poll.multiSelect ? (
+        <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
+          <CheckSquare size={13} />
+          여러 개 선택 가능
+        </p>
+      ) : null}
+
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -112,7 +146,8 @@ function PollCard({ moimId, poll }: { moimId: string; poll: PollWithResults }) {
             key={option.id}
             option={option}
             totalVotes={totalVotes}
-            isMine={poll.myVote === option.id}
+            isMine={poll.myVotes.includes(option.id)}
+            multiSelect={poll.multiSelect}
             pending={pending}
             onVote={handleVote}
           />
@@ -120,7 +155,12 @@ function PollCard({ moimId, poll }: { moimId: string; poll: PollWithResults }) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        총 {totalVotes}표{poll.myVote ? " · 내 선택이 반영됐어요" : " · 선택지를 탭해 투표하세요"}
+        총 {totalVotes}표
+        {hasVoted
+          ? " · 내 선택이 반영됐어요"
+          : poll.multiSelect
+            ? " · 가능한 항목을 모두 탭해 투표하세요"
+            : " · 선택지를 탭해 투표하세요"}
       </p>
     </article>
   );
@@ -238,6 +278,25 @@ function CreatePollForm({ moimId }: { moimId: string }) {
           선택지 추가
         </button>
       </div>
+
+      {/* 여러 개 선택 허용 토글(name="multiSelect", 체크 시 "on"). 기본 꺼짐(단일 선택). Meetup 오렌지 accent. */}
+      <label
+        htmlFor="poll-multi-select"
+        className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-background p-3"
+      >
+        <input
+          id="poll-multi-select"
+          name="multiSelect"
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span className="text-sm font-semibold text-foreground">여러 개 선택 허용</span>
+          <span className="text-xs text-muted-foreground">
+            켜면 멤버가 가능한 항목을 모두 고를 수 있어요(예: 가능한 날짜).
+          </span>
+        </span>
+      </label>
 
       <button
         type="submit"

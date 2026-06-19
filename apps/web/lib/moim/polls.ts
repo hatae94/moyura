@@ -1,4 +1,4 @@
-// 모임 투표(poll) 조회/생성/투표 헬퍼 (SPEC-MOIM-005 REQ-MOIM5-005).
+// 모임 투표(poll) 조회/생성/투표 헬퍼 (SPEC-MOIM-006 REQ-MOIM6-005).
 //
 // poll 라우트는 path 파라미터가 있어(`/moims/:id/polls`, `/moims/:id/polls/:pollId/vote`) api-client 의
 // 편의 메서드 표면(리터럴 경로 전용)에 넣지 않는다 — lib/moim/api.ts 의 getMoim/getMoimMembers 와 동일하게
@@ -10,19 +10,21 @@ import {
   type PollResponse,
 } from "@moyura/api-client";
 
-// 백엔드 PollResponseDto 미러 — 각 옵션의 voteCount(표 0 포함) + 호출자 myVote(optionId/null).
+// 백엔드 PollResponseDto 미러 — multiSelect(다중 선택 여부) + 각 옵션의 voteCount(표 0 포함) + 호출자
+// myVotes(고른 optionId 목록, 미투표 빈 배열). MOIM-006: 단일 myVote(string|null)를 myVotes(string[])로 대체.
 export interface PollWithResults {
   id: string;
   question: string;
   createdBy: string;
   createdAt: string;
+  multiSelect: boolean;
   options: { id: string; label: string; voteCount: number }[];
-  myVote: string | null;
+  myVotes: string[];
 }
 
 /**
  * 모임의 투표 목록 + 결과를 조회한다(GET /moims/:id/polls). 멤버 한정 — 비멤버는 백엔드가 403(ApiError 전파).
- * 각 poll 은 옵션별 voteCount(표 0 포함)와 호출자 자신의 myVote(optionId 또는 null)를 포함한다.
+ * 각 poll 은 multiSelect 와 옵션별 voteCount(표 0 포함), 호출자 자신의 myVotes(고른 optionId 목록)를 포함한다.
  */
 export async function listPolls(
   api: ApiClient,
@@ -49,7 +51,8 @@ export async function createPoll(
 }
 
 /**
- * 한 투표에 투표한다(POST /moims/:id/polls/:pollId/vote). 단일 선택 — 재투표 시 백엔드가 표를 교체(upsert).
+ * 한 선택지에 투표한다(POST /moims/:id/polls/:pollId/vote). 단일 선택은 백엔드가 표를 교체, 다중 선택은 토글
+ * (추가/제거)한다 — 요청 형태는 동일({ optionId }), 의미론은 poll.multiSelect 로 백엔드가 분기한다.
  * 갱신된 단건 poll 결과를 반환한다. 잘못된 optionId 400 / 다른 모임 pollId 404 / 비멤버 403 은 ApiError 전파.
  */
 export async function votePoll(

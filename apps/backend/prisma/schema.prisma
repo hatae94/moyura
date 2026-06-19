@@ -121,6 +121,9 @@ model Poll {
   moimId    String       @map("moim_id")
   // 투표 질문(한 줄). trim 후 빈 값은 컨트롤러가 400 으로 거른다(ValidationPipe 부재 보완).
   question  String
+  // SPEC-MOIM-006 REQ-MOIM6-001: poll 별 다중 선택 옵트인(additive). false(기본)=단일 선택(투표=교체),
+  // true=다중 선택(투표=토글, 멤버당 옵션당 0..N 표). 기존 row 는 모두 false 로 단일 선택을 보존한다.
+  multiSelect Boolean    @default(false) @map("multi_select")
   // 생성자 sub(= profile.id). 가드-검증 sub 만 들어온다(mass-assignment 차단 — moim/chat 패턴 동일).
   createdBy String       @map("created_by")
   createdAt DateTime     @default(now()) @map("created_at")
@@ -147,9 +150,12 @@ model PollOption {
   @@map("poll_option")
 }
 
-// SPEC-MOIM-005 투표 표(REQ-MOIM5-001/003). 복합 PK (pollId, userId) 가 "멤버당 한 투표(변경 가능)" 불변식을
-// DB 레벨에서 강제한다(MoimMember 의 (moimId, userId) 선례 동일). 재투표 = (pollId, userId) 기준 upsert 로
-// optionId 교체(추가 아님). poll/option 삭제 시 표도 Cascade 로 정리된다.
+// SPEC-MOIM-006 투표 표(REQ-MOIM6-001/003). 복합 PK (pollId, optionId, userId) 가 "멤버당 옵션당 한 표
+// (0..N 표)" 불변식을 DB 레벨에서 강제한다 — 다중 선택 poll 에서 한 멤버가 옵션 여러 개를 동시에 보유할 수 있다.
+// 단일 선택 poll(multiSelect=false)은 service 가 deleteMany+create 로 멤버당 한 표만 유지한다(교체). 다중(true)은
+// (pollId,optionId,userId) 토글(존재하면 delete, 없으면 create). poll/option 삭제 시 표도 Cascade 로 정리된다.
+// 비파괴 PK 변경(MOIM-005 의 (pollId,userId) → 이 PK): 기존 단일 선택 표는 (pollId,userId) 당 한 row 라 그
+// (pollId,optionId,userId) 도 이미 유일 → 새 PK 를 위반 없이 만족(row 손실 0). 비파괴 마이그레이션 선례.
 model PollVote {
   pollId    String     @map("poll_id")
   optionId  String     @map("option_id")
@@ -161,8 +167,8 @@ model PollVote {
 
   // 옵션별 득표 수 집계(voteCount)를 커버한다.
   @@index([optionId])
-  // 복합 PK = 멤버당 한 투표 불변식(재투표는 추가가 아니라 교체).
-  @@id([pollId, userId])
+  // 복합 PK = 멤버당 옵션당 한 표 불변식(다중 선택 = 옵션마다 0..N 표 토글, 단일 선택 = 교체로 한 표 유지).
+  @@id([pollId, optionId, userId])
   @@map("poll_vote")
 }
 
