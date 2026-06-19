@@ -17,6 +17,7 @@
 | `20260614_add_device_token` | 2026-06-14 | `device_token` 테이블(token TEXT PK, user_id TEXT, platform TEXT, created_at, updated_at; @@index(userId)). SPEC-CHAT-002 — FCM 디바이스 토큰 레지스트리. Prisma 표준 타임스탬프 없음(파일명에 시간 부분 미포함 — 로컬 개발 단계 마이그레이션. 적용은 `db execute` + `migrate resolve --applied`로 체크섬 드리프트 우회). |
 | `20260615000000_add_profile_name` | 2026-06-15 | `profile` 테이블에 `name TEXT` 컬럼(nullable) 추가. SPEC-MOBILE-004 — provider 비종속 이름 온보딩. NULL = 온보딩 미완료 판별 기준. `PATCH /me { name }` 으로 업데이트. |
 | `20260619000000_add_moim_event_fields` | 2026-06-19 | `moim` 테이블에 `starts_at TIMESTAMP(3)` + `location TEXT` 컬럼(모두 nullable) 추가. SPEC-MOIM-004 — 모임 이벤트 일정/장소 필드. 기존 row는 두 값 모두 NULL(additive 무중단 마이그레이션). |
+| `20260619100000_add_poll` | 2026-06-19 | `poll`(id TEXT PK uuid, moim_id FK→moim Cascade, question, created_by, created_at) + `poll_option`(id TEXT PK uuid, poll_id FK→poll Cascade, label) + `poll_vote`(복합 PK(poll_id,user_id), option_id FK→poll_option Cascade, created_at) 신규 3 테이블 CREATE. 비파괴 additive(기존 테이블 무변경). SPEC-MOIM-005 — 모임 투표/단일 투표/결과 집계. |
 
 ### SPEC-CHAT-001 수동 SQL 주의 (R-6 드리프트)
 
@@ -45,6 +46,7 @@
 | `20260614_add_device_token` | 2026-06-14 | prod DB에 device_token 테이블 추가 필요 | Yes (prod 배포 시) |
 | `20260615000000_add_profile_name` | 2026-06-15 | prod DB에 profile.name(nullable) 컬럼 추가 필요 | Yes (prod 배포 시) |
 | `20260619000000_add_moim_event_fields` | 2026-06-19 | prod DB에 moim.starts_at(nullable) + moim.location(nullable) 컬럼 추가 필요 | Yes (prod 배포 시) |
+| `20260619100000_add_poll` | 2026-06-19 | prod DB에 poll/poll_option/poll_vote 테이블 추가 필요 | Yes (prod 배포 시) |
 
 ---
 
@@ -52,6 +54,7 @@
 
 | Migration | Risk Level | Rollback Steps | Data Loss? |
 |-----------|-----------|----------------|------------|
+| `20260619100000_add_poll` | Low | `DROP TABLE poll_vote; DROP TABLE poll_option; DROP TABLE poll;` | poll/poll_option/poll_vote 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260619000000_add_moim_event_fields` | Low | `ALTER TABLE moim DROP COLUMN starts_at; ALTER TABLE moim DROP COLUMN location;` | starts_at/location 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260615000000_add_profile_name` | Low | `ALTER TABLE profile DROP COLUMN name;` | name 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260614_add_device_token` | Low | `DROP TABLE device_token;` | device_token 데이터 손실 (현재 로컬 개발 데이터만 해당) |

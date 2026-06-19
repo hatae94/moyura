@@ -1,6 +1,6 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-06-19 (SPEC-MOIM-004 sync — Moim.startsAt/location nullable 추가)
+%% 최종 갱신: 2026-06-19 (SPEC-MOIM-005 sync — Poll/PollOption/PollVote 3 테이블 추가)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
@@ -52,6 +52,31 @@ erDiagram
         timestamp updated_at "Prisma @updatedAt"
     }
 
+    POLL {
+        string id PK "uuid() 자동 생성"
+        string moim_id FK "→ MOIM.id onDelete Cascade"
+        string question "투표 질문"
+        string created_by "생성자 sub (= PROFILE.id)"
+        timestamp created_at
+    }
+
+    POLL_OPTION {
+        string id PK "uuid() 자동 생성"
+        string poll_id FK "→ POLL.id onDelete Cascade"
+        string label "선택지 텍스트"
+    }
+
+    POLL_VOTE {
+        string poll_id PK,FK "→ POLL.id onDelete Cascade"
+        string user_id PK "투표자 sub (= PROFILE.id)"
+        string option_id FK "→ POLL_OPTION.id onDelete Cascade"
+        timestamp created_at
+    }
+
     MOIM ||--o{ MOIM_MEMBER : "has members (Cascade)"
     MOIM ||--o{ MOIM_INVITE : "has invites (Cascade)"
     MOIM ||--o{ CHAT_MESSAGE : "has messages (Cascade)"
+    MOIM ||--o{ POLL : "has polls (Cascade)"
+    POLL ||--o{ POLL_OPTION : "has options (Cascade)"
+    POLL ||--o{ POLL_VOTE : "has votes (Cascade)"
+    POLL_OPTION ||--o{ POLL_VOTE : "voted by (Cascade)"

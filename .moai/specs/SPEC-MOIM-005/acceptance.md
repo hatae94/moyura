@@ -82,15 +82,15 @@ backend jest 통과(신규 poll 케이스 포함), backend+web+api-client tsc 0,
 
 ## Definition of Done (DoD)
 
-- [ ] `Poll`/`PollOption`/`PollVote` 모델 추가(`PollVote` 복합 PK `(pollId,userId)`, FK cascade), 비파괴 마이그레이션 적용(신규 3 테이블, moim 무변경), prisma migrate clean. (AC-1)
-- [ ] poll 도메인(service/controller/DTO/module) 추가 — `@Controller('moims/:id/polls')`, 모든 진입 assertMember. (AC-2/AC-3/AC-4)
-- [ ] `POST /moims/:id/polls` 생성(createdBy=sub) + question 빈 400 + 유효 옵션<2 400 + 비멤버 403. (AC-2)
-- [ ] `POST /moims/:id/polls/:pollId/vote` upsert(재투표 교체) + 잘못된 optionId 400 + 다른 모임 pollId 404 + 비멤버 403. (AC-3)
-- [ ] `GET /moims/:id/polls` 옵션별 voteCount(표 0 포함) + myVote(null/optionId) + 비멤버 403 + poll 없으면 빈 배열. (AC-4)
-- [ ] backend jest 신규 케이스(생성/검증/투표/재투표/집계/myVote/스코핑/400) 통과. (AC-1~4/AC-6)
-- [ ] `schema.d.ts` 재생성 + api-client poll 타입 별칭(`CreatePollRequest`/`VoteRequest`/`PollResponse`), tsc 0. (AC-6)
-- [ ] web 헬퍼(`lib/moim/polls.ts`) 구체-경로 호출 + 상세 Server Component 의 poll fetch + Client 섬(`polls-section.tsx`) + Server Action(`poll-actions.ts`). (AC-5)
-- [ ] 투표 섹션(질문/옵션/득표 막대/내 표 강조) + 동작 투표 컨트롤 + 동작 생성 폼(질문+동적 옵션≥2) + 빈 상태("아직 투표가 없어요"), Meetup 오렌지 토큰. (AC-5)
-- [ ] web tsc 0 / web lint 0 / web build 0(Client 섬 + Server Action 컴파일). (AC-6)
-- [ ] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-6)
+- [x] `Poll`/`PollOption`/`PollVote` 모델 추가(`PollVote` 복합 PK `(pollId,userId)`, FK cascade), 비파괴 마이그레이션 적용(신규 3 테이블, moim 무변경), prisma migrate clean. (AC-1) — 라이브 검증 2026-06-19
+- [x] poll 도메인(service/controller/DTO/module) 추가 — `@Controller('moims/:id/polls')`, 모든 진입 assertMember. (AC-2/AC-3/AC-4) — 라이브 검증 2026-06-19
+- [x] `POST /moims/:id/polls` 생성(createdBy=sub) + question 빈 400 + 유효 옵션<2 400 + 비멤버 403. (AC-2) — 라이브 검증 2026-06-19
+- [x] `POST /moims/:id/polls/:pollId/vote` upsert(재투표 교체) + 잘못된 optionId 400 + 다른 모임 pollId 404 + 비멤버 403. (AC-3) — 라이브 검증 2026-06-19 (재투표 총 1표 불변 확인)
+- [x] `GET /moims/:id/polls` 옵션별 voteCount(표 0 포함) + myVote(null/optionId) + 비멤버 403 + poll 없으면 빈 배열. (AC-4) — 라이브 검증 2026-06-19
+- [x] backend jest 신규 케이스(생성/검증/투표/재투표/집계/myVote/스코핑/400) 통과. (AC-1~4/AC-6) — jest 258/258 (poll 36 케이스)
+- [x] `schema.d.ts` 재생성 + api-client poll 타입 별칭(`CreatePollRequest`/`VoteRequest`/`PollResponse`), tsc 0. (AC-6) — 라이브 검증 2026-06-19
+- [x] web 헬퍼(`lib/moim/polls.ts`) 구체-경로 호출 + 상세 Server Component 의 poll fetch + Client 섬(`polls-section.tsx`) + Server Action(`poll-actions.ts`). (AC-5) — 라이브 검증 2026-06-19
+- [x] 투표 섹션(질문/옵션/득표 막대/내 표 강조) + 동작 투표 컨트롤 + 동작 생성 폼(질문+동적 옵션≥2) + 빈 상태("아직 투표가 없어요"), Meetup 오렌지 토큰. (AC-5) — 라이브 검증 2026-06-19
+- [x] web tsc 0 / web lint 0 / web build 0(Client 섬 + Server Action 컴파일). (AC-6) — 라이브 검증 2026-06-19
+- [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-6) — mobile vitest 215/215 회귀 0
 - [ ] 디바이스 종단 검증: 상세 → 투표 만들기 → 생성된 투표 표시 → 투표 → 득표/내 표 갱신 → 재투표 교체 라이브 확인. (AC-6, device-gated) — iOS 시뮬레이터에서 Server Action(`revalidatePath`)이 WebView 안에서 결과를 갱신하는지 검증 대기

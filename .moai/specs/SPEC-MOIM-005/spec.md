@@ -1,7 +1,7 @@
 ---
 id: SPEC-MOIM-005
-version: 0.1.0
-status: draft
+version: 0.2.0
+status: in-progress
 created: 2026-06-19
 updated: 2026-06-19
 author: hatae
@@ -13,6 +13,7 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-19 (v0.2.0): 구현 완료 + 라이브 검증 기록. 백엔드: Poll/PollOption/PollVote 신규 3 테이블 additive 추가(마이그레이션 `add_poll`), `PollVote(pollId, userId)` 복합 PK로 단일 투표 불변식 DB 강제. `PollController(@Controller('moims/:id/polls'))` + `PollService`(assertMember 재사용) 신규 도메인 모듈(`apps/backend/src/poll/`). POST 생성(멤버 전용, question+옵션≥2, 빈 question/옵션<2→400, 비멤버→403), POST `:pollId/vote`(단일 투표 upsert, 재투표=교체, 잘못된 optionId→400), GET(옵션별 voteCount+myVote+비멤버 403). jest 258/258(poll 36 케이스), branch 85.14%. api-client: `CreatePollRequest`/`VoteRequest`/`PollResponse` 타입 별칭. 웹(Meetup 오렌지): `lib/moim/polls.ts` 구체-경로 헬퍼; `app/(main)/home/[id]/poll-actions.ts` Server Action(`createPollAction`/`voteAction` + `revalidatePath`); `polls-section.tsx` Client 하위 컴포넌트(투표 막대+득표 수/퍼센트+내 표 강조+생성 폼+빈 상태); `page.tsx` Server Component 유지(poll fetch + Client 섬 마운트). 라이브 검증(2026-06-19, 데스크톱 브라우저, 실 세션, 모임 "주말 등산 모임"): 빈 상태 "아직 투표가 없어요" 확인 → "투표 만들기" → "다음 산행 어디로 갈까요?"/북한산·관악산 생성(poll count 1, 0표) → 북한산 투표(1표/100%, 내 표 강조, "총 1표 · 내 선택이 반영됐어요") → 관악산 재투표(표 교체 — 관악산 1표/100%, 북한산 0표, 총 1표 불변 = 추가 아닌 교체 확인). AC-1~5 라이브 PASS. 자동 게이트: jest 258/258, tsc 0(all), web lint/build 0, mobile vitest 215/215(회귀 0), prisma migrate clean. **미완료(device-gated)**: poll 생성/투표 Server Action + `revalidatePath`가 iOS 시뮬레이터 모바일 WebView 셸 안에서 동작하여 결과가 갱신되는지 검증 대기. status in-progress 유지. **소소한 UX 메모**: 투표 생성 성공 후 생성 폼이 자동 닫힘/초기화되지 않고 열린 상태로 남음 — 코스메틱, 별도 후속 수정 대상.
 - 2026-06-19 (v0.1.0): 최초 draft. 이벤트 트라이어드(일정·장소·투표)의 마지막 조각. SPEC-MOIM-004 가 일정/장소를 추가하며 투표를 명시적으로 카브아웃("poll 엔티티 + options + per-user votes + 결과 집계 UI 가 필요한 별도·대형 후속 SPEC", MOIM-004 spec.md:124)했고, 제품 로그인 태그라인("일정, 장소, 투표를 한곳에서")이 가리키는 세 번째 기능이다 — 본 SPEC이 그 후속이다. **MVP 단일 선택 투표**로 범위를 한정한다. 핵심 결정: (1) 데이터 모델 — `moim` 테이블 무변경, **신규 3 테이블만 additive CREATE**(`Poll`/`PollOption`/`PollVote`). `PollVote` 의 복합 PK `(pollId, userId)` 가 "멤버당 한 투표(변경 가능)" 불변식을 DB 레벨에서 강제한다(MoimMember 의 `(moimId, userId)` 복합 PK 패턴 동일). (2) 멤버 스코핑 — 채팅과 동일하게 모임 멤버만 생성/투표/조회 가능(비멤버 403). 어느 멤버나 투표 생성(질문 + 옵션 ≥2), 어느 멤버나 투표당 1표(재투표 = 선택 변경, upsert on `(pollId,userId)`). (3) 엔드포인트 shape — **모든 투표 라우트를 `/moims/:id/polls` 하위에 중첩**한다(ChatController 의 `@Controller('moims/:id/messages')` 패턴 미러 — moimId 가 항상 path 에 있어 `assertMember(sub, moimId)` 직접 호출, poll→moim 역방향 lookup 불필요). (4) 웹 — `/home/[id]` 상세(현재 읽기 전용 Server Component)에 투표 섹션 추가. **투표/생성은 인터랙티브하므로 Server Component 본체는 데이터 fetch + 가드를 유지하고, 투표 컨트롤·생성 폼은 Client 하위 컴포넌트 + Server Action**(MOIM-004 `createMoimAction`/온보딩 패턴)으로 분리한다. 결과는 액션/페이지 로드 시 `revalidatePath` 로 갱신(Supabase Realtime 라이브 갱신은 제외 — 채팅 미러는 향후). (5) api-client — 백엔드 OpenAPI 변경 반영해 `schema.d.ts` 재생성 + poll DTO 타입 별칭. path-param 투표 라우트는 web 의 `lib/moim/*` 구체-경로 헬퍼로 호출(getMoim/getMoimMembers 와 동일 — api-client 의 편의 메서드 표면은 리터럴 경로 전용 유지). 디자인은 Meetup 오렌지 시맨틱 토큰(`(main)/*` 동일 — login/onboarding blue 아님). **스코프 결정 기록**: (a) 단일 선택만(다중/순위/가중 제외); (b) 일반 투표(질문 + 텍스트 옵션) — 날짜 후보 투표(`Moim.startsAt` 설정용)는 향후 특수화; (c) 마감/잠금/수정/삭제/익명 투표 제외; (d) 실시간 라이브 갱신 제외(결과는 투표·새로고침 시 반영); (e) 모바일 신규 코드 없음(웹 상세가 WebView 안에서 렌더).
 
 ---

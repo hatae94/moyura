@@ -3,6 +3,7 @@ engine: PostgreSQL 17.x (Supabase 관리형)
 orm: Prisma 7.8.0
 last_synced_at: 2026-06-19
 manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
+spec: SPEC-MOIM-005 sync (Poll/PollOption/PollVote 3 테이블 추가)
 ---
 
 
@@ -23,6 +24,9 @@ manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
 | `moim_invite` | 초대 링크 — token PK, moim_id FK, 만료·폐기·사용 횟수 관리 (SPEC-MOIM-002) |
 | `chat_message` | 모임 채팅 메시지 — BigInt PK, moim_id FK, RLS default-deny, content CHECK(1..2000) (SPEC-CHAT-001) |
 | `device_token` | FCM 디바이스 토큰 레지스트리 — token PK, userId(=profile.id), platform, upsert 중복 없음 (SPEC-CHAT-002) |
+| `poll` | 모임 투표 — uuid PK, moimId FK→moim Cascade, question, createdBy, createdAt (SPEC-MOIM-005) |
+| `poll_option` | 투표 선택지 — uuid PK, pollId FK→poll Cascade, label (SPEC-MOIM-005) |
+| `poll_vote` | 투표 기록 — 복합 PK (pollId, userId), optionId FK→poll_option Cascade; 멤버당 한 투표 불변식 DB 강제 (SPEC-MOIM-005) |
 
 ### profile
 
@@ -112,6 +116,45 @@ Prisma 모델명: `DeviceToken` | 마이그레이션: `20260614_add_device_token
 
 **인덱스**: `@@index([moimId, id])` — keyset 내림차순 히스토리 쿼리 최적화(`id DESC`).
 
+### poll
+
+Prisma 모델명: `Poll` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005)
+
+| 컬럼 | 타입 | 제약 | 설명 |
+|------|------|------|------|
+| `id` | TEXT | PK | uuid() 자동 생성 |
+| `moim_id` | TEXT | NOT NULL, FK → moim.id onDelete Cascade | 소속 모임 id |
+| `question` | TEXT | NOT NULL | 투표 질문 (trim 후 빈 값 → 400) |
+| `created_by` | TEXT | NOT NULL | 생성자 sub (= profile.id, 가드 검증) |
+| `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 생성 시각 |
+
+### poll_option
+
+Prisma 모델명: `PollOption` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005)
+
+| 컬럼 | 타입 | 제약 | 설명 |
+|------|------|------|------|
+| `id` | TEXT | PK | uuid() 자동 생성 |
+| `poll_id` | TEXT | NOT NULL, FK → poll.id onDelete Cascade | 소속 투표 id |
+| `label` | TEXT | NOT NULL | 선택지 텍스트 |
+
+**정렬 주의**: `position` 컬럼 없음(SPEC-MOIM-005 Exclusions). 선택지는 결정적 키(`id`)로 정렬해 안정 표시.
+
+### poll_vote
+
+Prisma 모델명: `PollVote` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005)
+
+| 컬럼 | 타입 | 제약 | 설명 |
+|------|------|------|------|
+| `poll_id` | TEXT | PK(복합), FK → poll.id onDelete Cascade | 소속 투표 id |
+| `user_id` | TEXT | PK(복합) | 투표자 sub (= profile.id) |
+| `option_id` | TEXT | NOT NULL, FK → poll_option.id onDelete Cascade | 선택한 옵션 id |
+| `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 투표 시각 |
+
+**복합 PK `(poll_id, user_id)`**: 멤버당 한 투표 불변식을 DB 레벨에서 강제. 재투표 = `(pollId,userId)` 기준 upsert로 `option_id` 교체(추가 표 아님). `MoimMember(moim_id,user_id)` 복합 PK 패턴과 동일.
+
+**Cascade 체인**: moim 삭제 → poll Cascade → poll_option Cascade, poll_vote Cascade. poll 삭제 → poll_option/poll_vote Cascade.
+
 ---
 
 ## Relationships
@@ -121,6 +164,10 @@ Prisma 모델명: `DeviceToken` | 마이그레이션: `20260614_add_device_token
 | `moim_member` | `moim` | N:1 | `moim_member.moim_id` | onDelete Cascade — 모임 삭제 시 멤버십 자동 정리 |
 | `moim_invite` | `moim` | N:1 | `moim_invite.moim_id` | onDelete Cascade — 모임 삭제 시 초대 자동 정리 |
 | `chat_message` | `moim` | N:1 | `chat_message.moim_id` | onDelete Cascade — 모임 삭제 시 채팅 메시지 자동 정리 |
+| `poll` | `moim` | N:1 | `poll.moim_id` | onDelete Cascade — 모임 삭제 시 투표 자동 정리 (SPEC-MOIM-005) |
+| `poll_option` | `poll` | N:1 | `poll_option.poll_id` | onDelete Cascade — 투표 삭제 시 선택지 자동 정리 (SPEC-MOIM-005) |
+| `poll_vote` | `poll` | N:1 | `poll_vote.poll_id` | onDelete Cascade — 투표 삭제 시 표 자동 정리 (SPEC-MOIM-005) |
+| `poll_vote` | `poll_option` | N:1 | `poll_vote.option_id` | onDelete Cascade — 선택지 삭제 시 표 자동 정리 (SPEC-MOIM-005) |
 
 > `profile.id`와 `moim.created_by` / `moim_member.user_id` / `moim_invite.created_by` / `device_token.user_id`는 모두 Supabase `sub`로 논리적으로 연결되나, 현재 schema에 외래 키 제약은 없다(auth.users는 Supabase 내부 스키마 — app-owned profile 패턴). `device_token`은 `moim`에도 FK가 없는 독립 레지스트리다(사용자-디바이스 등록, moim과 무관).
 
@@ -139,6 +186,9 @@ Prisma 모델명: `DeviceToken` | 마이그레이션: `20260614_add_device_token
 | `chat_message` | `(moim_id, id)` | INDEX (`@@index([moimId, id])`) | 모임별 keyset 내림차순 히스토리 쿼리 최적화 |
 | `device_token` | `token` | PK (기본) | 토큰 단일 조회 |
 | `device_token` | `user_id` | INDEX (`@@index([userId])`) | 사용자별 토큰 목록 조회 최적화(PushListener 수신자 토큰 일괄 조회) |
+| `poll` | `id` | PK (기본) | 단일 PK 조회 |
+| `poll_option` | `id` | PK (기본) | 단일 PK 조회 |
+| `poll_vote` | `(poll_id, user_id)` | PK 복합 (기본) | 멤버당 한 투표 불변식 — 한 사용자는 한 투표에서 한 번만 (SPEC-MOIM-005) |
 
 ---
 
@@ -156,3 +206,10 @@ Prisma 모델명: `DeviceToken` | 마이그레이션: `20260614_add_device_token
 | `chat_message` | `chat_message_moim_id_fkey` | FK | `moim_id → moim(id) ON DELETE CASCADE` |
 | `chat_message` | `chat_message_content_length` | CHECK | `char_length(content) BETWEEN 1 AND 2000` |
 | `device_token` | `device_token_pkey` | PK | `token` |
+| `poll` | `poll_pkey` | PK | `id` |
+| `poll` | `poll_moim_id_fkey` | FK | `moim_id → moim(id) ON DELETE CASCADE` |
+| `poll_option` | `poll_option_pkey` | PK | `id` |
+| `poll_option` | `poll_option_poll_id_fkey` | FK | `poll_id → poll(id) ON DELETE CASCADE` |
+| `poll_vote` | `poll_vote_pkey` | PK | `(poll_id, user_id)` |
+| `poll_vote` | `poll_vote_poll_id_fkey` | FK | `poll_id → poll(id) ON DELETE CASCADE` |
+| `poll_vote` | `poll_vote_option_id_fkey` | FK | `option_id → poll_option(id) ON DELETE CASCADE` |
