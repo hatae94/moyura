@@ -255,13 +255,24 @@ function PollCard({
 
 /** "투표 만들기" 폼 — 질문 + 동적 옵션 입력(추가/제거, 최소 2). useActionState(createPollAction). */
 function CreatePollForm({ moimId }: { moimId: string }) {
-  const [state, action, pending] = useActionState<
-    CreatePollActionState,
-    FormData
-  >(createPollAction, undefined);
   // 동적 옵션 입력 — 기본 2칸, 추가/제거 가능(최소 2 유지). 제어 컴포넌트로 입력값을 관리한다.
   const [options, setOptions] = useState<string[]>(["", ""]);
   const [open, setOpen] = useState(false);
+
+  // 생성 성공 시 폼을 닫고 입력을 리셋한다 — 제출 후에도 폼이 열린 채 남던 UX 결함 해소.
+  // createPollAction 을 액션 래퍼로 감싸 성공(ok) 직후 setOpen/setOptions 를 호출한다(트랜잭션 컨텍스트라
+  // effect-내-setState 안티패턴을 피한다 — react-hooks/set-state-in-effect). 실패 시 폼/입력을 유지한다.
+  const [state, action, pending] = useActionState<CreatePollActionState, FormData>(
+    async (prev, formData) => {
+      const result = await createPollAction(prev, formData);
+      if (result?.ok) {
+        setOpen(false);
+        setOptions(["", ""]);
+      }
+      return result;
+    },
+    undefined,
+  );
 
   function updateOption(index: number, value: string): void {
     setOptions((prev) => prev.map((o, i) => (i === index ? value : o)));

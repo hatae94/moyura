@@ -51,11 +51,13 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* 테마 톤 통일(SPEC-MOIM-007 후속 UX): Figma Make "One-time-Event-App" 는 light 전용 디자인이라
+   --card/--muted/--border/--input-background 등 시맨틱 토큰이 모두 light 값이다. create-next-app 기본
+   prefers-color-scheme:dark 오버라이드는 --background/--foreground 만 어둡게 바꿔, 검은 배경 위에 흰 카드·
+   밝은 입력·보이지 않는 테두리가 섞이는 톤 불일치를 만들었다. 다크 팔레트가 없으므로 OS 선호와 무관하게
+   설계된 light 팔레트로 일관 렌더한다(부분 다크 오버라이드 제거 — 전면 다크 테마 신설은 범위 밖). */
+:root {
+  color-scheme: light;
 }
 
 body {

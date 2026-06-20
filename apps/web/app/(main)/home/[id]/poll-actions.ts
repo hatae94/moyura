@@ -19,8 +19,8 @@ import { API_BASE_URL } from "@/lib/env";
 import { closePoll, createPoll, votePoll } from "@/lib/moim/polls";
 import { createClient } from "@/lib/supabase/server";
 
-/** 투표 생성 결과 상태(useActionState 로 소비 — 에러 시 폼에 머무른다). */
-export type CreatePollActionState = { error?: string } | undefined;
+/** 투표 생성 결과 상태(useActionState 로 소비 — 에러 시 폼에 머무르고, 성공 시 ok:true 로 폼을 닫는다). */
+export type CreatePollActionState = { error?: string; ok?: boolean } | undefined;
 
 /** 투표(vote) 결과 상태(클라이언트가 실패 시 일반화 오류를 표시). */
 export type VoteActionState = { error?: string } | undefined;
@@ -105,8 +105,9 @@ export async function createPollAction(
   }
 
   // 성공: 상세를 재검증해 새 투표가 목록에 나타나게 한다(라이브 푸시 아님 — revalidatePath).
+  // ok:true 를 돌려줘 클라이언트 폼이 닫히고 입력이 리셋되게 한다(매 성공마다 새 객체 → useEffect 가 감지).
   revalidatePath(`/home/${moimId}`);
-  return undefined;
+  return { ok: true };
 }
 
 /**
