@@ -19,6 +19,7 @@
 | `20260619000000_add_moim_event_fields` | 2026-06-19 | `moim` 테이블에 `starts_at TIMESTAMP(3)` + `location TEXT` 컬럼(모두 nullable) 추가. SPEC-MOIM-004 — 모임 이벤트 일정/장소 필드. 기존 row는 두 값 모두 NULL(additive 무중단 마이그레이션). |
 | `20260619100000_add_poll` | 2026-06-19 | `poll`(id TEXT PK uuid, moim_id FK→moim Cascade, question, created_by, created_at) + `poll_option`(id TEXT PK uuid, poll_id FK→poll Cascade, label) + `poll_vote`(복합 PK(poll_id,user_id), option_id FK→poll_option Cascade, created_at) 신규 3 테이블 CREATE. 비파괴 additive(기존 테이블 무변경). SPEC-MOIM-005 — 모임 투표/단일 투표/결과 집계. |
 | `add_poll_multi_select` | 2026-06-20 | `poll` 테이블에 `multi_select BOOLEAN NOT NULL DEFAULT false` 컬럼 additive 추가(기존 poll row 모두 false). `poll_vote` 복합 PK `(poll_id,user_id)` → `(poll_id,option_id,user_id)` 비파괴 변경(`poll_vote_pkey` DROP + ADD — 기존 단일 선택 표는 (pollId,userId) 유일이므로 (pollId,optionId,userId)도 자동 유일 → row 손실 0). `@@index([optionId])` 보존. 비파괴 패턴(migrate diff → db execute → migrate resolve --applied → migrate status clean). SPEC-MOIM-006 — 투표 다중 선택. |
+| `20260620200000_add_poll_closes_at` | 2026-06-20 | `poll` 테이블에 `closes_at TIMESTAMP(3)` 컬럼 nullable additive 추가(`@default` 없음 — 기존 poll row 모두 null = 마감 없음, MOIM-005/006 동작 보존). `poll_vote` PK/FK/인덱스 무변경. SQL: `ALTER TABLE poll ADD COLUMN closes_at TIMESTAMP(3);` — 비파괴(데이터 손실 0). 비파괴 패턴(migrate diff → db execute → migrate resolve --applied → migrate status clean). SPEC-MOIM-007 — 투표 마감(deadline + 수동 마감). |
 
 ### SPEC-CHAT-001 수동 SQL 주의 (R-6 드리프트)
 
@@ -49,6 +50,7 @@
 | `20260619000000_add_moim_event_fields` | 2026-06-19 | prod DB에 moim.starts_at(nullable) + moim.location(nullable) 컬럼 추가 필요 | Yes (prod 배포 시) |
 | `20260619100000_add_poll` | 2026-06-19 | prod DB에 poll/poll_option/poll_vote 테이블 추가 필요 | Yes (prod 배포 시) |
 | `add_poll_multi_select` | 2026-06-20 | prod DB에 poll.multi_select 컬럼 추가 + poll_vote PK 변경 필요 | Yes (prod 배포 시) |
+| `20260620200000_add_poll_closes_at` | 2026-06-20 | prod DB에 poll.closes_at(nullable) 컬럼 추가 필요 | Yes (prod 배포 시) |
 
 ---
 
@@ -56,6 +58,7 @@
 
 | Migration | Risk Level | Rollback Steps | Data Loss? |
 |-----------|-----------|----------------|------------|
+| `20260620200000_add_poll_closes_at` | Low | `ALTER TABLE poll DROP COLUMN closes_at;` | closes_at 데이터 손실(현재 로컬 개발 데이터만 해당). poll/option/vote row에는 영향 없음 |
 | `add_poll_multi_select` | Low | `ALTER TABLE poll DROP COLUMN multi_select; ALTER TABLE poll_vote DROP CONSTRAINT poll_vote_pkey; ALTER TABLE poll_vote ADD PRIMARY KEY (poll_id, user_id);` | 다중 선택 표 손실 가능(단일 선택 표는 (pollId,userId) 유일이므로 PK 복구 시 row 손실 없음 — 단, 다중 선택으로 추가된 표는 (pollId,userId) 기준으로 충돌 가능성 있음) |
 | `20260619100000_add_poll` | Low | `DROP TABLE poll_vote; DROP TABLE poll_option; DROP TABLE poll;` | poll/poll_option/poll_vote 데이터 손실 (현재 로컬 개발 데이터만 해당) |
 | `20260619000000_add_moim_event_fields` | Low | `ALTER TABLE moim DROP COLUMN starts_at; ALTER TABLE moim DROP COLUMN location;` | starts_at/location 데이터 손실 (현재 로컬 개발 데이터만 해당) |

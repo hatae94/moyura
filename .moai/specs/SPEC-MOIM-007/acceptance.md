@@ -115,15 +115,15 @@ backend jest 통과(마감 신규 + 열린 poll 회귀), backend+web+api-client 
 
 ## Definition of Done (DoD)
 
-- [ ] `Poll.closesAt`(nullable, `@default` 없음, additive) 추가 + PK/FK/인덱스 무변경(기존 row 보존, row 손실 0), prisma migrate clean. (AC-1)
-- [ ] `POST /moims/:id/polls` 가 optional closesAt(생략 시 null) 수용 + 무효 ISO 400 + 마감 없는 생성 무변경 + question 빈/옵션<2 400 + 비멤버 403. (AC-2)
-- [ ] `POST .../close` 가 생성자 전용(createdBy === sub → closesAt=now/isClosed true) + 비생성자 멤버 403 + 비멤버 403 + 없는 poll 404 + 멱등(두 번 close 200). (AC-3)
-- [ ] `POST .../vote` 가 마감 poll 에서 409("마감된 투표입니다", 표 불변, 단일/다중 공통 + optionId 무관) + 열린 poll 정상(단일 교체 총 1표 / 다중 토글, MOIM-005/006 회귀 0) + 다른 모임 pollId 404 + 비멤버 403. (AC-4)
-- [ ] `GET /moims/:id/polls` 가 closesAt(ISO|null) + 서버 계산 isClosed(null/미래 false, 과거/now true) + 마감 poll 도 결과 조회 가능 + 비멤버 403 + poll 없으면 빈 배열. (AC-5)
-- [ ] DTO(`CreatePollDto.closesAt`, `PollResponseDto.closesAt`+`isClosed`) + service vote 마감 검사(409)/closePoll 신규/aggregate isClosed 계산 + 컨트롤러 close 라우트/parseClosesAt. (AC-2/3/4/5)
-- [ ] backend jest 신규(closesAt 생성/무효 ISO 400/vote 409 단일·다중/closePoll 생성자·비생성자·비멤버·멱등/isClosed 계산) + 열린 poll 회귀(closesAt 생략/단일 교체/다중 토글) + 400/403/404 통과. (AC-1~5/AC-8)
-- [ ] `schema.d.ts` 재생성 + api-client `CreatePollRequest`(closesAt) / `PollResponse`(closesAt/isClosed, multiSelect·myVotes 보존) + 별칭 유지, tsc 0. (AC-6)
-- [ ] web `PollWithResults`(closesAt/isClosed) + `closePoll` 헬퍼 + `closePollAction` + `createPollAction` closesAt 읽기 + `PollCard` 마감 분기(배지/비활성/결과/마감하기) + `CreatePollForm` 마감 시각 입력 + page currentUserId 전달, Meetup 오렌지. (AC-7)
-- [ ] web tsc 0(closesAt/isClosed/currentUserId 전 소비처) / web lint 0 / web build 0. (AC-8)
-- [ ] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-8)
-- [ ] 디바이스 종단 검증: 상세 → 마감 시각 정해 생성 → 마감 전 투표(단일/다중) → 생성자 "마감하기" → "마감됨" 배지 + 비활성 컨트롤 + 결과 표시 → 마감 poll 투표 차단(409) → 비생성자/마감 poll "마감하기" 미노출 라이브 확인. (AC-8, device-gated) — iOS 시뮬레이터에서 모바일 WebView poll 마감 인터랙션(Server Action + revalidatePath)이 WebView 컨텍스트에서 마감 상태를 갱신하는지 검증 대기.
+- [x] `Poll.closesAt`(nullable, `@default` 없음, additive) 추가 + PK/FK/인덱스 무변경(기존 row 보존, row 손실 0), prisma migrate clean. (AC-1) — 라이브 검증 2026-06-20
+- [x] `POST /moims/:id/polls` 가 optional closesAt(생략 시 null) 수용 + 무효 ISO 400 + 마감 없는 생성 무변경 + question 빈/옵션<2 400 + 비멤버 403. (AC-2) — 라이브 검증 2026-06-20
+- [x] `POST .../close` 가 생성자 전용(createdBy === sub → closesAt=now/isClosed true) + 비생성자 멤버 403 + 비멤버 403 + 없는 poll 404 + 멱등(두 번 close 200). (AC-3) — 라이브 검증 2026-06-20
+- [x] `POST .../vote` 가 마감 poll 에서 409("마감된 투표입니다", 표 불변, 단일/다중 공통 + optionId 무관) + 열린 poll 정상(단일 교체 총 1표 / 다중 토글, MOIM-005/006 회귀 0) + 다른 모임 pollId 404 + 비멤버 403. (AC-4) — 라이브 검증 2026-06-20
+- [x] `GET /moims/:id/polls` 가 closesAt(ISO|null) + 서버 계산 isClosed(null/미래 false, 과거/now true) + 마감 poll 도 결과 조회 가능 + 비멤버 403 + poll 없으면 빈 배열. (AC-5) — 라이브 검증 2026-06-20
+- [x] DTO(`CreatePollDto.closesAt`, `PollResponseDto.closesAt`+`isClosed`) + service vote 마감 검사(409)/closePoll 신규/aggregate isClosed 계산 + 컨트롤러 close 라우트/parseClosesAt. (AC-2/3/4/5) — 라이브 검증 2026-06-20
+- [x] backend jest 신규(closesAt 생성/무효 ISO 400/vote 409 단일·다중/closePoll 생성자·비생성자·비멤버·멱등/isClosed 계산) + 열린 poll 회귀(closesAt 생략/단일 교체/다중 토글) + 400/403/404 통과. (AC-1~5/AC-8) — jest 290/290
+- [x] `schema.d.ts` 재생성 + api-client `CreatePollRequest`(closesAt) / `PollResponse`(closesAt/isClosed, multiSelect·myVotes 보존) + 별칭 유지, tsc 0. (AC-6) — tsc 0(all)
+- [x] web `PollWithResults`(closesAt/isClosed) + `closePoll` 헬퍼 + `closePollAction` + `createPollAction` closesAt 읽기 + `PollCard` 마감 분기(배지/비활성/결과/마감하기) + `CreatePollForm` 마감 시각 입력 + page currentUserId 전달, Meetup 오렌지. (AC-7) — 라이브 검증 2026-06-20
+- [x] web tsc 0(closesAt/isClosed/currentUserId 전 소비처) / web lint 0 / web build 0. (AC-8) — tsc 0, lint 0, build 0
+- [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-8) — mobile vitest 215/215(회귀 0)
+- [ ] 디바이스 종단 검증: 상세 → 마감 시각 정해 생성 → 마감 전 투표(단일/다중) → 생성자 "마감하기" → "마감됨" 배지 + 비활성 컨트롤 + 결과 표시 → 마감 poll 투표 차단(409) → 비생성자/마감 poll "마감하기" 미노출 라이브 확인. (AC-8, device-gated) — iOS 시뮬레이터에서 모바일 WebView poll 마감 인터랙션(Server Action + revalidatePath)이 WebView 컨텍스트에서 마감 상태를 갱신하는지 검증 대기
