@@ -1,9 +1,9 @@
 ---
 engine: PostgreSQL 17.x (Supabase 관리형)
 orm: Prisma 7.8.0
-last_synced_at: 2026-06-20
+last_synced_at: 2026-06-21
 manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
-spec: SPEC-MOIM-007 sync (Poll.closesAt 컬럼 추가 — 20260620200000_add_poll_closes_at 비파괴 마이그레이션)
+spec: SPEC-MOIM-008 sync (Poll.kind + PollOption.option_date 컬럼 추가 — 20260621000000_add_poll_kind_option_date 비파괴 마이그레이션)
 ---
 
 
@@ -24,8 +24,8 @@ spec: SPEC-MOIM-007 sync (Poll.closesAt 컬럼 추가 — 20260620200000_add_pol
 | `moim_invite` | 초대 링크 — token PK, moim_id FK, 만료·폐기·사용 횟수 관리 (SPEC-MOIM-002) |
 | `chat_message` | 모임 채팅 메시지 — BigInt PK, moim_id FK, RLS default-deny, content CHECK(1..2000) (SPEC-CHAT-001) |
 | `device_token` | FCM 디바이스 토큰 레지스트리 — token PK, userId(=profile.id), platform, upsert 중복 없음 (SPEC-CHAT-002) |
-| `poll` | 모임 투표 — uuid PK, moimId FK→moim Cascade, question, createdBy, createdAt, multiSelect(boolean, SPEC-MOIM-006), closesAt(nullable timestamp, SPEC-MOIM-007) |
-| `poll_option` | 투표 선택지 — uuid PK, pollId FK→poll Cascade, label (SPEC-MOIM-005) |
+| `poll` | 모임 투표 — uuid PK, moimId FK→moim Cascade, question, createdBy, createdAt, multiSelect(boolean, SPEC-MOIM-006), closesAt(nullable timestamp, SPEC-MOIM-007), kind(TEXT NOT NULL DEFAULT 'general', SPEC-MOIM-008) |
+| `poll_option` | 투표 선택지 — uuid PK, pollId FK→poll Cascade, label, optionDate(nullable timestamp, SPEC-MOIM-008) |
 | `poll_vote` | 투표 기록 — 복합 PK (pollId, optionId, userId), optionId FK→poll_option Cascade; 멤버당 옵션당 한 표 불변식(SPEC-MOIM-006 PK 변경) |
 
 ### profile
@@ -118,7 +118,7 @@ Prisma 모델명: `DeviceToken` | 마이그레이션: `20260614_add_device_token
 
 ### poll
 
-Prisma 모델명: `Poll` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005) | multiSelect 추가 마이그레이션: `add_poll_multi_select` (SPEC-MOIM-006) | closesAt 추가 마이그레이션: `20260620200000_add_poll_closes_at` (SPEC-MOIM-007)
+Prisma 모델명: `Poll` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005) | multiSelect 추가 마이그레이션: `add_poll_multi_select` (SPEC-MOIM-006) | closesAt 추가 마이그레이션: `20260620200000_add_poll_closes_at` (SPEC-MOIM-007) | kind 추가 마이그레이션: `20260621000000_add_poll_kind_option_date` (SPEC-MOIM-008)
 
 | 컬럼 | 타입 | 제약 | 설명 |
 |------|------|------|------|
@@ -129,16 +129,18 @@ Prisma 모델명: `Poll` | 마이그레이션: `20260619100000_add_poll` (SPEC-M
 | `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 생성 시각 |
 | `multi_select` | BOOLEAN | NOT NULL DEFAULT false | poll별 다중 선택 opt-in 플래그. false = 단일 교체(MOIM-005 동작 보존), true = 토글(0..N 선택). 기존 모든 poll row는 false(additive 추가, SPEC-MOIM-006) |
 | `closes_at` | TIMESTAMP(3) | NULLABLE | 마감 시각 — deadline(생성 시 설정) + 수동 마감(closePoll이 now로 설정) 모두 이 컬럼 하나로 표현. null = 마감 없음(영구 열림, MOIM-005/006 기본 동작 보존). CLOSED 판정: closesAt != null AND closesAt <= now(서버 계산 isClosed로 노출). @default 없음 → 기존 poll row 모두 null(additive 비파괴, SPEC-MOIM-007) |
+| `kind` | TEXT | NOT NULL DEFAULT 'general' | 투표 종류 — "general"(자유 텍스트 옵션, MOIM-005/006/007 그대로) 또는 "date"(날짜 옵션, SPEC-MOIM-008). Prisma enum 아님(string 컬럼 — CREATE TYPE 회피, 컨트롤러 parseKind 검증). `@default("general")` → 기존 poll row 모두 "general"(additive 비파괴). 미지 값 → 컨트롤러 400. |
 
 ### poll_option
 
-Prisma 모델명: `PollOption` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005)
+Prisma 모델명: `PollOption` | 마이그레이션: `20260619100000_add_poll` (SPEC-MOIM-005) | optionDate 추가 마이그레이션: `20260621000000_add_poll_kind_option_date` (SPEC-MOIM-008)
 
 | 컬럼 | 타입 | 제약 | 설명 |
 |------|------|------|------|
 | `id` | TEXT | PK | uuid() 자동 생성 |
 | `poll_id` | TEXT | NOT NULL, FK → poll.id onDelete Cascade | 소속 투표 id |
-| `label` | TEXT | NOT NULL | 선택지 텍스트 |
+| `label` | TEXT | NOT NULL | 선택지 텍스트. 날짜 투표 옵션의 경우 파싱된 ISO 문자열(정규화 — 웹이 optionDate를 포맷해 렌더, raw label 노출 금지). 일반 투표는 자유 텍스트(MOIM-005 그대로) |
+| `option_date` | TIMESTAMP(3) | NULLABLE | 날짜 투표 옵션의 시각 — kind="date" 생성 시 ISO 파싱값을 저장, finalize 판정의 출처(label ISO 재파싱 금지). kind="general" 이면 null(additive 비파괴, 기존 option row 모두 null, SPEC-MOIM-008) |
 
 **정렬 주의**: `position` 컬럼 없음(SPEC-MOIM-005 Exclusions). 선택지는 결정적 키(`id`)로 정렬해 안정 표시.
 

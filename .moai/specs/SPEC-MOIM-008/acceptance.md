@@ -111,16 +111,16 @@ backend jest 통과(날짜 투표 + finalize 신규 + 일반/마감 회귀), bac
 
 ## Definition of Done (DoD)
 
-- [ ] `Poll.kind`(string `@default("general")`) + `PollOption.optionDate`(nullable) additive 추가 + PK/FK/인덱스 무변경(기존 row 보존, row 손실 0), prisma migrate clean(enum 회피). (AC-1)
-- [ ] `POST /moims/:id/polls` 가 kind="date" + ISO 날짜 옵션 수용(optionDate/label 저장) + 미지 kind 400 + 무효 날짜 옵션 400 + 일반 투표 무변경 + question 빈/옵션<2 400 + 비멤버 403. (AC-2)
-- [ ] `POST .../close` 가 날짜 투표 단일 승자 → Moim.startsAt 확정(finalizedStartsAt) / 동점 → "tie" 스킵 / 무표 → "no_votes" 스킵 / 일반 투표 → finalize 안 함 + 기존 startsAt 덮어쓰기 + 비생성자 403(finalize 미실행). (AC-3)
-- [ ] `Moim.startsAt` 쓰기가 `MoimService.setStartsAt` 단일 메서드를 통한다(closePoll 호출, createMoim 외 유일 쓰기 경로). (AC-3)
-- [ ] `GET /moims/:id/polls` 가 각 poll 의 kind + 각 옵션 optionDate(ISO|null) + 마감/finalize 된 날짜 투표 결과 조회 가능 + 비멤버 403 + poll 없으면 빈 배열. (AC-4)
-- [ ] close 응답이 finalizedStartsAt(ISO|null) + finalizeSkippedReason("tie"|"no_votes"|null) + vote/list 응답은 둘 다 null. (AC-5)
-- [ ] DTO(`CreatePollDto.kind`, `PollResponseDto.kind`/`finalizedStartsAt`/`finalizeSkippedReason`, `PollOptionResponseDto.optionDate`) + service createPoll optionDate/closePoll finalize/aggregate kind·optionDate + 컨트롤러 parseKind/parseOptionDates + setStartsAt. (AC-2/3/4/5)
-- [ ] backend jest 신규(날짜 생성/무효 날짜 400/미지 kind 400/finalize 단일 승자→startsAt/동점 tie/무표 no_votes/일반 투표 finalize 안 함/덮어쓰기/비생성자 403/setStartsAt 단일 출처) + 회귀(일반 단일 교체/다중 토글/마감 409/closesAt 옵트인) + 400/403/404/409 통과. (AC-1~5/AC-8)
-- [ ] `schema.d.ts` 재생성 + api-client `CreatePollRequest`(kind) / `PollResponse`(kind/옵션 optionDate/finalize, multiSelect·myVotes·closesAt·isClosed 보존) + 별칭 유지, tsc 0. (AC-6)
-- [ ] web `PollWithResults`(kind/옵션 optionDate) + close 결과 타입(finalize) + `createPollAction` kind/날짜 옵션 읽기 + `closePollAction` finalize 결과 전달 + `PollCard` 날짜 포맷/확정 힌트/동점 notice + `CreatePollForm` 일정 투표 토글(datetime 옵션 전환), Meetup 오렌지. page.tsx 헤더 startsAt 갱신 확인. (AC-7)
-- [ ] web tsc 0(kind/optionDate/finalize 전 소비처) / web lint 0 / web build 0. (AC-8)
-- [ ] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-8)
-- [ ] 디바이스 종단 검증: 상세 → "일정 투표" 토글 켜고 날짜 옵션 ≥2 생성 → 포맷 날짜 + 확정 힌트 → 멤버 투표 → 생성자 "마감하기" → 단일 승자 모임 헤더 일정 확정 갱신 / 동점 notice + 일정 불변 라이브 확인. (AC-8, device-gated) — iOS 시뮬레이터에서 모바일 WebView poll 마감(Server Action + revalidatePath)이 poll 마감 AND 모임 헤더 startsAt 을 둘 다 갱신하는지 검증 대기
+- [x] `Poll.kind`(string `@default("general")`) + `PollOption.optionDate`(nullable) additive 추가 + PK/FK/인덱스 무변경(기존 row 보존, row 손실 0), prisma migrate clean(enum 회피). (AC-1) — 라이브 검증 2026-06-21
+- [x] `POST /moims/:id/polls` 가 kind="date" + ISO 날짜 옵션 수용(optionDate/label 저장) + 미지 kind 400 + 무효 날짜 옵션 400 + 일반 투표 무변경 + question 빈/옵션<2 400 + 비멤버 403. (AC-2) — 라이브 검증 2026-06-21(poll-finalize.live.mts)
+- [x] `POST .../close` 가 날짜 투표 단일 승자 → Moim.startsAt 확정(finalizedStartsAt) / 동점 → "tie" 스킵 / 무표 → "no_votes" 스킵 / 일반 투표 → finalize 안 함 + 기존 startsAt 덮어쓰기 + 비생성자 403(finalize 미실행). (AC-3) — 라이브 검증 2026-06-21(poll-finalize.live.mts)
+- [x] `Moim.startsAt` 쓰기가 `MoimService.setStartsAt` 단일 메서드를 통한다(closePoll 호출, createMoim 외 유일 쓰기 경로). (AC-3) — tsc 0(all)
+- [x] `GET /moims/:id/polls` 가 각 poll 의 kind + 각 옵션 optionDate(ISO|null) + 마감/finalize 된 날짜 투표 결과 조회 가능 + 비멤버 403 + poll 없으면 빈 배열. (AC-4) — jest 301/301
+- [x] close 응답이 finalizedStartsAt(ISO|null) + finalizeSkippedReason("tie"|"no_votes"|null) + vote/list 응답은 둘 다 null. (AC-5) — 라이브 검증 2026-06-21(poll-finalize.live.mts)
+- [x] DTO(`CreatePollDto.kind`, `PollResponseDto.kind`/`finalizedStartsAt`/`finalizeSkippedReason`, `PollOptionResponseDto.optionDate`) + service createPoll optionDate/closePoll finalize/aggregate kind·optionDate + 컨트롤러 parseKind/parseOptionDates + setStartsAt. (AC-2/3/4/5) — 라이브 검증 2026-06-21
+- [x] backend jest 신규(날짜 생성/무효 날짜 400/미지 kind 400/finalize 단일 승자→startsAt/동점 tie/무표 no_votes/일반 투표 finalize 안 함/덮어쓰기/비생성자 403/setStartsAt 단일 출처) + 회귀(일반 단일 교체/다중 토글/마감 409/closesAt 옵트인) + 400/403/404/409 통과. (AC-1~5/AC-8) — jest 301/301
+- [x] `schema.d.ts` 재생성 + api-client `CreatePollRequest`(kind) / `PollResponse`(kind/옵션 optionDate/finalize, multiSelect·myVotes·closesAt·isClosed 보존) + 별칭 유지, tsc 0. (AC-6) — tsc 0(all)
+- [x] web `PollWithResults`(kind/옵션 optionDate) + close 결과 타입(finalize) + `createPollAction` kind/날짜 옵션 읽기 + `closePollAction` finalize 결과 전달 + `PollCard` 날짜 포맷/확정 힌트/동점 notice + `CreatePollForm` 일정 투표 토글(datetime 옵션 전환), Meetup 오렌지. page.tsx 헤더 startsAt 갱신 확인. (AC-7) — web lint 0, nx run web:build 0 (브라우저 UI 워크스루 미완료 — moyura-verify 세션 만료, 재로그인 대기)
+- [x] web tsc 0(kind/optionDate/finalize 전 소비처) / web lint 0 / web build 0. (AC-8) — tsc 0, lint 0, build 0
+- [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-8) — mobile vitest 215/215(회귀 0)
+- [ ] 디바이스 종단 검증: 상세 → "일정 투표" 토글 켜고 날짜 옵션 ≥2 생성 → 포맷 날짜 + 확정 힌트 → 멤버 투표 → 생성자 "마감하기" → 단일 승자 모임 헤더 일정 확정 갱신 / 동점 notice + 일정 불변 라이브 확인. (AC-8, device-gated) — 브라우저 웹 UI 워크스루(moyura-verify 세션 만료 — 재로그인 필요) + iOS 시뮬레이터에서 모바일 WebView poll 마감(Server Action + revalidatePath)이 poll 마감 AND 모임 헤더 startsAt 을 둘 다 갱신하는지 검증 대기
