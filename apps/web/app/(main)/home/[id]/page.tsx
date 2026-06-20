@@ -171,8 +171,13 @@ export default async function MoimDetailPage({
           )}
         </section>
 
-        {/* SPEC-MOIM-006: 투표 섹션(Client 섬). 투표 목록·득표 막대·내 표 강조·단일/다중 선택 투표·생성 폼. */}
-        <PollsSection moimId={moim.id} polls={polls} />
+        {/* SPEC-MOIM-006/007: 투표 섹션(Client 섬). 투표 목록·득표 막대·내 표 강조·단일/다중 투표·마감·생성 폼.
+            currentUserId(세션 user.id = JWT sub) 는 생성자 전용 "마감하기" 버튼 노출 판정에 쓰인다(직렬화 string). */}
+        <PollsSection
+          moimId={moim.id}
+          polls={polls}
+          currentUserId={session.user.id}
+        />
       </div>
     </div>
   );

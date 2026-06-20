@@ -100,6 +100,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       multiSelect,
       createdBy: 'owner',
       createdAt: new Date('2026-06-20T00:00:00.000Z'),
+      closesAt: null,
     };
     tables.poll.set(poll.id, poll);
     const options = labels.map((label) => {
@@ -130,6 +131,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
             question: string;
             createdBy: string;
             multiSelect?: boolean;
+            closesAt?: Date | null;
             options?: { create: { label: string }[] };
           };
         }) => {
@@ -140,6 +142,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
             multiSelect: arg.data.multiSelect ?? false,
             createdBy: arg.data.createdBy,
             createdAt: new Date('2026-06-20T00:00:00.000Z'),
+            closesAt: arg.data.closesAt ?? null,
           };
           tables.poll.set(created.id, created);
           const opts = (arg.data.options?.create ?? []).map((o) => {

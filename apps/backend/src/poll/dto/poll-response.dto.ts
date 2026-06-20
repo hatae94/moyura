@@ -18,10 +18,10 @@ export class PollOptionResponseDto {
   voteCount!: number;
 }
 
-// @MX:NOTE: [AUTO] 투표 공개 표현(SPEC-MOIM-006 REQ-MOIM6-004). @nestjs/swagger가 이 DTO로 OpenAPI 모델을 만든다.
+// @MX:NOTE: [AUTO] 투표 공개 표현(SPEC-MOIM-007 REQ-MOIM7-005 — MOIM-006 확장). @nestjs/swagger가 이 DTO로 OpenAPI 모델을 만든다.
 // options 는 각 선택지의 voteCount(집계, 표 0 포함)를 담고, myVotes 는 호출자 자신이 고른 optionId 목록이다
 // (단일 선택은 0/1요소, 다중 선택은 0..N요소, 미투표 시 빈 배열). multiSelect 는 poll 별 다중 선택 여부다.
-// SPEC-MOIM-006: 단일 myVote(string|null)를 myVotes(string[])로 대체한다 — 다중 선택은 단일 값으로 담을 수 없다.
+// SPEC-MOIM-007: closesAt(ISO|null) + isClosed(서버 계산)를 추가한다 — 클라이언트 시계 오차 차단.
 // 누가 무엇에 투표했는지(타인 식별)는 노출하지 않는다(spec §4 익명/공개 토글 비범위 — 집계 + 자기 표만).
 export class PollResponseDto {
   @ApiProperty({
@@ -64,4 +64,20 @@ export class PollResponseDto {
     example: ['15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8'],
   })
   myVotes!: string[];
+
+  @ApiProperty({
+    description:
+      '마감 시각(ISO-8601). null 이면 마감 없음(영구히 열림). 마감 판정은 isClosed 를 권위 있는 출처로 사용한다.',
+    nullable: true,
+    type: String,
+    example: '2026-06-25T12:00:00.000Z',
+  })
+  closesAt!: string | null;
+
+  @ApiProperty({
+    description:
+      '서버 계산 마감 여부(closesAt != null AND closesAt <= 서버 now). 클라이언트 시계 오차 차단용 — 차단/배지 판정에 사용한다.',
+    example: false,
+  })
+  isClosed!: boolean;
 }

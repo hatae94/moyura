@@ -12,6 +12,8 @@ import {
 
 // 백엔드 PollResponseDto 미러 — multiSelect(다중 선택 여부) + 각 옵션의 voteCount(표 0 포함) + 호출자
 // myVotes(고른 optionId 목록, 미투표 빈 배열). MOIM-006: 단일 myVote(string|null)를 myVotes(string[])로 대체.
+// SPEC-MOIM-007: closesAt(ISO|null — 마감 시각) + isClosed(서버 계산 마감 여부 — 차단/배지 판정의 권위 출처)
+// 추가. 클라이언트는 closesAt 를 자기 시계로 비교하지 않고 isClosed 만 신뢰한다(시계 오차 차단 — §5).
 export interface PollWithResults {
   id: string;
   question: string;
@@ -20,6 +22,8 @@ export interface PollWithResults {
   multiSelect: boolean;
   options: { id: string; label: string; voteCount: number }[];
   myVotes: string[];
+  closesAt: string | null;
+  isClosed: boolean;
 }
 
 /**
@@ -67,5 +71,23 @@ export async function votePoll(
   return (await api.request(path as never, "post", {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ optionId }),
+  })) as PollResponse;
+}
+
+/**
+ * 투표를 수동으로 마감한다(POST /moims/:id/polls/:pollId/close, SPEC-MOIM-007 REQ-MOIM7-003). 생성자 전용 —
+ * 비생성자 멤버 403 / 비멤버 403 / 다른 모임 pollId 404 는 백엔드가 판정해 ApiError 로 전파한다. body 없음
+ * (마감 시각 = 서버 now). 마감된 단건 poll 결과(closesAt=now, isClosed:true)를 반환한다. 이미 마감이면 멱등(200).
+ */
+export async function closePoll(
+  api: ApiClient,
+  moimId: string,
+  pollId: string,
+): Promise<PollResponse> {
+  const path = `/moims/${encodeURIComponent(moimId)}/polls/${encodeURIComponent(
+    pollId,
+  )}/close`;
+  return (await api.request(path as never, "post", {
+    headers: { "Content-Type": "application/json" },
   })) as PollResponse;
 }

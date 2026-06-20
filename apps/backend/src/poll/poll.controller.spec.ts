@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import type { VerifiedUser } from '../auth/token-verifier.service';
 import { PollController } from './poll.controller';
-import type { PollWithResults, PollService } from './poll.service';
+import type { PollWithOptions, PollWithResults, PollService } from './poll.service';
 
 // PollController 단위 테스트(SPEC-MOIM-006 — MOIM-005 확장). PollService 는 mock 으로 대체해 라우팅 + DTO 매핑
 // (multiSelect + myVotes) + 수동 400 검증(C-1: class-validator/ValidationPipe 부재)만 검증한다. 401/403/404
@@ -20,6 +20,8 @@ const POLL_RESULT: PollWithResults = {
     { id: 'opt-B', label: '라면', voteCount: 0 },
   ],
   myVotes: ['opt-A'],
+  closesAt: null,
+  isClosed: false,
 };
 
 const POLL_DTO = {
@@ -33,6 +35,8 @@ const POLL_DTO = {
     { id: 'opt-B', label: '라면', voteCount: 0 },
   ],
   myVotes: ['opt-A'],
+  closesAt: null,
+  isClosed: false,
 };
 
 function makeService(createdMultiSelect = false): {
@@ -41,24 +45,32 @@ function makeService(createdMultiSelect = false): {
     createPoll: jest.Mock;
     vote: jest.Mock;
     listPolls: jest.Mock;
+    closePoll: jest.Mock;
   };
 } {
-  // createPoll 은 Poll & { options } 를 반환(컨트롤러가 PollWithResults 형태로 매핑하므로 결과형 stub).
+  // createPoll 은 PollWithOptions(Poll & { options })를 반환(컨트롤러가 newPollToDto 로 매핑).
+  const createPollResult: PollWithOptions = {
+    id: 'poll-1',
+    moimId: 'moim-A',
+    question: '점심?',
+    multiSelect: createdMultiSelect,
+    createdBy: 'sub-U',
+    createdAt: new Date('2026-06-20T00:00:00.000Z'),
+    closesAt: null,
+    options: [
+      { id: 'opt-A', pollId: 'poll-1', label: '김밥' },
+      { id: 'opt-B', pollId: 'poll-1', label: '라면' },
+    ],
+  };
   const mocks = {
-    createPoll: jest.fn().mockResolvedValue({
-      id: 'poll-1',
-      moimId: 'moim-A',
-      question: '점심?',
-      multiSelect: createdMultiSelect,
-      createdBy: 'sub-U',
-      createdAt: new Date('2026-06-20T00:00:00.000Z'),
-      options: [
-        { id: 'opt-A', pollId: 'poll-1', label: '김밥' },
-        { id: 'opt-B', pollId: 'poll-1', label: '라면' },
-      ],
-    }),
+    createPoll: jest.fn().mockResolvedValue(createPollResult),
     vote: jest.fn().mockResolvedValue(POLL_RESULT),
     listPolls: jest.fn().mockResolvedValue([POLL_RESULT]),
+    closePoll: jest.fn().mockResolvedValue({
+      ...POLL_RESULT,
+      closesAt: new Date('2026-06-20T00:00:00.000Z'),
+      isClosed: true,
+    } satisfies PollWithResults),
   };
   return { service: mocks as unknown as PollService, mocks };
 }
@@ -74,13 +86,14 @@ describe('PollController', () => {
         options: ['김밥', '라면'],
       });
 
-      // multiSelect 생략 → false 로 정규화해 전달한다.
+      // multiSelect 생략 → false, closesAt 생략 → null 로 전달한다.
       expect(mocks.createPoll).toHaveBeenCalledWith(
         'sub-U',
         'moim-A',
         '점심?',
         ['김밥', '라면'],
         false,
+        null,
       );
       // 갓 생성된 poll 은 투표 0 + myVotes 빈 배열 + multiSelect:false 로 매핑된다.
       expect(res.id).toBe('poll-1');
@@ -110,6 +123,7 @@ describe('PollController', () => {
         '가능한 날짜?',
         ['토', '일'],
         true,
+        null,
       );
       expect(res.multiSelect).toBe(true);
       expect(res.myVotes).toEqual([]);
@@ -130,6 +144,60 @@ describe('PollController', () => {
         '점심?',
         ['김밥', '라면'],
         false,
+        null,
+      );
+    });
+
+    it('closesAt 를 전달하면 createPoll 에 Date 로 파싱해 전달한다', async () => {
+      const { service, mocks } = makeService();
+      const controller = new PollController(service);
+
+      await controller.create(USER, 'moim-A', {
+        question: '마감 있는 투표?',
+        options: ['A', 'B'],
+        closesAt: '2026-06-25T12:00:00.000Z',
+      });
+
+      expect(mocks.createPoll).toHaveBeenCalledWith(
+        'sub-U',
+        'moim-A',
+        '마감 있는 투표?',
+        ['A', 'B'],
+        false,
+        new Date('2026-06-25T12:00:00.000Z'),
+      );
+    });
+
+    it('closesAt 가 무효 ISO 문자열이면 400, 서비스 미호출', async () => {
+      const { service, mocks } = makeService();
+      const controller = new PollController(service);
+
+      await expect(
+        controller.create(USER, 'moim-A', {
+          question: '마감 있는 투표?',
+          options: ['A', 'B'],
+          closesAt: '무효날짜abc',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mocks.createPoll).not.toHaveBeenCalled();
+    });
+
+    it('closesAt 생략 시 createPoll 에 null 을 전달한다(마감 없음)', async () => {
+      const { service, mocks } = makeService();
+      const controller = new PollController(service);
+
+      await controller.create(USER, 'moim-A', {
+        question: '마감 없는 투표?',
+        options: ['A', 'B'],
+      });
+
+      expect(mocks.createPoll).toHaveBeenCalledWith(
+        'sub-U',
+        'moim-A',
+        '마감 없는 투표?',
+        ['A', 'B'],
+        false,
+        null,
       );
     });
 
@@ -184,7 +252,7 @@ describe('PollController', () => {
     });
   });
 
-  describe('POST /moims/:id/polls/:pollId/vote (vote, REQ-MOIM5-003 / AC-3)', () => {
+  describe('POST /moims/:id/polls/:pollId/vote (vote, REQ-MOIM7-004 / AC-4)', () => {
     it('optionId 로 vote 를 호출하고 갱신된 poll DTO 를 반환한다', async () => {
       const { service, mocks } = makeService();
       const controller = new PollController(service);
@@ -210,6 +278,31 @@ describe('PollController', () => {
         controller.vote(USER, 'moim-A', 'poll-1', { optionId: '   ' }),
       ).rejects.toThrow(BadRequestException);
       expect(mocks.vote).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /moims/:id/polls/:pollId/close (close, REQ-MOIM7-003 / AC-3)', () => {
+    it('close 를 호출하면 closePoll 서비스를 호출하고 마감된 poll DTO 를 반환한다', async () => {
+      const { service, mocks } = makeService();
+      const controller = new PollController(service);
+
+      const res = await controller.close(USER, 'moim-A', 'poll-1');
+
+      expect(mocks.closePoll).toHaveBeenCalledWith('sub-U', 'moim-A', 'poll-1');
+      expect(res.isClosed).toBe(true);
+      expect(res.closesAt).toBeTruthy();
+    });
+  });
+
+  describe('DTO 매핑 — closesAt + isClosed(REQ-MOIM7-005 / AC-5)', () => {
+    it('resultToDto 가 closesAt(null) + isClosed:false 를 포함한다', async () => {
+      const { service } = makeService();
+      const controller = new PollController(service);
+
+      const res = await controller.list(USER, 'moim-A');
+
+      expect(res[0].closesAt).toBeNull();
+      expect(res[0].isClosed).toBe(false);
     });
   });
 });

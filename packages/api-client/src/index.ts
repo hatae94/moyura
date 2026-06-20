@@ -22,14 +22,17 @@ export type MoimResponse = components['schemas']['MoimResponseDto'];
 export type CreateMoimRequest = components['schemas']['CreateMoimDto'];
 
 // SPEC-MOIM-006 REQ-MOIM6-005: 투표 DTO 타입 별칭(CreateMoimRequest/MoimResponse 선례).
-// path-param 투표 라우트(/moims/:id/polls·/moims/:id/polls/:pollId/vote)는 편의 메서드를 추가하지 않고
-// web 의 구체-경로 헬퍼(lib/moim/polls.ts)가 request(path as never, ...) 로 호출한다 — 타입만 노출한다.
-// POST /moims/:id/polls 요청 바디(CreatePollDto): question(필수) + options(string[], 유효 ≥2) + multiSelect?(기본 false).
+// path-param 투표 라우트(/moims/:id/polls·/moims/:id/polls/:pollId/vote·/moims/:id/polls/:pollId/close)는 편의
+// 메서드를 추가하지 않고 web 의 구체-경로 헬퍼(lib/moim/polls.ts)가 request(path as never, ...) 로 호출한다 — 타입만 노출한다.
+// POST /moims/:id/polls 요청 바디(CreatePollDto): question(필수) + options(string[], 유효 ≥2) + multiSelect?(기본 false)
+// + SPEC-MOIM-007 closesAt?(ISO-8601, 마감 시각 — 생략 시 마감 없음, 무효 ISO 는 백엔드 400).
 export type CreatePollRequest = components['schemas']['CreatePollDto'];
 // POST /moims/:id/polls/:pollId/vote 요청 바디(VoteDto): optionId(필수). 단일=교체/다중=토글은 백엔드가 분기.
+// SPEC-MOIM-007: 마감된 poll 에 투표하면 백엔드가 409(ApiError) — web 액션이 일반화 오류로 처리.
 export type VoteRequest = components['schemas']['VoteDto'];
 // GET/POST poll 응답(PollResponseDto): id/question/createdBy/createdAt + multiSelect + options[{id,label,voteCount}]
 // + myVotes(string[] — 호출자가 고른 optionId 목록, 미투표 빈 배열). MOIM-005 의 단일 myVote 는 myVotes 로 대체됨.
+// SPEC-MOIM-007: closesAt(string|null — 마감 시각) + isClosed(boolean — 서버 계산 마감 여부, 차단/배지 판정 권위) 추가.
 export type PollResponse = components['schemas']['PollResponseDto'];
 
 /**

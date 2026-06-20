@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -67,6 +68,7 @@ describe('PollService', () => {
     labels: string[],
     multiSelect = false,
     createdBy = 'owner',
+    closesAt: Date | null = null,
   ): { poll: Poll; options: PollOption[] } {
     const poll: Poll = {
       id: nextId('poll'),
@@ -75,6 +77,7 @@ describe('PollService', () => {
       multiSelect,
       createdBy,
       createdAt: NOW,
+      closesAt,
     };
     tables.poll.set(poll.id, poll);
     const options = labels.map((label) => {
@@ -127,6 +130,7 @@ describe('PollService', () => {
             question: string;
             createdBy: string;
             multiSelect?: boolean;
+            closesAt?: Date | null;
             options?: { create: { label: string }[] };
           };
           include?: { options?: boolean };
@@ -138,6 +142,7 @@ describe('PollService', () => {
             multiSelect: arg.data.multiSelect ?? false,
             createdBy: arg.data.createdBy,
             createdAt: NOW,
+            closesAt: arg.data.closesAt ?? null,
           };
           tables.poll.set(created.id, created);
           const opts = (arg.data.options?.create ?? []).map((o) => {
@@ -170,6 +175,16 @@ describe('PollService', () => {
                 ),
               })),
           ),
+      ),
+      // update({ where: { id }, data: { closesAt } }) — closePoll 이 now 로 설정할 때 사용.
+      update: jest.fn(
+        (arg: { where: { id: string }; data: { closesAt?: Date | null } }) => {
+          const existing = tables.poll.get(arg.where.id);
+          if (!existing) return Promise.resolve(null);
+          const updated: Poll = { ...existing, ...arg.data };
+          tables.poll.set(arg.where.id, updated);
+          return Promise.resolve(updated);
+        },
       ),
     };
     const pollOption = {
@@ -643,6 +658,258 @@ describe('PollService', () => {
       await expect(
         service.listPolls('stranger', 'moim-A'),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  // ── SPEC-MOIM-007: createPoll — closesAt 옵트인 ──
+  describe('createPoll() — closesAt 옵트인(REQ-MOIM7-002 / AC-2)', () => {
+    it('closesAt 를 전달하면 poll 의 closesAt 가 설정된다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const future = new Date(NOW.getTime() + 86400000); // 내일
+
+      const poll = await service.createPoll(
+        'member-1',
+        'moim-A',
+        '마감 있는 투표?',
+        ['A', 'B'],
+        false,
+        future,
+      );
+
+      expect(poll.closesAt).toEqual(future);
+    });
+
+    it('closesAt 를 null 로 전달하면 마감 없는 poll 이 생성된다(MOIM-005/006 동작 보존)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+
+      const poll = await service.createPoll(
+        'member-1',
+        'moim-A',
+        '점심?',
+        ['A', 'B'],
+        false,
+        null,
+      );
+
+      expect(poll.closesAt).toBeNull();
+    });
+  });
+
+  // ── SPEC-MOIM-007: vote — 마감 poll 투표 차단(409) ──
+  describe('vote() — 마감 poll 투표 차단(REQ-MOIM7-004 / AC-4)', () => {
+    it('마감된 단일 poll(closesAt<=now) 에 투표하면 409(ConflictException) + 표 불변', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      // closesAt = now(=NOW) → CLOSED: closesAt <= NOW 이므로 마감.
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '마감 poll',
+        ['A', 'B'],
+        false,
+        'owner',
+        NOW,
+      );
+
+      await expect(
+        service.vote('member-1', 'moim-A', poll.id, options[0].id),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(tables.vote.size).toBe(0);
+    });
+
+    it('마감된 다중 poll(closesAt<=now) 에 투표하면 409(단일/다중 공통 차단)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const past = new Date(NOW.getTime() - 1000); // 1초 전
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '마감 다중 poll',
+        ['A', 'B'],
+        true,
+        'owner',
+        past,
+      );
+
+      await expect(
+        service.vote('member-1', 'moim-A', poll.id, options[0].id),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(tables.vote.size).toBe(0);
+    });
+
+    it('마감된 poll 에 poll 에 없는 optionId 로 투표해도 409(마감 검사 우선)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const { poll } = seedPoll(
+        'moim-A',
+        '마감 poll',
+        ['A', 'B'],
+        false,
+        'owner',
+        NOW,
+      );
+
+      await expect(
+        service.vote('member-1', 'moim-A', poll.id, 'no-such-option'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(tables.vote.size).toBe(0);
+    });
+
+    it('열린 poll(closesAt=null)에 투표하면 정상 처리된다(MOIM-005/006 회귀 0)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '열린 poll',
+        ['A', 'B'],
+        false,
+        'owner',
+        null, // 마감 없음
+      );
+
+      await service.vote('member-1', 'moim-A', poll.id, options[0].id);
+
+      expect(tables.vote.size).toBe(1);
+    });
+
+    it('closesAt 가 미래인 poll 에 투표하면 정상 처리된다(아직 열림)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const future = new Date(NOW.getTime() + 86400000); // 내일
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '미래 마감 poll',
+        ['A', 'B'],
+        false,
+        'owner',
+        future,
+      );
+
+      await service.vote('member-1', 'moim-A', poll.id, options[0].id);
+
+      expect(tables.vote.size).toBe(1);
+    });
+  });
+
+  // ── SPEC-MOIM-007: closePoll — 생성자 전용 수동 마감 ──
+  describe('closePoll() — 생성자 전용 수동 마감(REQ-MOIM7-003 / AC-3)', () => {
+    it('생성자가 closePoll 을 호출하면 closesAt=now, isClosed:true 가 반환된다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      seedPoll('moim-A', '열린 poll', ['A', 'B'], false, 'creator', null);
+      const { poll } = seedPoll('moim-A', '내 투표', ['X', 'Y'], false, 'creator', null);
+
+      // 두 번째 poll 을 테스트 대상으로.
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(result.isClosed).toBe(true);
+      expect(result.closesAt).not.toBeNull();
+      const closed = tables.poll.get(poll.id);
+      expect(closed?.closesAt).not.toBeNull();
+    });
+
+    it('비생성자 멤버가 closePoll 을 호출하면 403(ForbiddenException)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      setMember('moim-A', 'other-member');
+      const { poll } = seedPoll('moim-A', '내 투표', ['A', 'B'], false, 'creator', null);
+
+      await expect(
+        service.closePoll('other-member', 'moim-A', poll.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      // poll 은 변경되지 않는다.
+      expect(tables.poll.get(poll.id)?.closesAt).toBeNull();
+    });
+
+    it('비멤버가 closePoll 을 호출하면 403(assertMember — 생성자 비교에 도달하지 않음)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const { poll } = seedPoll('moim-A', '내 투표', ['A', 'B'], false, 'creator', null);
+
+      await expect(
+        service.closePoll('stranger', 'moim-A', poll.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('path 모임에 속하지 않는 pollId 로 closePoll 하면 404(NotFoundException)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      existingMoims.add('moim-B');
+      const { poll } = seedPoll('moim-B', '다른 모임 poll', ['A', 'B'], false, 'creator', null);
+
+      await expect(
+        service.closePoll('creator', 'moim-A', poll.id),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('이미 마감된 poll 에 다시 closePoll 하면 200(멱등 — isClosed:true 유지)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      // 이미 마감된 poll(closesAt=NOW).
+      const { poll } = seedPoll('moim-A', '마감 poll', ['A', 'B'], false, 'creator', NOW);
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(result.isClosed).toBe(true);
+    });
+  });
+
+  // ── SPEC-MOIM-007: isClosed 서버 계산 ──
+  describe('aggregatePolls() — isClosed 서버 계산(REQ-MOIM7-005 / AC-5)', () => {
+    it('closesAt=null 이면 isClosed:false', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      seedPoll('moim-A', '열린 poll', ['A', 'B'], false, 'owner', null);
+
+      const polls = await service.listPolls('member-1', 'moim-A');
+
+      expect(polls[0].isClosed).toBe(false);
+      expect(polls[0].closesAt).toBeNull();
+    });
+
+    it('closesAt 가 미래이면 isClosed:false', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const future = new Date(NOW.getTime() + 86400000);
+      seedPoll('moim-A', '미래 마감', ['A', 'B'], false, 'owner', future);
+
+      const polls = await service.listPolls('member-1', 'moim-A');
+
+      expect(polls[0].isClosed).toBe(false);
+      expect(polls[0].closesAt).toEqual(future);
+    });
+
+    it('closesAt<=now 이면 isClosed:true', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const past = new Date(NOW.getTime() - 1000);
+      seedPoll('moim-A', '마감됨', ['A', 'B'], false, 'owner', past);
+
+      const polls = await service.listPolls('member-1', 'moim-A');
+
+      expect(polls[0].isClosed).toBe(true);
+      expect(polls[0].closesAt).toEqual(past);
+    });
+
+    it('마감된 poll 도 voteCount/myVotes 결과 조회가 가능하다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const past = new Date(NOW.getTime() - 1000);
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '마감됨',
+        ['A', 'B'],
+        false,
+        'owner',
+        past,
+      );
+      seedVote(poll.id, options[0].id, 'member-1');
+
+      const polls = await service.listPolls('member-1', 'moim-A');
+
+      expect(polls[0].isClosed).toBe(true);
+      expect(polls[0].myVotes).toEqual([options[0].id]);
+      expect(polls[0].options.find((o) => o.id === options[0].id)?.voteCount).toBe(1);
     });
   });
 });

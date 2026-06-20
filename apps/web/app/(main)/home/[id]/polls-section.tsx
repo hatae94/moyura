@@ -17,14 +17,35 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { BarChart3, Check, CheckSquare, Plus, Square, Vote, X } from "lucide-react";
+import {
+  BarChart3,
+  Check,
+  CheckSquare,
+  Clock,
+  Lock,
+  Plus,
+  Square,
+  Vote,
+  X,
+} from "lucide-react";
 
 import type { PollWithResults } from "@/lib/moim/polls";
 import {
+  closePollAction,
   createPollAction,
   voteAction,
   type CreatePollActionState,
 } from "./poll-actions";
+
+/** 마감 시각(ISO)을 사람이 읽을 수 있는 한국어 로컬 표기로 변환한다(표시 전용 — 판정은 isClosed). */
+function formatClosesAt(iso: string): string {
+  return new Date(iso).toLocaleString("ko-KR", {
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 /**
  * 한 선택지 행 — 라벨 + 득표 수 + 총표 대비 퍼센트 막대 + 내 표 강조. 클릭하면 그 선택지에 투표한다.
@@ -36,6 +57,7 @@ function OptionRow({
   isMine,
   multiSelect,
   pending,
+  closed,
   onVote,
 }: {
   option: { id: string; label: string; voteCount: number };
@@ -43,6 +65,7 @@ function OptionRow({
   isMine: boolean;
   multiSelect: boolean;
   pending: boolean;
+  closed: boolean;
   onVote: (optionId: string) => void;
 }) {
   // 총표 0이면 0% (퍼센트 NaN 방지). 막대는 시각적 집계.
@@ -50,13 +73,16 @@ function OptionRow({
   return (
     <button
       type="button"
-      disabled={pending}
+      // SPEC-MOIM-007: 마감(closed)이면 투표 컨트롤을 비활성화한다(결과 막대/강조는 계속 표시).
+      disabled={pending || closed}
       onClick={() => onVote(option.id)}
       // 다중 선택은 체크박스 의미(role=checkbox + aria-checked), 단일은 toggle 버튼(aria-pressed).
       role={multiSelect ? "checkbox" : undefined}
       aria-checked={multiSelect ? isMine : undefined}
       aria-pressed={multiSelect ? undefined : isMine}
       className={`relative w-full overflow-hidden rounded-xl border p-3 text-left transition-colors disabled:opacity-60 ${
+        closed ? "cursor-default" : ""
+      } ${
         isMine
           ? "border-primary bg-primary/5 ring-2 ring-primary/40"
           : "border-border bg-card hover:border-primary/40"
@@ -102,14 +128,29 @@ function OptionRow({
  * 단일/다중은 poll.multiSelect 로 분기 — 강조 판정은 둘 다 poll.myVotes.includes(option.id) 로 통일한다.
  * 다중 선택은 총표 합이 멤버 수보다 클 수 있어(멤버당 옵션당 1표) 퍼센트 합이 100%가 아닐 수 있다(총표 대비 표시).
  */
-function PollCard({ moimId, poll }: { moimId: string; poll: PollWithResults }) {
+function PollCard({
+  moimId,
+  poll,
+  currentUserId,
+}: {
+  moimId: string;
+  poll: PollWithResults;
+  currentUserId: string;
+}) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | undefined>(undefined);
 
   const totalVotes = poll.options.reduce((sum, o) => sum + o.voteCount, 0);
   const hasVoted = poll.myVotes.length > 0;
+  // SPEC-MOIM-007: 마감 판정은 서버 계산 isClosed 만 신뢰한다(closesAt 자기 시계 비교 금지 — 시계 오차 차단).
+  const closed = poll.isClosed;
+  // "마감하기"는 생성자 + 열린 poll 에만 노출한다(createdBy = JWT sub = Supabase user.id).
+  const canClose = poll.createdBy === currentUserId && !closed;
 
   function handleVote(optionId: string): void {
+    if (closed) {
+      return;
+    }
     setError(undefined);
     startTransition(async () => {
       const result = await voteAction(moimId, poll.id, optionId);
@@ -119,18 +160,47 @@ function PollCard({ moimId, poll }: { moimId: string; poll: PollWithResults }) {
     });
   }
 
+  function handleClose(): void {
+    setError(undefined);
+    startTransition(async () => {
+      const result = await closePollAction(moimId, poll.id);
+      if (result?.error) {
+        setError(result.error);
+      }
+    });
+  }
+
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-      <h3 className="flex items-start gap-2 font-bold text-card-foreground">
-        <Vote size={18} className="mt-0.5 shrink-0 text-primary" />
-        <span className="min-w-0">{poll.question}</span>
-      </h3>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="flex min-w-0 items-start gap-2 font-bold text-card-foreground">
+          <Vote size={18} className="mt-0.5 shrink-0 text-primary" />
+          <span className="min-w-0">{poll.question}</span>
+        </h3>
+        {/* 마감됨 배지 — 차분한 muted 계열(파괴적 아님). 마감 후에도 결과는 계속 표시한다. */}
+        {closed ? (
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+            <Lock size={12} />
+            마감됨
+          </span>
+        ) : null}
+      </div>
 
       {/* 다중 선택 안내 — 여러 항목을 동시에 고를 수 있음을 명시한다(단일은 표시 안 함). */}
       {poll.multiSelect ? (
         <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
           <CheckSquare size={13} />
           여러 개 선택 가능
+        </p>
+      ) : null}
+
+      {/* 마감 시각 표시 — closesAt 가 설정돼 있을 때만(없으면 마감 안내 미표시). 표시 전용. */}
+      {poll.closesAt ? (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock size={13} />
+          {closed
+            ? `마감됨 · ${formatClosesAt(poll.closesAt)}`
+            : `마감 예정 · ${formatClosesAt(poll.closesAt)}`}
         </p>
       ) : null}
 
@@ -149,19 +219,36 @@ function PollCard({ moimId, poll }: { moimId: string; poll: PollWithResults }) {
             isMine={poll.myVotes.includes(option.id)}
             multiSelect={poll.multiSelect}
             pending={pending}
+            closed={closed}
             onVote={handleVote}
           />
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        총 {totalVotes}표
-        {hasVoted
-          ? " · 내 선택이 반영됐어요"
-          : poll.multiSelect
-            ? " · 가능한 항목을 모두 탭해 투표하세요"
-            : " · 선택지를 탭해 투표하세요"}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          총 {totalVotes}표
+          {closed
+            ? " · 마감된 투표예요"
+            : hasVoted
+              ? " · 내 선택이 반영됐어요"
+              : poll.multiSelect
+                ? " · 가능한 항목을 모두 탭해 투표하세요"
+                : " · 선택지를 탭해 투표하세요"}
+        </p>
+        {/* 생성자 전용 "마감하기" — 열린 poll 에만 노출(마감되면 사라진다). 절제된 secondary 스타일. */}
+        {canClose ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleClose}
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-50"
+          >
+            <Lock size={12} />
+            {pending ? "마감 중..." : "마감하기"}
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -298,6 +385,22 @@ function CreatePollForm({ moimId }: { moimId: string }) {
         </span>
       </label>
 
+      {/* SPEC-MOIM-007: optional 마감 시각(datetime-local). 미입력 시 마감 없음(영구히 열림). moims/new 일정 미러. */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="poll-closes-at" className="text-sm font-semibold text-foreground">
+          마감 시각 <span className="font-normal text-muted-foreground">(선택)</span>
+        </label>
+        <input
+          id="poll-closes-at"
+          name="closesAt"
+          type="datetime-local"
+          className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <span className="text-xs text-muted-foreground">
+          마감 시각이 지나면 투표가 자동으로 닫혀요. 비워 두면 직접 마감할 때까지 열려 있어요.
+        </span>
+      </div>
+
       <button
         type="submit"
         disabled={pending}
@@ -313,9 +416,12 @@ function CreatePollForm({ moimId }: { moimId: string }) {
 export function PollsSection({
   moimId,
   polls,
+  currentUserId,
 }: {
   moimId: string;
   polls: PollWithResults[];
+  // SPEC-MOIM-007: 현재 사용자 sub(Supabase user.id) — 생성자 전용 "마감하기" 버튼 노출 판정에 쓴다.
+  currentUserId: string;
 }) {
   return (
     <section className="flex flex-col gap-3">
@@ -327,7 +433,12 @@ export function PollsSection({
       {polls.length > 0 ? (
         <div className="flex flex-col gap-3">
           {polls.map((poll) => (
-            <PollCard key={poll.id} moimId={moimId} poll={poll} />
+            <PollCard
+              key={poll.id}
+              moimId={moimId}
+              poll={poll}
+              currentUserId={currentUserId}
+            />
           ))}
         </div>
       ) : (

@@ -16,7 +16,7 @@ import { redirect } from "next/navigation";
 import { ApiError, createApiClient } from "@moyura/api-client";
 
 import { API_BASE_URL } from "@/lib/env";
-import { createPoll, votePoll } from "@/lib/moim/polls";
+import { closePoll, createPoll, votePoll } from "@/lib/moim/polls";
 import { createClient } from "@/lib/supabase/server";
 
 /** 투표 생성 결과 상태(useActionState 로 소비 — 에러 시 폼에 머무른다). */
@@ -25,8 +25,28 @@ export type CreatePollActionState = { error?: string } | undefined;
 /** 투표(vote) 결과 상태(클라이언트가 실패 시 일반화 오류를 표시). */
 export type VoteActionState = { error?: string } | undefined;
 
+/** 마감(close) 결과 상태(클라이언트가 실패 시 일반화 오류를 표시). */
+export type ClosePollActionState = { error?: string } | undefined;
+
 const CREATE_GENERIC_ERROR = "투표를 만들지 못했습니다. 다시 시도해 주세요.";
 const VOTE_GENERIC_ERROR = "투표하지 못했습니다. 다시 시도해 주세요.";
+const CLOSE_GENERIC_ERROR = "투표를 마감하지 못했습니다. 다시 시도해 주세요.";
+
+/**
+ * datetime-local 입력을 ISO-8601 로 변환한다. 빈 값/무효 입력이면 undefined(미전송 → 마감 없음).
+ * moims/new/actions.ts 의 toIsoOrUndefined 패턴을 미러한다(§3 — datetime-local→ISO 공유 패턴).
+ */
+function toIsoOrUndefined(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+  return date.toISOString();
+}
 
 /** 쿠키 세션을 읽어 access_token 을 돌려준다. 세션 부재면 /login 리다이렉트(보호 경로 미진입). */
 async function requireToken(): Promise<string> {
@@ -57,6 +77,8 @@ export async function createPollAction(
     .filter((v) => v.length > 0);
   // "여러 개 선택 허용" 체크박스 — 체크 시 "on", 미체크 시 null. 다중 선택 옵트인(기본 false).
   const multiSelect = formData.get("multiSelect") === "on";
+  // SPEC-MOIM-007: optional 마감 시각(datetime-local) — 빈 값/무효면 미전송(마감 없음 = null).
+  const closesAt = toIsoOrUndefined(String(formData.get("closesAt") ?? ""));
 
   if (!moimId) {
     // moimId 는 hidden 필드로 항상 동봉되지만, 누락 시 안전하게 일반화 오류로 처리한다.
@@ -74,7 +96,7 @@ export async function createPollAction(
       baseUrl: API_BASE_URL,
       getToken: () => token,
     });
-    await createPoll(api, moimId, { question, options, multiSelect });
+    await createPoll(api, moimId, { question, options, multiSelect, closesAt });
   } catch (err) {
     // AC-5 Unwanted: 백엔드 생성 실패 → 머무르며 일반화된 오류(토큰/상세 비노출 — R-A9). 재제출 가능.
     const status = err instanceof ApiError ? err.status : "unknown";
@@ -117,6 +139,39 @@ export async function voteAction(
   }
 
   // 성공: 상세를 재검증해 득표 수/내 표 강조가 갱신되게 한다.
+  revalidatePath(`/home/${moimId}`);
+  return undefined;
+}
+
+/**
+ * 투표를 수동으로 마감한다(클라이언트 "마감하기" onClick 에서 호출, SPEC-MOIM-007 REQ-MOIM7-003).
+ * 생성자 전용 — 비생성자/비멤버는 백엔드가 403, 다른 모임 pollId 는 404 로 거부한다(ApiError 전파 → 일반화 오류).
+ * 성공 시 상세를 revalidatePath 로 재검증해 그 poll 이 마감 상태("마감됨" + 비활성 컨트롤)로 갱신되게 한다.
+ */
+export async function closePollAction(
+  moimId: string,
+  pollId: string,
+): Promise<ClosePollActionState> {
+  if (!moimId || !pollId) {
+    return { error: CLOSE_GENERIC_ERROR };
+  }
+
+  const token = await requireToken();
+
+  try {
+    const api = createApiClient({
+      baseUrl: API_BASE_URL,
+      getToken: () => token,
+    });
+    await closePoll(api, moimId, pollId);
+  } catch (err) {
+    // 백엔드 마감 실패(403 비생성자/404/네트워크) → 일반화된 오류(토큰/상세 비노출). 화면 머무름.
+    const status = err instanceof ApiError ? err.status : "unknown";
+    console.error(`closePollAction: POST close 실패 (status ${status})`);
+    return { error: CLOSE_GENERIC_ERROR };
+  }
+
+  // 성공: 상세를 재검증해 "마감됨" 배지 + 투표 컨트롤 비활성화가 반영되게 한다.
   revalidatePath(`/home/${moimId}`);
   return undefined;
 }

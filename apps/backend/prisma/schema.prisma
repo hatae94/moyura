@@ -124,6 +124,9 @@ model Poll {
   // SPEC-MOIM-006 REQ-MOIM6-001: poll 별 다중 선택 옵트인(additive). false(기본)=단일 선택(투표=교체),
   // true=다중 선택(투표=토글, 멤버당 옵션당 0..N 표). 기존 row 는 모두 false 로 단일 선택을 보존한다.
   multiSelect Boolean    @default(false) @map("multi_select")
+  // SPEC-MOIM-007 REQ-MOIM7-001: 마감 시각(nullable, @default 없음). deadline(미래 시각) + 수동 마감(=now) 두 역할.
+  // closesAt != null AND closesAt <= now 이면 CLOSED. 기존 row 는 모두 null(마감 없음 — MOIM-005/006 동작 보존).
+  closesAt  DateTime?    @map("closes_at")
   // 생성자 sub(= profile.id). 가드-검증 sub 만 들어온다(mass-assignment 차단 — moim/chat 패턴 동일).
   createdBy String       @map("created_by")
   createdAt DateTime     @default(now()) @map("created_at")

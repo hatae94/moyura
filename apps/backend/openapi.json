@@ -702,7 +702,7 @@
             }
           },
           "400": {
-            "description": "빈 question / 유효 옵션 <2 — 400"
+            "description": "빈 question / 유효 옵션 <2 / 무효 closesAt ISO — 400"
           },
           "401": {
             "description": "유효한 Supabase JWT 부재 — 401"
@@ -813,6 +813,61 @@
           },
           "403": {
             "description": "대상 모임의 멤버가 아님 — 403"
+          },
+          "404": {
+            "description": "해당 모임에 속하지 않는(또는 없는) pollId — 404"
+          },
+          "409": {
+            "description": "마감된 투표에 투표 시도 — 409"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "polls"
+        ]
+      }
+    },
+    "/moims/{id}/polls/{pollId}/close": {
+      "post": {
+        "operationId": "PollController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pollId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "마감된 poll 결과(closesAt=now, isClosed:true)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "비멤버 또는 생성자가 아닌 멤버 — 403"
           },
           "404": {
             "description": "해당 모임에 속하지 않는(또는 없는) pollId — 404"
@@ -1274,6 +1329,12 @@
             "description": "여러 개 선택 허용 여부(poll 별 옵트인). true 면 다중 선택(토글), 생략/false 면 단일 선택(교체).",
             "default": false,
             "example": false
+          },
+          "closesAt": {
+            "type": "string",
+            "description": "마감 시각(ISO-8601). 생략 시 null(마감 없음 — 영구히 열림). 무효 ISO 는 400 Bad Request.",
+            "nullable": true,
+            "example": "2026-06-25T12:00:00.000Z"
           }
         },
         "required": [
@@ -1350,6 +1411,17 @@
             "items": {
               "type": "string"
             }
+          },
+          "closesAt": {
+            "type": "string",
+            "description": "마감 시각(ISO-8601). null 이면 마감 없음(영구히 열림). 마감 판정은 isClosed 를 권위 있는 출처로 사용한다.",
+            "nullable": true,
+            "example": "2026-06-25T12:00:00.000Z"
+          },
+          "isClosed": {
+            "type": "boolean",
+            "description": "서버 계산 마감 여부(closesAt != null AND closesAt <= 서버 now). 클라이언트 시계 오차 차단용 — 차단/배지 판정에 사용한다.",
+            "example": false
           }
         },
         "required": [
@@ -1359,7 +1431,9 @@
           "createdAt",
           "multiSelect",
           "options",
-          "myVotes"
+          "myVotes",
+          "closesAt",
+          "isClosed"
         ]
       },
       "VoteDto": {
