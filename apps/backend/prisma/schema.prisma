@@ -127,6 +127,10 @@ model Poll {
   // SPEC-MOIM-007 REQ-MOIM7-001: 마감 시각(nullable, @default 없음). deadline(미래 시각) + 수동 마감(=now) 두 역할.
   // closesAt != null AND closesAt <= now 이면 CLOSED. 기존 row 는 모두 null(마감 없음 — MOIM-005/006 동작 보존).
   closesAt  DateTime?    @map("closes_at")
+  // SPEC-MOIM-008 REQ-MOIM8-001: 투표 종류(additive, @default="general"). "general"=자유 텍스트 옵션, "date"=날짜 옵션.
+  // Prisma enum 이 아닌 string 컬럼 — CREATE TYPE 마이그레이션 마찰 회피. 허용 값 검증은 컨트롤러가 담당(미지 값 → 400).
+  // 기존 row 는 모두 kind='general'(일반 투표 — MOIM-005/006/007 동작 보존).
+  kind      String       @default("general") @map("kind")
   // 생성자 sub(= profile.id). 가드-검증 sub 만 들어온다(mass-assignment 차단 — moim/chat 패턴 동일).
   createdBy String       @map("created_by")
   createdAt DateTime     @default(now()) @map("created_at")
@@ -141,12 +145,16 @@ model Poll {
 
 // SPEC-MOIM-005 투표 선택지(REQ-MOIM5-001). 한 poll 에 2개 이상. position 컬럼 없음(spec §4 — id 결정적 정렬).
 model PollOption {
-  id     String     @id @default(uuid())
-  pollId String     @map("poll_id")
+  id         String     @id @default(uuid())
+  pollId     String     @map("poll_id")
   // 선택지 라벨(자유 텍스트). trim 후 비지 않은 항목만 컨트롤러가 모아 ≥2 를 강제한다.
-  label  String
-  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  votes  PollVote[]
+  // 날짜 투표(kind="date")의 경우 label 은 optionDate.toISOString()(정규 ISO) — 웹이 포맷해 표시한다.
+  label      String
+  // SPEC-MOIM-008 REQ-MOIM8-001: 날짜 옵션의 시각(nullable). 날짜 투표(kind="date") 옵션만 채움.
+  // 일반 투표(kind="general") 옵션은 optionDate=null(MOIM-005/006/007 동작 보존). 기존 row 모두 null.
+  optionDate DateTime?  @map("option_date")
+  poll       Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes      PollVote[]
 
   // poll 별 선택지 조회를 커버한다.
   @@index([pollId])

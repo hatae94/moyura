@@ -3,6 +3,8 @@ import type { VerifiedUser } from '../auth/token-verifier.service';
 import { PollController } from './poll.controller';
 import type { PollWithOptions, PollWithResults, PollService } from './poll.service';
 
+// SPEC-MOIM-008: PollResponseDto 의 신규 필드(kind/optionDate/finalizedStartsAt/finalizeSkippedReason) 포함.
+
 // PollController 단위 테스트(SPEC-MOIM-006 — MOIM-005 확장). PollService 는 mock 으로 대체해 라우팅 + DTO 매핑
 // (multiSelect + myVotes) + 수동 400 검증(C-1: class-validator/ValidationPipe 부재)만 검증한다. 401/403/404
 // 가드/인가 배선은 poll.integration.spec.ts(AppModule + 실제 가드)에서 검증한다.
@@ -15,13 +17,16 @@ const POLL_RESULT: PollWithResults = {
   createdBy: 'sub-U',
   createdAt: new Date('2026-06-20T00:00:00.000Z'),
   multiSelect: false,
+  kind: 'general',
   options: [
-    { id: 'opt-A', label: '김밥', voteCount: 2 },
-    { id: 'opt-B', label: '라면', voteCount: 0 },
+    { id: 'opt-A', label: '김밥', voteCount: 2, optionDate: null },
+    { id: 'opt-B', label: '라면', voteCount: 0, optionDate: null },
   ],
   myVotes: ['opt-A'],
   closesAt: null,
   isClosed: false,
+  finalizedStartsAt: null,
+  finalizeSkippedReason: null,
 };
 
 const POLL_DTO = {
@@ -30,13 +35,16 @@ const POLL_DTO = {
   createdBy: 'sub-U',
   createdAt: '2026-06-20T00:00:00.000Z',
   multiSelect: false,
+  kind: 'general',
   options: [
-    { id: 'opt-A', label: '김밥', voteCount: 2 },
-    { id: 'opt-B', label: '라면', voteCount: 0 },
+    { id: 'opt-A', label: '김밥', voteCount: 2, optionDate: null },
+    { id: 'opt-B', label: '라면', voteCount: 0, optionDate: null },
   ],
   myVotes: ['opt-A'],
   closesAt: null,
   isClosed: false,
+  finalizedStartsAt: null,
+  finalizeSkippedReason: null,
 };
 
 function makeService(createdMultiSelect = false): {
@@ -49,6 +57,7 @@ function makeService(createdMultiSelect = false): {
   };
 } {
   // createPoll 은 PollWithOptions(Poll & { options })를 반환(컨트롤러가 newPollToDto 로 매핑).
+  // SPEC-MOIM-008: kind + optionDate 필드 추가.
   const createPollResult: PollWithOptions = {
     id: 'poll-1',
     moimId: 'moim-A',
@@ -57,9 +66,10 @@ function makeService(createdMultiSelect = false): {
     createdBy: 'sub-U',
     createdAt: new Date('2026-06-20T00:00:00.000Z'),
     closesAt: null,
+    kind: 'general',
     options: [
-      { id: 'opt-A', pollId: 'poll-1', label: '김밥' },
-      { id: 'opt-B', pollId: 'poll-1', label: '라면' },
+      { id: 'opt-A', pollId: 'poll-1', label: '김밥', optionDate: null },
+      { id: 'opt-B', pollId: 'poll-1', label: '라면', optionDate: null },
     ],
   };
   const mocks = {
@@ -70,6 +80,8 @@ function makeService(createdMultiSelect = false): {
       ...POLL_RESULT,
       closesAt: new Date('2026-06-20T00:00:00.000Z'),
       isClosed: true,
+      finalizedStartsAt: null,
+      finalizeSkippedReason: null,
     } satisfies PollWithResults),
   };
   return { service: mocks as unknown as PollService, mocks };
@@ -86,7 +98,7 @@ describe('PollController', () => {
         options: ['김밥', '라면'],
       });
 
-      // multiSelect 생략 → false, closesAt 생략 → null 로 전달한다.
+      // multiSelect 생략 → false, closesAt 생략 → null, kind 생략 → "general", optionDates → [] 로 전달한다.
       expect(mocks.createPoll).toHaveBeenCalledWith(
         'sub-U',
         'moim-A',
@@ -94,14 +106,16 @@ describe('PollController', () => {
         ['김밥', '라면'],
         false,
         null,
+        'general',
+        [],
       );
       // 갓 생성된 poll 은 투표 0 + myVotes 빈 배열 + multiSelect:false 로 매핑된다.
       expect(res.id).toBe('poll-1');
       expect(res.question).toBe('점심?');
       expect(res.multiSelect).toBe(false);
       expect(res.options).toEqual([
-        { id: 'opt-A', label: '김밥', voteCount: 0 },
-        { id: 'opt-B', label: '라면', voteCount: 0 },
+        { id: 'opt-A', label: '김밥', voteCount: 0, optionDate: null },
+        { id: 'opt-B', label: '라면', voteCount: 0, optionDate: null },
       ]);
       expect(res.myVotes).toEqual([]);
       expect(res.createdAt).toBe('2026-06-20T00:00:00.000Z');
@@ -124,6 +138,8 @@ describe('PollController', () => {
         ['토', '일'],
         true,
         null,
+        'general',
+        [],
       );
       expect(res.multiSelect).toBe(true);
       expect(res.myVotes).toEqual([]);
@@ -145,6 +161,8 @@ describe('PollController', () => {
         ['김밥', '라면'],
         false,
         null,
+        'general',
+        [],
       );
     });
 
@@ -165,6 +183,8 @@ describe('PollController', () => {
         ['A', 'B'],
         false,
         new Date('2026-06-25T12:00:00.000Z'),
+        'general',
+        [],
       );
     });
 
@@ -198,6 +218,8 @@ describe('PollController', () => {
         ['A', 'B'],
         false,
         null,
+        'general',
+        [],
       );
     });
 

@@ -40,7 +40,7 @@ import { PollService } from './poll.service';
 export class PollController {
   constructor(private readonly pollService: PollService) {}
 
-  // POST /moims/:id/polls — 투표 생성(멤버 한정, REQ-MOIM7-002 / AC-2). 201.
+  // POST /moims/:id/polls — 투표 생성(멤버 한정, REQ-MOIM7-002/REQ-MOIM8-002 / AC-2). 201.
   @Post()
   @ApiCreatedResponse({
     description: '투표 생성 + 옵션(투표 0 직후 상태)',
@@ -51,7 +51,7 @@ export class PollController {
     description: '대상 모임의 멤버가 아님(또는 없는 모임) — 403/404',
   })
   @ApiBadRequestResponse({
-    description: '빈 question / 유효 옵션 <2 / 무효 closesAt ISO — 400',
+    description: '빈 question / 유효 옵션 <2 / 무효 closesAt ISO / 미지 kind / 무효 날짜 옵션 ISO — 400',
   })
   async create(
     @CurrentUser() user: VerifiedUser,
@@ -60,11 +60,27 @@ export class PollController {
   ): Promise<PollResponseDto> {
     // C-1: ValidationPipe 부재 → question 빈/옵션<2 를 명시적으로 검사(400).
     const question = requireNonEmpty(body?.question, 'question');
-    const options = normalizeOptions(body?.options);
     // multiSelect 옵트인 — 명시적으로 true 일 때만 다중 선택(생략/falsy → false 단일 선택).
     const multiSelect = body?.multiSelect === true;
     // SPEC-MOIM-007: closesAt optional — 있으면 파싱(무효 ISO → 400), 없으면 null(마감 없음).
     const closesAt = parseClosesAt(body?.closesAt);
+    // SPEC-MOIM-008: kind 파싱 — 생략→"general", "general"/"date" 허용, 그 외 400.
+    const kind = parseKind(body?.kind);
+
+    let options: string[];
+    let optionDates: Date[] = [];
+
+    if (kind === 'date') {
+      // 날짜 투표: options[] 가 ISO datetime 문자열 — 파싱(무효 → 400, ≥2 검사).
+      const parsed = parseOptionDates(body?.options);
+      optionDates = parsed.dates;
+      // label 은 ISO 정규 문자열로 저장(optionDate.toISOString()).
+      options = parsed.dates.map((d) => d.toISOString());
+    } else {
+      // 일반 투표: 기존 normalizeOptions 로 라벨 정규화.
+      options = normalizeOptions(body?.options);
+    }
+
     const poll = await this.pollService.createPoll(
       user.sub,
       moimId,
@@ -72,6 +88,8 @@ export class PollController {
       options,
       multiSelect,
       closesAt,
+      kind,
+      optionDates,
     );
     // 갓 생성된 poll 은 투표 0(voteCount:0) + myVotes 빈 배열로 매핑한다.
     return newPollToDto(poll);
@@ -129,12 +147,13 @@ export class PollController {
     return resultToDto(poll);
   }
 
-  // POST /moims/:id/polls/:pollId/close — 수동 마감(생성자 전용, REQ-MOIM7-003 / AC-3). 200.
+  // POST /moims/:id/polls/:pollId/close — 수동 마감(생성자 전용, REQ-MOIM7-003/REQ-MOIM8-003 / AC-3). 200.
   // closesAt = now 로 설정해 즉시 마감. 이미 마감된 poll 에 다시 호출해도 200(멱등).
+  // SPEC-MOIM-008: 날짜 투표 마감 시 finalize 결과(finalizedStartsAt + finalizeSkippedReason)를 응답에 포함.
   @Post(':pollId/close')
   @HttpCode(200)
   @ApiOkResponse({
-    description: '마감된 poll 결과(closesAt=now, isClosed:true)',
+    description: '마감된 poll 결과(closesAt=now, isClosed:true, finalize 필드 포함)',
     type: PollResponseDto,
   })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
@@ -150,7 +169,7 @@ export class PollController {
     @Param('pollId') pollId: string,
   ): Promise<PollResponseDto> {
     const poll = await this.pollService.closePoll(user.sub, moimId, pollId);
-    return resultToDto(poll);
+    return closeResultToDto(poll);
   }
 }
 
@@ -179,6 +198,42 @@ function parseClosesAt(value: unknown): Date | null {
   return date;
 }
 
+// SPEC-MOIM-008 REQ-MOIM8-002: kind 파싱 헬퍼. 생략/"general" → "general"(기본). "date" 허용. 그 외 → 400.
+// closesAt 정책과 동일하게 컨트롤러에서 명시 검사 — no-ValidationPipe 정책.
+function parseKind(value: unknown): string {
+  if (value === undefined || value === null || value === '') {
+    return 'general';
+  }
+  if (value === 'general' || value === 'date') {
+    return value;
+  }
+  throw new BadRequestException('kind 는 "general" 또는 "date" 여야 합니다');
+}
+
+// SPEC-MOIM-008 REQ-MOIM8-002: 날짜 옵션 배열 파싱 헬퍼. kind="date" 일 때 사용.
+// 각 항목을 ISO-8601 datetime 으로 파싱하고 무효하면 400. ≥2 유효 항목이 없으면 400(일반 투표와 동일).
+// closesAt parseClosesAt 정책 미러: getTime NaN → 400.
+function parseOptionDates(value: unknown): { dates: Date[] } {
+  if (!Array.isArray(value)) {
+    throw new BadRequestException('options 는 배열이어야 합니다');
+  }
+  const dates: Date[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string' || item.trim().length === 0) {
+      throw new BadRequestException('날짜 투표 옵션은 ISO-8601 문자열이어야 합니다');
+    }
+    const d = new Date(item.trim());
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestException(`날짜 투표 옵션 "${item}" 이(가) 유효한 날짜/시각이 아닙니다`);
+    }
+    dates.push(d);
+  }
+  if (dates.length < 2) {
+    throw new BadRequestException('날짜 투표 선택지는 2개 이상이어야 합니다');
+  }
+  return { dates };
+}
+
 // 옵션 배열을 정규화한다: trim 후 비지 않은 항목만 모으고, 2개 미만이면 400(최소 2 선택지 — REQ-MOIM5-002).
 function normalizeOptions(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -196,6 +251,7 @@ function normalizeOptions(value: unknown): string[] {
 
 // 갓 생성된 poll(투표 전) → DTO. 모든 옵션 voteCount:0, myVotes 빈 배열, multiSelect 는 생성값 반영.
 // SPEC-MOIM-007: closesAt(ISO|null) + isClosed(서버 계산 — 생성 직후 미래 시각이면 false) 추가.
+// SPEC-MOIM-008: kind + 옵션 optionDate(ISO|null) + finalize 필드(null) 추가.
 function newPollToDto(poll: PollWithOptions): PollResponseDto {
   const closesAt = poll.closesAt ?? null;
   return {
@@ -204,19 +260,25 @@ function newPollToDto(poll: PollWithOptions): PollResponseDto {
     createdBy: poll.createdBy,
     createdAt: poll.createdAt.toISOString(),
     multiSelect: poll.multiSelect,
+    kind: poll.kind,
     options: poll.options.map((o) => ({
       id: o.id,
       label: o.label,
       voteCount: 0,
+      optionDate: o.optionDate ? o.optionDate.toISOString() : null,
     })),
     myVotes: [],
     closesAt: closesAt ? closesAt.toISOString() : null,
     isClosed: closesAt != null && closesAt <= new Date(),
+    // 갓 생성된 poll 은 finalize 없음 — 항상 null.
+    finalizedStartsAt: null,
+    finalizeSkippedReason: null,
   };
 }
 
 // 집계 결과 poll → DTO(createdAt ISO-8601 직렬화, multiSelect + myVotes 목록).
 // SPEC-MOIM-007: closesAt(ISO|null) + isClosed(서버 계산, aggregatePolls 가 이미 계산) 추가.
+// SPEC-MOIM-008: kind + optionDate + finalize 필드 추가. vote/list 응답은 finalize 필드 null.
 function resultToDto(poll: PollWithResults): PollResponseDto {
   return {
     id: poll.id,
@@ -224,13 +286,29 @@ function resultToDto(poll: PollWithResults): PollResponseDto {
     createdBy: poll.createdBy,
     createdAt: poll.createdAt.toISOString(),
     multiSelect: poll.multiSelect,
+    kind: poll.kind,
     options: poll.options.map((o) => ({
       id: o.id,
       label: o.label,
       voteCount: o.voteCount,
+      optionDate: o.optionDate ? o.optionDate.toISOString() : null,
     })),
     myVotes: poll.myVotes,
     closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
     isClosed: poll.isClosed,
+    // vote/list 응답: finalize 필드는 항상 null(finalize 는 close 라우트에서만).
+    finalizedStartsAt: null,
+    finalizeSkippedReason: null,
+  };
+}
+
+// SPEC-MOIM-008: close 라우트 전용 DTO 매핑 — finalize 결과 필드를 service 값으로 채운다.
+// vote/list 는 resultToDto 를 사용하고, close 만 이 함수를 사용한다.
+function closeResultToDto(poll: PollWithResults): PollResponseDto {
+  return {
+    ...resultToDto(poll),
+    // close 응답: finalize 결과를 실제 service 값으로 덮어쓴다.
+    finalizedStartsAt: poll.finalizedStartsAt ? poll.finalizedStartsAt.toISOString() : null,
+    finalizeSkippedReason: poll.finalizeSkippedReason,
   };
 }

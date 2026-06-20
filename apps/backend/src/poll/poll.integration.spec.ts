@@ -101,10 +101,16 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       createdBy: 'owner',
       createdAt: new Date('2026-06-20T00:00:00.000Z'),
       closesAt: null,
+      kind: 'general',
     };
     tables.poll.set(poll.id, poll);
     const options = labels.map((label) => {
-      const option: PollOption = { id: nextId('opt'), pollId: poll.id, label };
+      const option: PollOption = {
+        id: nextId('opt'),
+        pollId: poll.id,
+        label,
+        optionDate: null,
+      };
       tables.option.set(option.id, option);
       return option;
     });
@@ -132,7 +138,8 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
             createdBy: string;
             multiSelect?: boolean;
             closesAt?: Date | null;
-            options?: { create: { label: string }[] };
+            kind?: string;
+            options?: { create: { label: string; optionDate?: Date | null }[] };
           };
         }) => {
           const created: Poll = {
@@ -143,6 +150,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
             createdBy: arg.data.createdBy,
             createdAt: new Date('2026-06-20T00:00:00.000Z'),
             closesAt: arg.data.closesAt ?? null,
+            kind: arg.data.kind ?? 'general',
           };
           tables.poll.set(created.id, created);
           const opts = (arg.data.options?.create ?? []).map((o) => {
@@ -150,6 +158,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
               id: nextId('opt'),
               pollId: created.id,
               label: o.label,
+              optionDate: o.optionDate ?? null,
             };
             tables.option.set(option.id, option);
             return option;

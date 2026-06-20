@@ -114,6 +114,17 @@ export class MoimService {
     });
   }
 
+  // @MX:ANCHOR: [AUTO] Moim.startsAt 쓰기의 단일 출처(SPEC-MOIM-008 REQ-MOIM8-003).
+  // @MX:REASON: createMoim 외의 유일한 startsAt 쓰기 경로 — finalize 가 직접 prisma.moim.update 하지 않고
+  // 이 메서드를 호출한다(assertMember 단일 출처 패턴 미러). 인가는 closePoll 이 이미 통과시킨 상태이므로
+  // 여기서는 순수하게 startsAt 만 갱신한다. moim 존재는 poll.moimId 가 보장(close 가 poll-moim 일관성 검증).
+  async setStartsAt(moimId: string, startsAt: Date): Promise<void> {
+    await this.prisma.moim.update({
+      where: { id: moimId },
+      data: { startsAt },
+    });
+  }
+
   // 모임 삭제(REQ-MOIM-003 / AC-7). owner 전용 — 비-owner 403/없는 모임 404는 assertOwner가 판정한다.
   // 종속 멤버십은 FK onDelete: Cascade로 함께 제거된다(R-5).
   async deleteMoim(sub: string, moimId: string): Promise<void> {

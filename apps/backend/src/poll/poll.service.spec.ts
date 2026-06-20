@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  Moim,
   Poll,
   PollOption,
   PollVote,
@@ -26,6 +27,7 @@ import { PollService } from './poll.service';
 const NOW = new Date('2026-06-20T00:00:00.000Z');
 
 interface Tables {
+  moim: Map<string, Moim>; // SPEC-MOIM-008: setStartsAt 호출 대상
   poll: Map<string, Poll>;
   option: Map<string, PollOption>;
   vote: Map<string, PollVote>; // key: `${pollId}:${optionId}:${userId}` — 새 복합 PK
@@ -45,7 +47,12 @@ describe('PollService', () => {
   function reset(): void {
     members = new Map();
     existingMoims = new Set();
-    tables = { poll: new Map(), option: new Map(), vote: new Map() };
+    tables = {
+      moim: new Map(),
+      poll: new Map(),
+      option: new Map(),
+      vote: new Map(),
+    };
     idSeq = 0;
   }
 
@@ -56,12 +63,24 @@ describe('PollService', () => {
 
   function setMember(moimId: string, sub: string): void {
     existingMoims.add(moimId);
+    // SPEC-MOIM-008: moim 테이블도 함께 유지해 setStartsAt 스텁에서 업데이트할 수 있게 한다.
+    if (!tables.moim.has(moimId)) {
+      tables.moim.set(moimId, {
+        id: moimId,
+        name: `모임 ${moimId}`,
+        startsAt: null,
+        location: null,
+        createdBy: sub,
+        createdAt: NOW,
+      });
+    }
     const set = members.get(moimId) ?? new Set<string>();
     set.add(sub);
     members.set(moimId, set);
   }
 
   // 옵션 라벨 배열로 poll 을 시드한다(직접 DB 시드 — vote/list 테스트 준비용). multiSelect 기본 false(단일).
+  // SPEC-MOIM-008: kind 와 optionDates 추가 — 날짜 투표 시드용. kind 기본 'general', optionDates 기본 null 배열.
   function seedPoll(
     moimId: string,
     question: string,
@@ -69,6 +88,8 @@ describe('PollService', () => {
     multiSelect = false,
     createdBy = 'owner',
     closesAt: Date | null = null,
+    kind = 'general',
+    optionDates: (Date | null)[] = [],
   ): { poll: Poll; options: PollOption[] } {
     const poll: Poll = {
       id: nextId('poll'),
@@ -78,10 +99,17 @@ describe('PollService', () => {
       createdBy,
       createdAt: NOW,
       closesAt,
+      kind,
     };
     tables.poll.set(poll.id, poll);
-    const options = labels.map((label) => {
-      const option: PollOption = { id: nextId('opt'), pollId: poll.id, label };
+    const options = labels.map((label, idx) => {
+      const optionDate = optionDates[idx] ?? null;
+      const option: PollOption = {
+        id: nextId('opt'),
+        pollId: poll.id,
+        label,
+        optionDate,
+      };
       tables.option.set(option.id, option);
       return option;
     });
@@ -104,7 +132,8 @@ describe('PollService', () => {
       .map((v) => v.optionId);
   }
 
-  // assertMember 를 스텁한 MoimService(존재+멤버십 기반 404/403 판정 — MOIM-001 계약 재현).
+  // assertMember + setStartsAt 을 스텁한 MoimService(존재+멤버십 기반 404/403 판정 — MOIM-001 계약 재현).
+  // SPEC-MOIM-008: setStartsAt 은 moim 테이블의 startsAt 을 인메모리 업데이트한다(단일 출처 계약 검증).
   function makeMoimService(): MoimService {
     return {
       assertMember: jest.fn((sub: string, moimId: string) => {
@@ -116,13 +145,21 @@ describe('PollService', () => {
         }
         return Promise.resolve();
       }),
+      setStartsAt: jest.fn((moimId: string, startsAt: Date) => {
+        const existing = tables.moim.get(moimId);
+        if (existing) {
+          tables.moim.set(moimId, { ...existing, startsAt });
+        }
+        return Promise.resolve();
+      }),
     } as unknown as MoimService;
   }
 
   // poll/pollOption/pollVote 테이블을 흉내내는 fake prisma. service 가 실제 호출하는 형태만 구현한다.
   function makePrisma(): PrismaService {
     const poll = {
-      // create({ data: { ..., multiSelect, options: { create: [{label}] } }, include:{options:true} }) 네스티드 생성.
+      // create({ data: { ..., multiSelect, kind, options: { create: [{label, optionDate?}] } }, include:{options:true} }) 네스티드 생성.
+      // SPEC-MOIM-008: kind + 옵션 optionDate 를 인자에서 읽어 저장한다.
       create: jest.fn(
         (arg: {
           data: {
@@ -131,7 +168,8 @@ describe('PollService', () => {
             createdBy: string;
             multiSelect?: boolean;
             closesAt?: Date | null;
-            options?: { create: { label: string }[] };
+            kind?: string;
+            options?: { create: { label: string; optionDate?: Date | null }[] };
           };
           include?: { options?: boolean };
         }) => {
@@ -143,6 +181,7 @@ describe('PollService', () => {
             createdBy: arg.data.createdBy,
             createdAt: NOW,
             closesAt: arg.data.closesAt ?? null,
+            kind: arg.data.kind ?? 'general',
           };
           tables.poll.set(created.id, created);
           const opts = (arg.data.options?.create ?? []).map((o) => {
@@ -150,6 +189,7 @@ describe('PollService', () => {
               id: nextId('opt'),
               pollId: created.id,
               label: o.label,
+              optionDate: o.optionDate ?? null,
             };
             tables.option.set(option.id, option);
             return option;
@@ -851,6 +891,264 @@ describe('PollService', () => {
       const result = await service.closePoll('creator', 'moim-A', poll.id);
 
       expect(result.isClosed).toBe(true);
+    });
+  });
+
+  // ── SPEC-MOIM-008: 날짜 투표 생성 (kind="date" + optionDate 저장) ──
+  describe('createPoll() — 날짜 투표(REQ-MOIM8-002 / AC-2)', () => {
+    it('kind="date" 로 생성하면 poll.kind="date" + 각 옵션 optionDate 가 저장된다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const date1 = new Date('2026-06-27T12:00:00.000Z');
+      const date2 = new Date('2026-06-28T12:00:00.000Z');
+
+      const poll = await service.createPoll(
+        'member-1',
+        'moim-A',
+        '언제 모일까?',
+        [date1.toISOString(), date2.toISOString()],
+        false,
+        null,
+        'date',
+        [date1, date2],
+      );
+
+      expect(poll.kind).toBe('date');
+      expect(poll.options[0].optionDate).toEqual(date1);
+      expect(poll.options[1].optionDate).toEqual(date2);
+      // 날짜 투표의 label 은 ISO 문자열(정규)이어야 한다.
+      expect(poll.options[0].label).toBe(date1.toISOString());
+    });
+
+    it('kind="general"(기본) 로 생성하면 kind="general" + optionDate=null', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+
+      const poll = await service.createPoll(
+        'member-1',
+        'moim-A',
+        '점심?',
+        ['A', 'B'],
+        false,
+      );
+
+      expect(poll.kind).toBe('general');
+      expect(poll.options[0].optionDate).toBeNull();
+      expect(poll.options[1].optionDate).toBeNull();
+    });
+
+    it('kind 미전달 시 기본 "general" 이다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+
+      const poll = await service.createPoll(
+        'member-1',
+        'moim-A',
+        '점심?',
+        ['A', 'B'],
+        false,
+        null,
+      );
+
+      expect(poll.kind).toBe('general');
+    });
+  });
+
+  // ── SPEC-MOIM-008: closePoll 날짜 투표 자동 확정 ──
+  describe('closePoll() — 날짜 투표 auto-finalize(REQ-MOIM8-003 / AC-3)', () => {
+    it('단일 최다 득표 옵션이 있으면 Moim.startsAt 이 그 optionDate 로 설정된다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const date1 = new Date('2026-06-27T12:00:00.000Z');
+      const date2 = new Date('2026-06-28T12:00:00.000Z');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '날짜 투표',
+        [date1.toISOString(), date2.toISOString()],
+        false,
+        'creator',
+        null,
+        'date',
+        [date1, date2],
+      );
+      // options[0] 에 3표, options[1] 에 1표 — 단일 최다 득표 = options[0].
+      seedVote(poll.id, options[0].id, 'member-1');
+      seedVote(poll.id, options[0].id, 'member-2');
+      seedVote(poll.id, options[0].id, 'member-3');
+      seedVote(poll.id, options[1].id, 'member-4');
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      // finalize: startsAt 이 date1(27일)로 설정된다.
+      expect(tables.moim.get('moim-A')?.startsAt).toEqual(date1);
+      expect(result.finalizedStartsAt).toEqual(date1);
+      expect(result.finalizeSkippedReason).toBeNull();
+    });
+
+    it('동점이면 finalize 를 건너뛰고 finalizeSkippedReason="tie", startsAt 불변', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const date1 = new Date('2026-06-27T12:00:00.000Z');
+      const date2 = new Date('2026-06-28T12:00:00.000Z');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '날짜 투표',
+        [date1.toISOString(), date2.toISOString()],
+        false,
+        'creator',
+        null,
+        'date',
+        [date1, date2],
+      );
+      // 각 2표 — 동점.
+      seedVote(poll.id, options[0].id, 'member-1');
+      seedVote(poll.id, options[0].id, 'member-2');
+      seedVote(poll.id, options[1].id, 'member-3');
+      seedVote(poll.id, options[1].id, 'member-4');
+      const originalStartsAt = tables.moim.get('moim-A')?.startsAt;
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(tables.moim.get('moim-A')?.startsAt).toEqual(originalStartsAt);
+      expect(result.finalizedStartsAt).toBeNull();
+      expect(result.finalizeSkippedReason).toBe('tie');
+    });
+
+    it('표가 없으면 finalize 를 건너뛰고 finalizeSkippedReason="no_votes", startsAt 불변', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const date1 = new Date('2026-06-27T12:00:00.000Z');
+      const date2 = new Date('2026-06-28T12:00:00.000Z');
+      const { poll } = seedPoll(
+        'moim-A',
+        '날짜 투표',
+        [date1.toISOString(), date2.toISOString()],
+        false,
+        'creator',
+        null,
+        'date',
+        [date1, date2],
+      );
+      const originalStartsAt = tables.moim.get('moim-A')?.startsAt;
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(tables.moim.get('moim-A')?.startsAt).toEqual(originalStartsAt);
+      expect(result.finalizedStartsAt).toBeNull();
+      expect(result.finalizeSkippedReason).toBe('no_votes');
+    });
+
+    it('일반 투표(kind="general") 를 닫으면 finalize 를 수행하지 않는다(startsAt 불변, 두 필드 null)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const { poll, options } = seedPoll('moim-A', '일반 투표', ['A', 'B'], false, 'creator');
+      seedVote(poll.id, options[0].id, 'member-1');
+      const originalStartsAt = tables.moim.get('moim-A')?.startsAt;
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(tables.moim.get('moim-A')?.startsAt).toEqual(originalStartsAt);
+      expect(result.finalizedStartsAt).toBeNull();
+      expect(result.finalizeSkippedReason).toBeNull();
+    });
+
+    it('모임에 이미 startsAt 이 있는 경우 단일 승자 finalize 가 덮어쓴다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const existingStartsAt = new Date('2026-06-01T00:00:00.000Z');
+      // 기존 startsAt 을 모임에 설정한다.
+      tables.moim.set('moim-A', {
+        ...tables.moim.get('moim-A')!,
+        startsAt: existingStartsAt,
+      });
+      const date1 = new Date('2026-06-27T12:00:00.000Z');
+      const date2 = new Date('2026-06-28T12:00:00.000Z');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '날짜 투표',
+        [date1.toISOString(), date2.toISOString()],
+        false,
+        'creator',
+        null,
+        'date',
+        [date1, date2],
+      );
+      seedVote(poll.id, options[0].id, 'member-1');
+      seedVote(poll.id, options[0].id, 'member-2');
+      seedVote(poll.id, options[1].id, 'member-3');
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      // 기존 startsAt 이 date1 로 덮어써진다.
+      expect(tables.moim.get('moim-A')?.startsAt).toEqual(date1);
+      expect(result.finalizedStartsAt).toEqual(date1);
+    });
+
+    it('비생성자 멤버가 날짜 투표를 닫으면 403(finalize 미실행, startsAt 불변)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      setMember('moim-A', 'other-member');
+      const date1 = new Date('2026-06-27T12:00:00.000Z');
+      const date2 = new Date('2026-06-28T12:00:00.000Z');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '날짜 투표',
+        [date1.toISOString(), date2.toISOString()],
+        false,
+        'creator',
+        null,
+        'date',
+        [date1, date2],
+      );
+      seedVote(poll.id, options[0].id, 'member-1');
+      const originalStartsAt = tables.moim.get('moim-A')?.startsAt;
+
+      await expect(
+        service.closePoll('other-member', 'moim-A', poll.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      // finalize 가 실행되지 않는다.
+      expect(tables.moim.get('moim-A')?.startsAt).toEqual(originalStartsAt);
+    });
+  });
+
+  // ── SPEC-MOIM-008: aggregatePolls — kind + optionDate 노출 ──
+  describe('aggregatePolls() — kind + optionDate 노출(REQ-MOIM8-004 / AC-4)', () => {
+    it('날짜 투표 조회 시 kind="date" + optionDate 가 포함된다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      const date1 = new Date('2026-06-27T12:00:00.000Z');
+      const date2 = new Date('2026-06-28T12:00:00.000Z');
+      seedPoll(
+        'moim-A',
+        '날짜 투표',
+        [date1.toISOString(), date2.toISOString()],
+        false,
+        'owner',
+        null,
+        'date',
+        [date1, date2],
+      );
+
+      const polls = await service.listPolls('member-1', 'moim-A');
+
+      expect(polls[0].kind).toBe('date');
+      expect(polls[0].options[0].optionDate).toEqual(date1);
+      expect(polls[0].options[1].optionDate).toEqual(date2);
+      // list 응답의 finalize 필드는 항상 null 이다.
+      expect(polls[0].finalizedStartsAt).toBeNull();
+      expect(polls[0].finalizeSkippedReason).toBeNull();
+    });
+
+    it('일반 투표 조회 시 kind="general" + optionDate=null', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      seedPoll('moim-A', '일반 투표', ['A', 'B']);
+
+      const polls = await service.listPolls('member-1', 'moim-A');
+
+      expect(polls[0].kind).toBe('general');
+      expect(polls[0].options.every((o) => o.optionDate === null)).toBe(true);
     });
   });
 

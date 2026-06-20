@@ -14,16 +14,21 @@ import {
 // myVotes(고른 optionId 목록, 미투표 빈 배열). MOIM-006: 단일 myVote(string|null)를 myVotes(string[])로 대체.
 // SPEC-MOIM-007: closesAt(ISO|null — 마감 시각) + isClosed(서버 계산 마감 여부 — 차단/배지 판정의 권위 출처)
 // 추가. 클라이언트는 closesAt 를 자기 시계로 비교하지 않고 isClosed 만 신뢰한다(시계 오차 차단 — §5).
+// SPEC-MOIM-008: kind("general"|"date") + 옵션별 optionDate(ISO|null — 날짜 투표 선택지의 시각) +
+// finalize 결과(finalizedStartsAt/finalizeSkippedReason — close 응답에서만 채워지고 list/vote 에선 null).
 export interface PollWithResults {
   id: string;
   question: string;
   createdBy: string;
   createdAt: string;
   multiSelect: boolean;
-  options: { id: string; label: string; voteCount: number }[];
+  kind: "general" | "date";
+  options: { id: string; label: string; voteCount: number; optionDate: string | null }[];
   myVotes: string[];
   closesAt: string | null;
   isClosed: boolean;
+  finalizedStartsAt: string | null;
+  finalizeSkippedReason: "tie" | "no_votes" | null;
 }
 
 /**

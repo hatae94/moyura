@@ -25,8 +25,17 @@ export type CreatePollActionState = { error?: string; ok?: boolean } | undefined
 /** 투표(vote) 결과 상태(클라이언트가 실패 시 일반화 오류를 표시). */
 export type VoteActionState = { error?: string } | undefined;
 
-/** 마감(close) 결과 상태(클라이언트가 실패 시 일반화 오류를 표시). */
-export type ClosePollActionState = { error?: string } | undefined;
+/**
+ * 마감(close) 결과 상태. 실패 시 error, 성공 시 ok + finalize 결과(SPEC-MOIM-008).
+ * finalizeSkippedReason 이 있으면(동점/무표) 일정이 확정되지 않았음을 UI 가 안내한다.
+ */
+export type ClosePollActionState =
+  | {
+      error?: string;
+      ok?: boolean;
+      finalizeSkippedReason?: "tie" | "no_votes" | null;
+    }
+  | undefined;
 
 const CREATE_GENERIC_ERROR = "투표를 만들지 못했습니다. 다시 시도해 주세요.";
 const VOTE_GENERIC_ERROR = "투표하지 못했습니다. 다시 시도해 주세요.";
@@ -70,15 +79,22 @@ export async function createPollAction(
 ): Promise<CreatePollActionState> {
   const moimId = String(formData.get("moimId") ?? "").trim();
   const question = String(formData.get("question") ?? "").trim();
-  // 동적 옵션 입력은 name="option" 으로 여러 개 제출된다 — trim 후 비지 않은 항목만 모은다.
-  const options = formData
-    .getAll("option")
-    .map((v) => String(v).trim())
-    .filter((v) => v.length > 0);
   // "여러 개 선택 허용" 체크박스 — 체크 시 "on", 미체크 시 null. 다중 선택 옵트인(기본 false).
   const multiSelect = formData.get("multiSelect") === "on";
   // SPEC-MOIM-007: optional 마감 시각(datetime-local) — 빈 값/무효면 미전송(마감 없음 = null).
   const closesAt = toIsoOrUndefined(String(formData.get("closesAt") ?? ""));
+  // SPEC-MOIM-008: 일정 투표 토글(name="kind") — "date" 면 날짜 투표, 그 외 일반.
+  const kind = formData.get("kind") === "date" ? "date" : "general";
+
+  // 동적 옵션 입력은 name="option" 으로 여러 개 제출된다. 일반 투표는 trim 후 비지 않은 라벨,
+  // 날짜 투표(kind="date")는 datetime-local 값을 ISO-8601 로 변환해(무효/빈 값 제외) 백엔드에 싣는다.
+  const rawOptions = formData.getAll("option").map((v) => String(v));
+  const options =
+    kind === "date"
+      ? rawOptions
+          .map((v) => toIsoOrUndefined(v))
+          .filter((v): v is string => Boolean(v))
+      : rawOptions.map((v) => v.trim()).filter((v) => v.length > 0);
 
   if (!moimId) {
     // moimId 는 hidden 필드로 항상 동봉되지만, 누락 시 안전하게 일반화 오류로 처리한다.
@@ -86,7 +102,12 @@ export async function createPollAction(
   }
   if (!question || options.length < 2) {
     // AC-5 Unwanted: 빈 질문/유효 옵션<2 → 머무르며 일반화된 오류 표시(재제출 가능, /login 이동 없음).
-    return { error: "질문과 선택지 2개 이상을 입력해 주세요." };
+    return {
+      error:
+        kind === "date"
+          ? "질문과 날짜 선택지 2개 이상을 입력해 주세요."
+          : "질문과 선택지 2개 이상을 입력해 주세요.",
+    };
   }
 
   const token = await requireToken();
@@ -96,7 +117,7 @@ export async function createPollAction(
       baseUrl: API_BASE_URL,
       getToken: () => token,
     });
-    await createPoll(api, moimId, { question, options, multiSelect, closesAt });
+    await createPoll(api, moimId, { question, options, multiSelect, closesAt, kind });
   } catch (err) {
     // AC-5 Unwanted: 백엔드 생성 실패 → 머무르며 일반화된 오류(토큰/상세 비노출 — R-A9). 재제출 가능.
     const status = err instanceof ApiError ? err.status : "unknown";
@@ -159,12 +180,16 @@ export async function closePollAction(
 
   const token = await requireToken();
 
+  let finalizeSkippedReason: "tie" | "no_votes" | null = null;
   try {
     const api = createApiClient({
       baseUrl: API_BASE_URL,
       getToken: () => token,
     });
-    await closePoll(api, moimId, pollId);
+    // SPEC-MOIM-008: 날짜 투표면 close 응답에 finalize 결과가 담긴다(단일 승자면 startsAt 확정,
+    // 동점/무표면 finalizeSkippedReason). 일반 투표는 둘 다 null.
+    const result = await closePoll(api, moimId, pollId);
+    finalizeSkippedReason = result.finalizeSkippedReason;
   } catch (err) {
     // 백엔드 마감 실패(403 비생성자/404/네트워크) → 일반화된 오류(토큰/상세 비노출). 화면 머무름.
     const status = err instanceof ApiError ? err.status : "unknown";
@@ -172,7 +197,7 @@ export async function closePollAction(
     return { error: CLOSE_GENERIC_ERROR };
   }
 
-  // 성공: 상세를 재검증해 "마감됨" 배지 + 투표 컨트롤 비활성화가 반영되게 한다.
+  // 성공: 상세를 재검증해 "마감됨" 배지 + 투표 컨트롤 비활성화 + (날짜 투표면) 모임 헤더 일정 갱신을 반영한다.
   revalidatePath(`/home/${moimId}`);
-  return undefined;
+  return { ok: true, finalizeSkippedReason };
 }

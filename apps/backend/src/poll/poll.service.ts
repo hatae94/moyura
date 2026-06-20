@@ -18,16 +18,22 @@ export interface PollWithOptions extends Poll {
 // 결과 집계가 포함된 poll(목록/투표 응답). 각 옵션은 voteCount(표 0 포함), myVotes 는 호출자가 고른 optionId 목록
 // (단일 0/1요소·다중 0..N요소·미투표 빈 배열), multiSelect 는 poll 별 다중 선택 여부다(SPEC-MOIM-006).
 // SPEC-MOIM-007: closesAt(마감 시각|null) + isClosed(서버 계산 마감 여부) 추가 — 클라이언트 시계 오차 차단.
+// SPEC-MOIM-008: kind + 옵션 optionDate + finalizedStartsAt + finalizeSkippedReason 추가.
+//   - finalizedStartsAt/finalizeSkippedReason 는 closePoll 이 반환할 때만 값을 가짐. 목록/투표 응답은 null.
 export interface PollWithResults {
   id: string;
   question: string;
   createdBy: string;
   createdAt: Date;
   multiSelect: boolean;
-  options: { id: string; label: string; voteCount: number }[];
+  kind: string;
+  options: { id: string; label: string; voteCount: number; optionDate: Date | null }[];
   myVotes: string[];
   closesAt: Date | null;
   isClosed: boolean;
+  // close 응답 전용 finalize 결과 필드. list/vote 응답에서는 항상 null.
+  finalizedStartsAt: Date | null;
+  finalizeSkippedReason: 'tie' | 'no_votes' | null;
 }
 
 @Injectable()
@@ -45,6 +51,10 @@ export class PollService {
   // (빈/<2 400)는 컨트롤러가 선처리하므로 여기서는 멤버십 + 원자 생성만 책임진다. multiSelect 는 poll 별 옵트인
   // (기본 false = 단일 선택)으로 그대로 저장한다 — 투표 의미론(교체/토글)은 vote 가 이 값으로 분기한다.
   // closesAt: null 이면 마감 없음(영구 열림), Date 이면 그 시각에 마감됨(deadline 또는 수동 마감 now 설정).
+  // SPEC-MOIM-008: kind("general"|"date") + optionDates(날짜 투표 옵션 시각 배열, 일반=빈 배열) 추가.
+  //   컨트롤러가 kind/optionDates 를 파싱·검증(무효 ISO → 400, 미지 kind → 400)하고 서비스는 저장만 담당.
+  //   kind="date": options[i]=ISO label, optionDates[i]=parsed Date 로 저장한다.
+  //   kind="general": optionDates 무시(빈 배열), 기존 label=text, optionDate=null 동작 유지.
   async createPoll(
     sub: string,
     moimId: string,
@@ -52,6 +62,8 @@ export class PollService {
     options: string[],
     multiSelect: boolean,
     closesAt: Date | null = null,
+    kind: string = 'general',
+    optionDates: Date[] = [],
   ): Promise<PollWithOptions> {
     // 멤버십 인가(없는 모임 404, 비멤버 403). throw 시 생성에 도달하지 않는다.
     await this.moim.assertMember(sub, moimId);
@@ -65,7 +77,14 @@ export class PollService {
           multiSelect,
           createdBy: sub,
           closesAt,
-          options: { create: options.map((label) => ({ label })) },
+          kind,
+          options: {
+            create: options.map((label, idx) => ({
+              label,
+              // 날짜 투표: optionDates[idx] 를 저장. 일반 투표 또는 인덱스 범위 초과: null.
+              optionDate: kind === 'date' ? (optionDates[idx] ?? null) : null,
+            })),
+          },
         },
         include: { options: true },
       });
@@ -138,10 +157,14 @@ export class PollService {
     return result;
   }
 
-  // @MX:ANCHOR: [AUTO] 수동 마감 — 생성자 전용(REQ-MOIM7-003 / AC-3). 컨트롤러(POST /moims/:id/polls/:pollId/close)가 호출한다.
+  // @MX:ANCHOR: [AUTO] 수동 마감 + 날짜 투표 auto-finalize — 생성자 전용(REQ-MOIM7-003/REQ-MOIM8-003 / AC-3).
   // @MX:REASON: 마감은 poll 생성자만 할 수 있는 신규 행위자-소유 인가다 — 멤버 스코핑보다 강함.
   // 인가 순서: assertMember(비멤버 403) → poll 일관성(404) → 생성자 검사(비생성자 403) → closesAt=now 설정.
-  // 이미 마감된 poll 에 다시 close 해도 now 로 재설정 무해(멱등 — closesAt <= now 이면 여전히 마감).
+  // SPEC-MOIM-008: closesAt=now 설정 후 poll.kind="date" 면 단일 최다 득표 옵션 판정 + MoimService.setStartsAt 호출.
+  //   승자 없음(동점/무표)은 finalize 를 건너뛰고 finalizeSkippedReason 로 이유를 반환한다.
+  //   일반 투표는 finalize 를 수행하지 않는다(둘 다 null). finalize 는 오직 여기서만 — passive deadline-pass 제외.
+  // @MX:WARN: [AUTO] cross-aggregate 쓰기 — closePoll 이 MoimService.setStartsAt 으로 moim 테이블을 갱신한다.
+  // @MX:REASON: finalize 트리거(생성자 close)와 startsAt 쓰기(setStartsAt 단일 출처)를 여기서 연결하는 설계 결정.
   async closePoll(
     sub: string,
     moimId: string,
@@ -168,7 +191,37 @@ export class PollService {
     });
 
     const [result] = await this.aggregatePolls(sub, [updated]);
-    return result;
+
+    // SPEC-MOIM-008 REQ-MOIM8-003: 날짜 투표(kind="date") 일 때만 finalize 를 수행한다.
+    // 일반 투표는 finalizedStartsAt=null, finalizeSkippedReason=null 으로 반환한다.
+    if (poll.kind !== 'date') {
+      return result;
+    }
+
+    // 날짜 투표 finalize: 옵션별 voteCount 에서 단일 최다 득표를 판정한다.
+    const sortedOptions = [...result.options].sort((a, b) => b.voteCount - a.voteCount);
+    const topCount = sortedOptions[0]?.voteCount ?? 0;
+
+    if (topCount === 0) {
+      // 무표 — finalize 스킵.
+      return { ...result, finalizedStartsAt: null, finalizeSkippedReason: 'no_votes' };
+    }
+
+    const winners = sortedOptions.filter((o) => o.voteCount === topCount);
+    if (winners.length > 1) {
+      // 동점 — finalize 스킵.
+      return { ...result, finalizedStartsAt: null, finalizeSkippedReason: 'tie' };
+    }
+
+    // 단일 승자 — startsAt 을 winner.optionDate 로 설정(기존 startsAt 덮어씀).
+    const winner = winners[0];
+    if (!winner.optionDate) {
+      // optionDate 가 null 이면 finalize 불가(날짜 투표인데 optionDate 없는 이상 케이스 — 방어).
+      return { ...result, finalizedStartsAt: null, finalizeSkippedReason: null };
+    }
+
+    await this.moim.setStartsAt(moimId, winner.optionDate);
+    return { ...result, finalizedStartsAt: winner.optionDate, finalizeSkippedReason: null };
   }
 
   // 투표 목록 + 결과 조회(REQ-MOIM7-005 / AC-5 — MOIM-006 확장). 멤버 한정 — 비멤버 403/없는 모임 404. poll 없으면 빈 배열.
@@ -225,6 +278,8 @@ export class PollService {
       createdBy: poll.createdBy,
       createdAt: poll.createdAt,
       multiSelect: poll.multiSelect,
+      // SPEC-MOIM-008: kind 노출(일반/날짜 투표 구분).
+      kind: poll.kind,
       // SPEC-MOIM-007: closesAt + 서버 계산 isClosed(클라이언트 시계 오차 차단).
       closesAt: poll.closesAt,
       isClosed: poll.closesAt != null && poll.closesAt <= now,
@@ -235,8 +290,13 @@ export class PollService {
           id: o.id,
           label: o.label,
           voteCount: countByOption.get(o.id) ?? 0,
+          // SPEC-MOIM-008: optionDate 노출(날짜 투표 옵션은 시각, 일반 투표 옵션은 null).
+          optionDate: o.optionDate,
         })),
       myVotes: myVotesByPoll.get(poll.id) ?? [],
+      // SPEC-MOIM-008: finalize 필드 — 목록/투표 응답에선 항상 null. closePoll 이 별도로 설정한다.
+      finalizedStartsAt: null,
+      finalizeSkippedReason: null,
     }));
   }
 }

@@ -702,7 +702,7 @@
             }
           },
           "400": {
-            "description": "빈 question / 유효 옵션 <2 / 무효 closesAt ISO — 400"
+            "description": "빈 question / 유효 옵션 <2 / 무효 closesAt ISO / 미지 kind / 무효 날짜 옵션 ISO — 400"
           },
           "401": {
             "description": "유효한 Supabase JWT 부재 — 401"
@@ -854,7 +854,7 @@
         ],
         "responses": {
           "200": {
-            "description": "마감된 poll 결과(closesAt=now, isClosed:true)",
+            "description": "마감된 poll 결과(closesAt=now, isClosed:true, finalize 필드 포함)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1335,6 +1335,16 @@
             "description": "마감 시각(ISO-8601). 생략 시 null(마감 없음 — 영구히 열림). 무효 ISO 는 400 Bad Request.",
             "nullable": true,
             "example": "2026-06-25T12:00:00.000Z"
+          },
+          "kind": {
+            "type": "string",
+            "description": "투표 종류. \"date\" 면 options 가 ISO-8601 날짜 문자열 배열(옵션별 optionDate 저장). 생략/\"general\" 이면 일반 자유 텍스트 옵션.",
+            "enum": [
+              "general",
+              "date"
+            ],
+            "default": "general",
+            "example": "general"
           }
         },
         "required": [
@@ -1359,12 +1369,19 @@
             "type": "number",
             "description": "이 선택지의 득표 수(표 0 이면 0)",
             "example": 3
+          },
+          "optionDate": {
+            "type": "string",
+            "description": "날짜 투표 옵션의 시각(ISO-8601). 일반 투표 옵션은 null.",
+            "nullable": true,
+            "example": "2026-06-27T12:00:00.000Z"
           }
         },
         "required": [
           "id",
           "label",
-          "voteCount"
+          "voteCount",
+          "optionDate"
         ]
       },
       "PollResponseDto": {
@@ -1395,8 +1412,17 @@
             "description": "여러 개 선택 허용 여부(true=다중 선택/토글, false=단일 선택/교체).",
             "example": false
           },
+          "kind": {
+            "type": "string",
+            "description": "투표 종류. \"general\"=일반(자유 텍스트 옵션), \"date\"=날짜 투표(optionDate 있음).",
+            "enum": [
+              "general",
+              "date"
+            ],
+            "example": "general"
+          },
           "options": {
-            "description": "선택지 목록(각 선택지의 득표 수 포함)",
+            "description": "선택지 목록(각 선택지의 득표 수 + optionDate 포함)",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PollOptionResponseDto"
@@ -1422,6 +1448,22 @@
             "type": "boolean",
             "description": "서버 계산 마감 여부(closesAt != null AND closesAt <= 서버 now). 클라이언트 시계 오차 차단용 — 차단/배지 판정에 사용한다.",
             "example": false
+          },
+          "finalizedStartsAt": {
+            "type": "string",
+            "description": "자동 확정된 모임 일정(ISO-8601). 날짜 투표 마감 시 단일 최다 득표 옵션의 날짜가 Moim.startsAt 으로 설정된 경우에만 값이 있다. vote/list 응답에선 항상 null.",
+            "nullable": true,
+            "example": "2026-06-27T12:00:00.000Z"
+          },
+          "finalizeSkippedReason": {
+            "type": "string",
+            "description": "finalize 건너뛴 이유. \"tie\"=동점, \"no_votes\"=표 없음, null=finalize 성공 또는 일반 투표 또는 vote/list 응답.",
+            "nullable": true,
+            "enum": [
+              "tie",
+              "no_votes"
+            ],
+            "example": null
           }
         },
         "required": [
@@ -1430,10 +1472,13 @@
           "createdBy",
           "createdAt",
           "multiSelect",
+          "kind",
           "options",
           "myVotes",
           "closesAt",
-          "isClosed"
+          "isClosed",
+          "finalizedStartsAt",
+          "finalizeSkippedReason"
         ]
       },
       "VoteDto": {

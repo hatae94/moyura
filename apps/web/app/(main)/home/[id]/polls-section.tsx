@@ -19,6 +19,7 @@
 import { useActionState, useState, useTransition } from "react";
 import {
   BarChart3,
+  CalendarClock,
   Check,
   CheckSquare,
   Clock,
@@ -60,7 +61,7 @@ function OptionRow({
   closed,
   onVote,
 }: {
-  option: { id: string; label: string; voteCount: number };
+  option: { id: string; label: string; voteCount: number; optionDate: string | null };
   totalVotes: number;
   isMine: boolean;
   multiSelect: boolean;
@@ -70,6 +71,8 @@ function OptionRow({
 }) {
   // 총표 0이면 0% (퍼센트 NaN 방지). 막대는 시각적 집계.
   const percent = totalVotes > 0 ? Math.round((option.voteCount / totalVotes) * 100) : 0;
+  // SPEC-MOIM-008: 날짜 투표 선택지는 optionDate(ISO)를 사람이 읽을 수 있게 표시한다(정규 ISO label 노출 금지).
+  const displayLabel = option.optionDate ? formatClosesAt(option.optionDate) : option.label;
   return (
     <button
       type="button"
@@ -112,7 +115,7 @@ function OptionRow({
               isMine ? "text-primary" : "text-card-foreground"
             }`}
           >
-            {option.label}
+            {displayLabel}
           </span>
         </span>
         <span className="shrink-0 text-sm font-semibold text-muted-foreground">
@@ -139,11 +142,15 @@ function PollCard({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | undefined>(undefined);
+  // SPEC-MOIM-008: 마감 직후 finalize 결과 안내(동점/무표로 일정이 확정되지 않은 경우).
+  const [notice, setNotice] = useState<string | undefined>(undefined);
 
   const totalVotes = poll.options.reduce((sum, o) => sum + o.voteCount, 0);
   const hasVoted = poll.myVotes.length > 0;
   // SPEC-MOIM-007: 마감 판정은 서버 계산 isClosed 만 신뢰한다(closesAt 자기 시계 비교 금지 — 시계 오차 차단).
   const closed = poll.isClosed;
+  // SPEC-MOIM-008: 날짜 투표(kind="date") — 마감 시 최다 득표 날짜가 모임 일정으로 확정된다.
+  const isDatePoll = poll.kind === "date";
   // "마감하기"는 생성자 + 열린 poll 에만 노출한다(createdBy = JWT sub = Supabase user.id).
   const canClose = poll.createdBy === currentUserId && !closed;
 
@@ -162,10 +169,18 @@ function PollCard({
 
   function handleClose(): void {
     setError(undefined);
+    setNotice(undefined);
     startTransition(async () => {
       const result = await closePollAction(moimId, poll.id);
       if (result?.error) {
         setError(result.error);
+        return;
+      }
+      // 날짜 투표 finalize 가 동점/무표로 스킵되면 일정 미확정을 안내한다(단일 승자면 헤더 일정이 갱신됨).
+      if (result?.finalizeSkippedReason === "tie") {
+        setNotice("최다 득표가 동점이라 일정이 확정되지 않았어요. 한 곳으로 모인 뒤 다시 마감해 주세요.");
+      } else if (result?.finalizeSkippedReason === "no_votes") {
+        setNotice("투표가 없어 일정이 확정되지 않았어요.");
       }
     });
   }
@@ -194,6 +209,14 @@ function PollCard({
         </p>
       ) : null}
 
+      {/* SPEC-MOIM-008: 날짜 투표 안내 — 열린 동안은 마감 시 일정 확정 예고, 마감 후 단일 승자면 헤더 일정이 갱신된다. */}
+      {isDatePoll && !closed ? (
+        <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
+          <CalendarClock size={13} />
+          마감하면 최다 득표 날짜가 모임 일정으로 확정돼요
+        </p>
+      ) : null}
+
       {/* 마감 시각 표시 — closesAt 가 설정돼 있을 때만(없으면 마감 안내 미표시). 표시 전용. */}
       {poll.closesAt ? (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -207,6 +230,13 @@ function PollCard({
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
+        </p>
+      ) : null}
+
+      {/* SPEC-MOIM-008: finalize 스킵(동점/무표) 안내 — 오류가 아니라 정보성(차분한 muted). */}
+      {notice ? (
+        <p className="rounded-xl border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          {notice}
         </p>
       ) : null}
 
@@ -258,6 +288,8 @@ function CreatePollForm({ moimId }: { moimId: string }) {
   // 동적 옵션 입력 — 기본 2칸, 추가/제거 가능(최소 2 유지). 제어 컴포넌트로 입력값을 관리한다.
   const [options, setOptions] = useState<string[]>(["", ""]);
   const [open, setOpen] = useState(false);
+  // SPEC-MOIM-008: 일정 투표 토글 — 켜면 선택지 입력이 datetime-local 로 바뀌고 kind="date" 로 제출된다.
+  const [isDatePoll, setIsDatePoll] = useState(false);
 
   // 생성 성공 시 폼을 닫고 입력을 리셋한다 — 제출 후에도 폼이 열린 채 남던 UX 결함 해소.
   // createPollAction 을 액션 래퍼로 감싸 성공(ok) 직후 setOpen/setOptions 를 호출한다(트랜잭션 컨텍스트라
@@ -268,6 +300,7 @@ function CreatePollForm({ moimId }: { moimId: string }) {
       if (result?.ok) {
         setOpen(false);
         setOptions(["", ""]);
+        setIsDatePoll(false);
       }
       return result;
     },
@@ -305,6 +338,8 @@ function CreatePollForm({ moimId }: { moimId: string }) {
     >
       {/* moimId 는 Server Action 이 읽도록 hidden 으로 동봉한다. */}
       <input type="hidden" name="moimId" value={moimId} />
+      {/* SPEC-MOIM-008: kind 는 일정 투표 토글에 따라 결정된다(체크 시 "date", 아니면 "general"). */}
+      <input type="hidden" name="kind" value={isDatePoll ? "date" : "general"} />
 
       <div className="flex items-center justify-between">
         <span className="font-bold text-card-foreground">새 투표 만들기</span>
@@ -342,17 +377,39 @@ function CreatePollForm({ moimId }: { moimId: string }) {
         />
       </div>
 
-      {/* 동적 선택지(최소 2) */}
+      {/* SPEC-MOIM-008: 일정 투표 토글(체크 시 선택지가 날짜 입력으로 전환). multiSelect 와 공존 가능. */}
+      <label
+        htmlFor="poll-date-kind"
+        className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-background p-3"
+      >
+        <input
+          id="poll-date-kind"
+          type="checkbox"
+          checked={isDatePoll}
+          onChange={(e) => setIsDatePoll(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span className="text-sm font-semibold text-foreground">일정 투표</span>
+          <span className="text-xs text-muted-foreground">
+            켜면 선택지를 날짜로 입력해요. 마감 시 최다 득표 날짜가 모임 일정으로 확정돼요.
+          </span>
+        </span>
+      </label>
+
+      {/* 동적 선택지(최소 2) — 일정 투표면 datetime-local, 일반이면 텍스트. */}
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-semibold text-foreground">선택지</span>
+        <span className="text-sm font-semibold text-foreground">
+          {isDatePoll ? "날짜 선택지" : "선택지"}
+        </span>
         {options.map((value, index) => (
           <div key={index} className="flex items-center gap-2">
             <input
               name="option"
-              type="text"
+              type={isDatePoll ? "datetime-local" : "text"}
               value={value}
               onChange={(e) => updateOption(index, e.target.value)}
-              placeholder={`선택지 ${index + 1}`}
+              placeholder={isDatePoll ? undefined : `선택지 ${index + 1}`}
               className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
             {options.length > 2 ? (
