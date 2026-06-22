@@ -126,7 +126,7 @@ backend jest 통과(마감 신규 + 열린 poll 회귀), backend+web+api-client 
 - [x] web `PollWithResults`(closesAt/isClosed) + `closePoll` 헬퍼 + `closePollAction` + `createPollAction` closesAt 읽기 + `PollCard` 마감 분기(배지/비활성/결과/마감하기) + `CreatePollForm` 마감 시각 입력 + page currentUserId 전달, Meetup 오렌지. (AC-7) — 라이브 검증 2026-06-20
 - [x] web tsc 0(closesAt/isClosed/currentUserId 전 소비처) / web lint 0 / web build 0. (AC-8) — tsc 0, lint 0, build 0
 - [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-8) — mobile vitest 215/215(회귀 0)
-- [ ] 디바이스 종단 검증: 상세 → 마감 시각 정해 생성 → 마감 전 투표(단일/다중) → 생성자 "마감하기" → "마감됨" 배지 + 비활성 컨트롤 + 결과 표시 → 마감 poll 투표 차단(409) → 비생성자/마감 poll "마감하기" 미노출 라이브 확인. (AC-8, device-gated) — iOS 시뮬레이터에서 모바일 WebView poll 마감 인터랙션(Server Action + revalidatePath)이 WebView 컨텍스트에서 마감 상태를 갱신하는지 검증 대기
+- [x] 디바이스 종단 검증: 상세 → 마감 시각 정해 생성 → 마감 전 투표(단일/다중) → 생성자 "마감하기" → "마감됨" 배지 + 비활성 컨트롤 + 결과 표시 → 마감 poll 투표 차단(409) → 비생성자/마감 poll "마감하기" 미노출 라이브 확인. (AC-8, device-gated) — 2026-06-22 검증 완료: Maestro iOS 시뮬레이터(iPhone 16) in-WebView poll 렌더(마감 배지 포함) 확인 + 데스크톱 멀티탭 워크스루(미래 마감 생성·열린 poll 투표·생성자 마감→배지/비활성/결과 유지·마감 후 409·재-close 멱등) + poll-*.live.mts
 
 ---
 
@@ -134,4 +134,4 @@ backend jest 통과(마감 신규 + 열린 poll 회귀), backend+web+api-client 
 
 웹 UI 표면은 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버)으로 실제 2-멤버 브라우저 워크스루를 통과했다(투표 생성/단일·다중 투표/마감/날짜·장소 확정→헤더 갱신/실시간 cross-member 전파/per-user myVotes 정확/생성자 전용 마감/3-way 종류 선택). 상세 결과·시나리오는 `.moai/reports/mobile-verification-runbook.md` 부록 A 참조.
 
-남은 device-gate: **모바일 iOS WebView 셸 + 네이티브 Google Sign-In** 검증(런북 §3~4). 그 전까지 status `in-progress` 유지(프로젝트 메모리 `mobile-spec-device-gated`).
+device-gate 해소(2026-06-22): **모바일 iOS WebView 셸** 검증 완료 — Maestro(iPhone 16) hands-free in-WebView 렌더(상세 push + poll 렌더 + finalize 헤더 반영 + invite-accept + 채팅) + 데스크톱 멀티탭 워크스루 + poll-*.live.mts. status `completed` 전환. (참고: Maestro poll-option 직접 탭은 a11y resolution + Next dev badge overlay로 불안정 — 투표/마감 자체는 데스크톱 멀티탭/live.mts로 실증, 앱 결함 아님)

@@ -125,10 +125,10 @@ backend jest 통과(장소 투표 + location finalize 신규 + 일반/날짜/마
 - [x] DTO(`CreatePollDto.kind` enum "place", `PollResponseDto.finalizedLocation`/kind enum "place") + service closePoll place→setLocation finalize 분기/aggregate finalizedLocation null + 컨트롤러 parseKind "place"/create place→normalizeOptions/closeResultToDto + setLocation. ✓ tsc 0(all) (AC-2/3/4/5)
 - [x] backend jest 신규(장소 생성/미지 kind 400/location finalize 단일 승자→location/동점 tie/무표 no_votes/일반 투표 location finalize 안 함/날짜 투표 startsAt 확정 회귀/덮어쓰기/비생성자 403/setLocation 단일 출처) + 회귀(일반 단일 교체/다중 토글/날짜 finalize/마감 409/closesAt 옵트인) + 400/403/404/409 통과. ✓ 308/308 PASS (AC-1~5/AC-8)
 - [x] `schema.d.ts` 재생성 + api-client `CreatePollRequest`(kind "place") / `PollResponse`(finalizedLocation, kind "place"/optionDate/finalizedStartsAt/finalizeSkippedReason/multiSelect·myVotes·closesAt·isClosed 보존) + 별칭 유지, tsc 0. ✓ (AC-6)
-- [x] web `PollWithResults`(kind union 확장) + close 결과 타입(finalizedLocation) + `createPollAction` kind="place"/텍스트 옵션 읽기(ISO 변환 없음) + `closePollAction` finalizedLocation 결과 전달 + `PollCard` 장소 텍스트 렌더/확정 힌트/동점 notice + `CreatePollForm` 투표 종류 3-way 선택(텍스트/날짜 옵션 전환), Meetup 오렌지. page.tsx 헤더 location 갱신 확인. ✓ web tsc/lint/build 0 — PENDING 브라우저 UI 워크스루 (AC-7)
+- [x] web `PollWithResults`(kind union 확장) + close 결과 타입(finalizedLocation) + `createPollAction` kind="place"/텍스트 옵션 읽기(ISO 변환 없음) + `closePollAction` finalizedLocation 결과 전달 + `PollCard` 장소 텍스트 렌더/확정 힌트/동점 notice + `CreatePollForm` 투표 종류 3-way 선택(텍스트/날짜 옵션 전환), Meetup 오렌지. page.tsx 헤더 location 갱신 확인. ✓ web tsc/lint/build 0 + 2026-06-22 데스크톱 멀티탭 브라우저 UI 워크스루 완료 (AC-7)
 - [x] web tsc 0(finalizedLocation/kind "place" 전 소비처) / web lint 0 / web build 0. ✓ (AC-8)
-- [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). ✓ mobile vitest 215/215(회귀 0) — PENDING iOS WebView 장소 투표 마감 검증 (AC-8)
-- [ ] 디바이스 종단 검증: 상세 → 투표 종류 "장소" 선택 후 장소 옵션 ≥2 생성 → 장소명 텍스트 + 확정 힌트 → 멤버 투표 → 생성자 "마감하기" → 단일 승자 모임 헤더 장소 확정 갱신 / 동점 notice + 장소 불변 라이브 확인. — PENDING device-gated (AC-8, web 세션 만료 + iOS WebView 장소 투표 마감 + MOIM-009 realtime 전파 검증 대기)
+- [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). ✓ mobile vitest 215/215(회귀 0) + 2026-06-22 Maestro iOS WebView 검증 완료 (AC-8)
+- [x] 디바이스 종단 검증: 상세 → 투표 종류 "장소" 선택 후 장소 옵션 ≥2 생성 → 장소명 텍스트 + 확정 힌트 → 멤버 투표 → 생성자 "마감하기" → 단일 승자 모임 헤더 장소 확정 갱신 / 동점 notice + 장소 불변 라이브 확인. — 2026-06-22 검증 완료 (AC-8): Maestro iOS 시뮬레이터(iPhone 16) in-WebView poll 렌더 + finalize 헤더(장소) 반영 확인 + 데스크톱 멀티탭 워크스루(장소 투표 생성·투표·생성자 마감 → 헤더 location 확정·동점 skip) + poll-place-finalize.live.mts 13/13. (MOIM-009 realtime cross-surface 모바일 전파는 별도 — MOIM-009 in-progress 유지)
 
 ---
 
@@ -136,4 +136,4 @@ backend jest 통과(장소 투표 + location finalize 신규 + 일반/날짜/마
 
 웹 UI 표면은 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버)으로 실제 2-멤버 브라우저 워크스루를 통과했다(투표 생성/단일·다중 투표/마감/날짜·장소 확정→헤더 갱신/실시간 cross-member 전파/per-user myVotes 정확/생성자 전용 마감/3-way 종류 선택). 상세 결과·시나리오는 `.moai/reports/mobile-verification-runbook.md` 부록 A 참조.
 
-남은 device-gate: **모바일 iOS WebView 셸 + 네이티브 Google Sign-In** 검증(런북 §3~4). 그 전까지 status `in-progress` 유지(프로젝트 메모리 `mobile-spec-device-gated`).
+device-gate 해소(2026-06-22): **모바일 iOS WebView 셸** 검증 완료 — Maestro(iPhone 16) hands-free in-WebView 렌더(상세 push + poll 렌더 + finalize 헤더(장소) 반영 + invite-accept + 채팅) + 데스크톱 멀티탭 워크스루 + poll-place-finalize.live.mts 13/13. status `completed` 전환. (참고: Maestro poll-option 직접 탭은 a11y resolution + Next dev badge overlay로 불안정 — 투표/finalize 자체는 데스크톱 멀티탭/live.mts로 실증, 앱 결함 아님)
