@@ -106,3 +106,11 @@ backend jest 통과(다중 신규 + 단일 회귀), backend+web+api-client tsc 0
 - [x] web tsc 0(myVote→myVotes 전 소비처) / web lint 0 / web build 0. (AC-7) — tsc 0, lint 0, build 0
 - [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-7) — mobile vitest 215/215(회귀 0)
 - [ ] 디바이스 종단 검증: 상세 → "여러 개 선택 허용" 켜고 생성 → 다중 토글(추가/제거/여러 강조) → 득표/퍼센트 갱신 → 단일 poll 회귀(한 강조, 교체) 라이브 확인. (AC-7, device-gated) — iOS 시뮬레이터에서 모바일 WebView poll 인터랙션(Server Action + revalidatePath)이 WebView 컨텍스트에서 다중 결과를 갱신하는지 검증 대기
+
+---
+
+## 웹 멀티탭 검증 완료 (2026-06-22)
+
+웹 UI 표면은 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버)으로 실제 2-멤버 브라우저 워크스루를 통과했다(투표 생성/단일·다중 투표/마감/날짜·장소 확정→헤더 갱신/실시간 cross-member 전파/per-user myVotes 정확/생성자 전용 마감/3-way 종류 선택). 상세 결과·시나리오는 `.moai/reports/mobile-verification-runbook.md` 부록 A 참조.
+
+남은 device-gate: **모바일 iOS WebView 셸 + 네이티브 Google Sign-In** 검증(런북 §3~4). 그 전까지 status `in-progress` 유지(프로젝트 메모리 `mobile-spec-device-gated`).

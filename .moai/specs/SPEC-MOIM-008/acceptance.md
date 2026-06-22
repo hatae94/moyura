@@ -124,3 +124,11 @@ backend jest 통과(날짜 투표 + finalize 신규 + 일반/마감 회귀), bac
 - [x] web tsc 0(kind/optionDate/finalize 전 소비처) / web lint 0 / web build 0. (AC-8) — tsc 0, lint 0, build 0
 - [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-8) — mobile vitest 215/215(회귀 0)
 - [ ] 디바이스 종단 검증: 상세 → "일정 투표" 토글 켜고 날짜 옵션 ≥2 생성 → 포맷 날짜 + 확정 힌트 → 멤버 투표 → 생성자 "마감하기" → 단일 승자 모임 헤더 일정 확정 갱신 / 동점 notice + 일정 불변 라이브 확인. (AC-8, device-gated) — 브라우저 웹 UI 워크스루(moyura-verify 세션 만료 — 재로그인 필요) + iOS 시뮬레이터에서 모바일 WebView poll 마감(Server Action + revalidatePath)이 poll 마감 AND 모임 헤더 startsAt 을 둘 다 갱신하는지 검증 대기
+
+---
+
+## 웹 멀티탭 검증 완료 (2026-06-22)
+
+웹 UI 표면은 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버)으로 실제 2-멤버 브라우저 워크스루를 통과했다(투표 생성/단일·다중 투표/마감/날짜·장소 확정→헤더 갱신/실시간 cross-member 전파/per-user myVotes 정확/생성자 전용 마감/3-way 종류 선택). 상세 결과·시나리오는 `.moai/reports/mobile-verification-runbook.md` 부록 A 참조.
+
+남은 device-gate: **모바일 iOS WebView 셸 + 네이티브 Google Sign-In** 검증(런북 §3~4). 그 전까지 status `in-progress` 유지(프로젝트 메모리 `mobile-spec-device-gated`).

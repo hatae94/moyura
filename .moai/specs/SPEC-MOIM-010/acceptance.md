@@ -129,3 +129,11 @@ backend jest 통과(장소 투표 + location finalize 신규 + 일반/날짜/마
 - [x] web tsc 0(finalizedLocation/kind "place" 전 소비처) / web lint 0 / web build 0. ✓ (AC-8)
 - [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). ✓ mobile vitest 215/215(회귀 0) — PENDING iOS WebView 장소 투표 마감 검증 (AC-8)
 - [ ] 디바이스 종단 검증: 상세 → 투표 종류 "장소" 선택 후 장소 옵션 ≥2 생성 → 장소명 텍스트 + 확정 힌트 → 멤버 투표 → 생성자 "마감하기" → 단일 승자 모임 헤더 장소 확정 갱신 / 동점 notice + 장소 불변 라이브 확인. — PENDING device-gated (AC-8, web 세션 만료 + iOS WebView 장소 투표 마감 + MOIM-009 realtime 전파 검증 대기)
+
+---
+
+## 웹 멀티탭 검증 완료 (2026-06-22)
+
+웹 UI 표면은 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버)으로 실제 2-멤버 브라우저 워크스루를 통과했다(투표 생성/단일·다중 투표/마감/날짜·장소 확정→헤더 갱신/실시간 cross-member 전파/per-user myVotes 정확/생성자 전용 마감/3-way 종류 선택). 상세 결과·시나리오는 `.moai/reports/mobile-verification-runbook.md` 부록 A 참조.
+
+남은 device-gate: **모바일 iOS WebView 셸 + 네이티브 Google Sign-In** 검증(런북 §3~4). 그 전까지 status `in-progress` 유지(프로젝트 메모리 `mobile-spec-device-gated`).
