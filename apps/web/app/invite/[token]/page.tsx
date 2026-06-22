@@ -9,7 +9,7 @@
 // 깨지지 않는다(문서화된 cross-SPEC 의존). 채팅 화면이 생기면 그대로 동작한다.
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
 import { createApiClient } from "@moyura/api-client";
@@ -30,6 +30,20 @@ export default function InviteAcceptPage({
   const [nickname, setNickname] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // SPEC-MOIM-011 REQ-MOIM11-005: 모바일 브라우저에서만 "앱에서 열기" 버튼을 노출한다. useSyncExternalStore 로
+  // 서버 스냅샷=false, 클라이언트 스냅샷=userAgent 판정 → SSR 불일치 없이(effect-내 setState 안티패턴 회피)
+  // 클라이언트에서만 모바일 판정을 반영한다(react-hooks/set-state-in-effect 회피, React 권장 패턴).
+  const isMobile = useSyncExternalStore(
+    () => () => {},
+    () => /iphone|ipad|ipod|android/i.test(navigator.userAgent),
+    () => false,
+  );
+
+  // 커스텀 스킴으로 앱 열기 시도. 앱 미설치면 스킴이 no-op 이라 아래 웹 수락 폼으로 그대로 진행한다(폴백).
+  function openInApp(): void {
+    window.location.href = `moyura://invite/${encodeURIComponent(token)}`;
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -87,6 +101,22 @@ export default function InviteAcceptPage({
         <p className="text-gray-600 text-center mb-8">
           닉네임을 입력하고 모임에 참여하세요.
         </p>
+
+        {/* SPEC-MOIM-011: 모바일이면 앱으로 여는 버튼을 먼저 제안한다(앱 미설치 시 아래 웹 수락 폼으로 폴백). */}
+        {isMobile ? (
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={openInApp}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            >
+              앱에서 열기
+            </button>
+            <p className="text-gray-500 text-center text-xs mt-2">
+              앱이 없으면 아래에서 바로 참여할 수 있어요.
+            </p>
+          </div>
+        ) : null}
 
         {error ? (
           <div

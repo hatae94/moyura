@@ -38,6 +38,7 @@ import {
 } from "@/lib/moim/api";
 import { type PollWithResults, listPolls } from "@/lib/moim/polls";
 import { PollsSection } from "./polls-section";
+import { InviteButton } from "./invite-button";
 
 /** 멤버 역할 배지(owner/member). owner 는 강조, 그 외는 muted. */
 function RoleBadge({ role }: { role: string }) {
@@ -117,6 +118,10 @@ export default async function MoimDetailPage({
     day: "numeric",
   });
 
+  // SPEC-MOIM-011: 모임 생성자(owner)만 초대 링크를 발급할 수 있다(createdBy = 가드-검증 sub).
+  // 비-owner 에겐 InviteButton 이 아무것도 렌더하지 않는다(백엔드 assertOwner 403 이 최종 출처).
+  const isOwner = moim.createdBy === session.user.id;
+
   return (
     <div className="flex flex-1 flex-col bg-background">
       {/* 헤더: 모임 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일. */}
@@ -151,6 +156,9 @@ export default async function MoimDetailPage({
           </span>
           <ChevronRight size={22} />
         </Link>
+
+        {/* SPEC-MOIM-011: owner 전용 초대 링크 발급(비-owner 면 null 렌더). 모바일 WebView 안에서도 동작. */}
+        <InviteButton moimId={moim.id} isOwner={isOwner} />
 
         {/* 멤버 목록(nickname + role). 멤버 0명이면 빈 멤버 안내(엣지 케이스). */}
         <section className="flex flex-col gap-3">
