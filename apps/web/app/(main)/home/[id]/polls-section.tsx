@@ -16,7 +16,8 @@
 //   - 빈 상태: poll 0개면 "아직 투표가 없어요"(허위/플레이스홀더 값 금지).
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useCallback, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   BarChart3,
   CalendarClock,
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 
 import type { PollWithResults } from "@/lib/moim/polls";
+import { usePollChannel } from "@/lib/poll/usePollChannel";
 import {
   closePollAction,
   createPollAction,
@@ -485,12 +487,23 @@ export function PollsSection({
   moimId,
   polls,
   currentUserId,
+  accessToken,
 }: {
   moimId: string;
   polls: PollWithResults[];
   // SPEC-MOIM-007: 현재 사용자 sub(Supabase user.id) — 생성자 전용 "마감하기" 버튼 노출 판정에 쓴다.
   currentUserId: string;
+  // SPEC-MOIM-009: realtime 구독 인가 토큰(없으면 구독 생략). page.tsx 가 세션 access_token 을 내려준다.
+  accessToken: string | null;
 }) {
+  // SPEC-MOIM-009: 다른 멤버의 투표/생성/마감 신호('poll_change')를 받으면 서버 컴포넌트를 재조회해
+  // 집계 결과 + 모임 헤더 일정(startsAt)을 통째로 갱신한다(각 멤버 myVotes 는 서버가 다시 계산).
+  const router = useRouter();
+  const handlePollChange = useCallback(() => {
+    router.refresh();
+  }, [router]);
+  usePollChannel(moimId, accessToken, handlePollChange);
+
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">

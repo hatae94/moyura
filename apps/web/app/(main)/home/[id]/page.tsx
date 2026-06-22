@@ -177,6 +177,7 @@ export default async function MoimDetailPage({
           moimId={moim.id}
           polls={polls}
           currentUserId={session.user.id}
+          accessToken={session.access_token}
         />
       </div>
     </div>
