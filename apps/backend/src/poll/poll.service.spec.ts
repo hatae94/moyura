@@ -706,7 +706,7 @@ describe('PollService', () => {
     it('closesAt 를 전달하면 poll 의 closesAt 가 설정된다', async () => {
       const service = makeService();
       setMember('moim-A', 'member-1');
-      const future = new Date(NOW.getTime() + 86400000); // 내일
+      const future = new Date(Date.now() + 86400000); // 내일
 
       const poll = await service.createPoll(
         'member-1',
@@ -815,7 +815,7 @@ describe('PollService', () => {
     it('closesAt 가 미래인 poll 에 투표하면 정상 처리된다(아직 열림)', async () => {
       const service = makeService();
       setMember('moim-A', 'member-1');
-      const future = new Date(NOW.getTime() + 86400000); // 내일
+      const future = new Date(Date.now() + 86400000); // 내일
       const { poll, options } = seedPoll(
         'moim-A',
         '미래 마감 poll',
@@ -1168,7 +1168,7 @@ describe('PollService', () => {
     it('closesAt 가 미래이면 isClosed:false', async () => {
       const service = makeService();
       setMember('moim-A', 'member-1');
-      const future = new Date(NOW.getTime() + 86400000);
+      const future = new Date(Date.now() + 86400000);
       seedPoll('moim-A', '미래 마감', ['A', 'B'], false, 'owner', future);
 
       const polls = await service.listPolls('member-1', 'moim-A');
