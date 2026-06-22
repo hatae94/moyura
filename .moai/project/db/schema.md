@@ -1,9 +1,9 @@
 ---
 engine: PostgreSQL 17.x (Supabase 관리형)
 orm: Prisma 7.8.0
-last_synced_at: 2026-06-21
+last_synced_at: 2026-06-22
 manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
-spec: SPEC-MOIM-008 sync (Poll.kind + PollOption.option_date 컬럼 추가 — 20260621000000_add_poll_kind_option_date 비파괴 마이그레이션)
+spec: SPEC-MOIM-009 sync (broadcast_poll_change 트리거 함수 + poll_broadcast/poll_vote_broadcast 트리거 — 20260622000000_add_poll_realtime_broadcast 비파괴 마이그레이션)
 ---
 
 
@@ -160,6 +160,42 @@ Prisma 모델명: `PollVote` | 마이그레이션: `20260619100000_add_poll` (SP
 **`@@index([optionId])` 보존**: PK 변경 후에도 option_id 기반 집계/조회 최적화 인덱스 유지.
 
 **Cascade 체인**: moim 삭제 → poll Cascade → poll_option Cascade, poll_vote Cascade. poll 삭제 → poll_option/poll_vote Cascade.
+
+---
+
+## Triggers & Realtime (수동 SQL — Prisma diff 비가시)
+
+Prisma 스키마로 표현 불가한 트리거·RLS·CHECK를 기록한다. 스키마 변경 시 수동 동기화 대상.
+
+### SPEC-CHAT-001 broadcast 트리거 (add_chat 마이그레이션)
+
+`apps/backend/prisma/migrations/20260613175232_add_chat/migration.sql`에 포함된 수동 SQL:
+
+| 항목 | 내용 |
+|------|------|
+| **함수** | `broadcast_chat_message()` — `LANGUAGE plpgsql`, `SECURITY DEFINER`, `SET search_path = ''`. `realtime.broadcast_changes('moim:'||moim_id, 'INSERT', 'INSERT', 'chat_message', 'public', NEW, NULL)` 7-arg 호출(private 채널, thin trigger — nickname 미포함). |
+| **트리거** | `chat_message_broadcast` — `AFTER INSERT FOR EACH ROW` on `chat_message`. |
+| **이벤트명** | `'INSERT'` |
+| **채널** | `moim:{moimId}` (private) |
+| **RLS 재사용** | `realtime.messages` SELECT 정책 `"members can receive moim broadcasts"` — `moim_member` 멤버십 확인으로 구독 인가. 비멤버 구독 거부. |
+| **Shadow DB 가드** | `to_regnamespace('realtime') IS NOT NULL` 가드 DO 블록으로 감싸 Prisma shadow DB 검증 통과(실 DB에서만 생성). |
+| **검증** | 2026-06-14 psql 존재 단언(함수·트리거·RLS·RLS enable·CHECK 모두 확인). |
+
+### SPEC-MOIM-009 broadcast 트리거 (add_poll_realtime_broadcast 마이그레이션)
+
+`apps/backend/prisma/migrations/20260622000000_add_poll_realtime_broadcast/migration.sql`에 포함된 수동 SQL:
+
+| 항목 | 내용 |
+|------|------|
+| **함수** | `broadcast_poll_change()` — `LANGUAGE plpgsql`, `SECURITY DEFINER`, `SET search_path = ''`. `realtime.send(jsonb_build_object('moimId', v_moim_id, 'pollId', v_poll_id), 'poll_change', 'moim:'||v_moim_id, true)` 호출(private 채널, 경량 신호 — 집계/표 정보 미포함). |
+| **트리거 1** | `poll_broadcast` — `AFTER INSERT OR UPDATE FOR EACH ROW` on `poll`. `TG_TABLE_NAME='poll'` 분기 — `NEW.moim_id`/`NEW.id` 직접 사용. |
+| **트리거 2** | `poll_vote_broadcast` — `AFTER INSERT OR DELETE FOR EACH ROW` on `poll_vote`. `TG_TABLE_NAME` 분기 후 `TG_OP='DELETE'`이면 `OLD.poll_id`, `INSERT`이면 `NEW.poll_id`로 poll_id 결정 → `SELECT moim_id FROM public.poll WHERE id = poll_id`로 moimId 해소(`poll_vote`에 moim_id 컬럼 없음). |
+| **이벤트명** | `'poll_change'` — 채팅 `'INSERT'`와 구별(교차 수신 방지). |
+| **채널** | `moim:{moimId}` (private) — CHAT-001과 동일 채널 재사용. |
+| **RLS 재사용** | CHAT-001의 `realtime.messages` SELECT 정책 `"members can receive moim broadcasts"` 그대로 재사용. poll broadcast도 `realtime.messages`를 거치므로 멤버십 게이트가 자동 적용(비멤버 차단). 신규 RLS 정책 추가 없음. |
+| **멱등 가드** | `DROP TRIGGER IF EXISTS poll_broadcast ON "poll"; DROP TRIGGER IF EXISTS poll_vote_broadcast ON "poll_vote";` 선행 실행. |
+| **페이로드** | `{moimId, pollId}` — 경량 신호. 집계(voteCount)/myVotes/표 내용 미포함. 각 클라이언트가 `router.refresh()`로 서버 재조회해 자신의 뷰를 얻는다(서버 = 단일 진실 출처). |
+| **검증** | 2026-06-22 poll-realtime.live.mts 7/7 PASS(실 Supabase 스택 — 멤버 수신·비멤버 RLS 차단·경량 페이로드 확인). |
 
 ---
 

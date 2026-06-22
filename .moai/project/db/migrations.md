@@ -21,6 +21,7 @@
 | `add_poll_multi_select` | 2026-06-20 | `poll` 테이블에 `multi_select BOOLEAN NOT NULL DEFAULT false` 컬럼 additive 추가(기존 poll row 모두 false). `poll_vote` 복합 PK `(poll_id,user_id)` → `(poll_id,option_id,user_id)` 비파괴 변경(`poll_vote_pkey` DROP + ADD — 기존 단일 선택 표는 (pollId,userId) 유일이므로 (pollId,optionId,userId)도 자동 유일 → row 손실 0). `@@index([optionId])` 보존. 비파괴 패턴(migrate diff → db execute → migrate resolve --applied → migrate status clean). SPEC-MOIM-006 — 투표 다중 선택. |
 | `20260620200000_add_poll_closes_at` | 2026-06-20 | `poll` 테이블에 `closes_at TIMESTAMP(3)` 컬럼 nullable additive 추가(`@default` 없음 — 기존 poll row 모두 null = 마감 없음, MOIM-005/006 동작 보존). `poll_vote` PK/FK/인덱스 무변경. SQL: `ALTER TABLE poll ADD COLUMN closes_at TIMESTAMP(3);` — 비파괴(데이터 손실 0). 비파괴 패턴(migrate diff → db execute → migrate resolve --applied → migrate status clean). SPEC-MOIM-007 — 투표 마감(deadline + 수동 마감). |
 | `20260621000000_add_poll_kind_option_date` | 2026-06-21 | `poll` 테이블에 `kind TEXT NOT NULL DEFAULT 'general'` 컬럼 additive 추가(기존 poll row 모두 kind="general" = 일반 투표, @default로 비파괴). `poll_option` 테이블에 `option_date TIMESTAMP(3)` 컬럼 nullable additive 추가(기존 option row 모두 null = 날짜 없음). `poll_vote` PK/FK/인덱스 무변경. SQL: `ALTER TABLE poll ADD COLUMN kind TEXT NOT NULL DEFAULT 'general'; ALTER TABLE poll_option ADD COLUMN option_date TIMESTAMP(3);` — 비파괴(row 손실 0, Prisma enum 아님 — CREATE TYPE 없음). 비파괴 패턴(migrate diff → db execute → migrate resolve --applied → migrate status clean). SPEC-MOIM-008 — 일정 투표 자동 확정(날짜 투표 종류 + 옵션 시각). |
+| `20260622000000_add_poll_realtime_broadcast` | 2026-06-22 | **순수 트리거 추가 — 테이블/컬럼/PK/FK/인덱스 무변경**. `broadcast_poll_change()` plpgsql 함수(`SECURITY DEFINER`, `SET search_path=''`) 신규 정의: `realtime.send(jsonb_build_object('moimId',...,'pollId',...), 'poll_change', 'moim:'||moimId, true)`를 호출해 경량 신호를 CHAT-001과 같은 private 채널에 전파. `poll` 트리거는 `NEW.moim_id` 직접 사용, `poll_vote` 트리거는 `poll_id` → `public.poll.moim_id` 조회로 moimId 해소. `DROP TRIGGER IF EXISTS` 멱등 가드 포함. 비파괴 패턴(hand-authored migration.sql → db execute → migrate resolve --applied → migrate status clean). SPEC-MOIM-009 — 투표 결과 실시간 갱신(CHAT-001 채널·RLS 재사용). |
 
 ### SPEC-CHAT-001 수동 SQL 주의 (R-6 드리프트)
 
@@ -53,6 +54,7 @@
 | `add_poll_multi_select` | 2026-06-20 | prod DB에 poll.multi_select 컬럼 추가 + poll_vote PK 변경 필요 | Yes (prod 배포 시) |
 | `20260620200000_add_poll_closes_at` | 2026-06-20 | prod DB에 poll.closes_at(nullable) 컬럼 추가 필요 | Yes (prod 배포 시) |
 | `20260621000000_add_poll_kind_option_date` | 2026-06-21 | prod DB에 poll.kind(TEXT NOT NULL DEFAULT 'general') + poll_option.option_date(nullable) 컬럼 추가 필요 | Yes (prod 배포 시) |
+| `20260622000000_add_poll_realtime_broadcast` | 2026-06-22 | prod DB에 broadcast_poll_change 함수 + poll_broadcast/poll_vote_broadcast 트리거 추가 필요(prod realtime 스키마 존재 전제) | Yes (prod 배포 시) |
 
 ---
 
@@ -60,6 +62,7 @@
 
 | Migration | Risk Level | Rollback Steps | Data Loss? |
 |-----------|-----------|----------------|------------|
+| `20260622000000_add_poll_realtime_broadcast` | Low | `DROP TRIGGER IF EXISTS poll_broadcast ON "poll"; DROP TRIGGER IF EXISTS poll_vote_broadcast ON "poll_vote"; DROP FUNCTION IF EXISTS broadcast_poll_change();` | 트리거·함수 제거만 — 테이블/행 데이터 손실 없음. 롤백 후 투표 변경이 더 이상 broadcast되지 않으나 poll/poll_vote row 자체에는 영향 없음 |
 | `20260621000000_add_poll_kind_option_date` | Low | `ALTER TABLE poll DROP COLUMN kind; ALTER TABLE poll_option DROP COLUMN option_date;` | kind 데이터 손실(현재 로컬 개발 데이터만 해당, @default='general'이라 실질적 데이터 없음). option_date 데이터 손실(날짜 투표 옵션 시각 — 현재 로컬 개발 데이터만 해당). poll/option/vote row 자체에는 영향 없음 |
 | `20260620200000_add_poll_closes_at` | Low | `ALTER TABLE poll DROP COLUMN closes_at;` | closes_at 데이터 손실(현재 로컬 개발 데이터만 해당). poll/option/vote row에는 영향 없음 |
 | `add_poll_multi_select` | Low | `ALTER TABLE poll DROP COLUMN multi_select; ALTER TABLE poll_vote DROP CONSTRAINT poll_vote_pkey; ALTER TABLE poll_vote ADD PRIMARY KEY (poll_id, user_id);` | 다중 선택 표 손실 가능(단일 선택 표는 (pollId,userId) 유일이므로 PK 복구 시 row 손실 없음 — 단, 다중 선택으로 추가된 표는 (pollId,userId) 기준으로 충돌 가능성 있음) |
