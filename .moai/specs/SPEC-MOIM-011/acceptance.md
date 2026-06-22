@@ -143,3 +143,18 @@ expert-debug 진단 결과 **백엔드(:3001) 다운**(nest watch 좀비 — `/h
 
 **잔여(여전히 in-progress 근거)**: `moyura://invite/{token}` 딥링크 → 앱 열림 + 모바일 수락 페이지의 "앱에서 열기"
 버튼 발화는 iOS 시뮬레이터 검증 필요(device-gated, 런북 §5).
+
+---
+
+## 디바이스 검증 완료 (2026-06-22, Maestro + iOS 시뮬레이터) → status completed
+
+도구: **Maestro 2.3.0**(번들 idb 드라이버 — macOS 손쉬운 사용 권한 불필요) + `xcrun simctl openurl/screenshot`, iPhone 16 / iOS 18.6, 하태용 계정(네이티브 Google 로그인 지속).
+
+- [x] **딥링크 OS 라우팅**: `simctl openurl moyura://invite/{token}` → iOS "'app'에서 열겠습니까?" 프롬프트(scheme 등록·앱 라우팅, warm+cold 모두) → Maestro `tapOn "열기"` → 앱이 `app/invite/[token]` 라우트로 열림.
+- [x] **수락 화면 in-WebView 렌더(REQ-MOIM11-004)**: "모임 초대" + 닉네임 폼 + "모임 참여하기" 렌더.
+- [x] **모바일 "앱에서 열기" 버튼(REQ-MOIM11-005)**: 모바일 UA 수락 페이지에 노출(데스크톱은 미노출 확인).
+- [x] **수락 종단**: Maestro `inputText` 닉네임 + `tapOn "모임 참여하기"` → 가입 → 채팅 화면(CHAT-001) 리다이렉트(기존 메시지 렌더).
+- [x] **상세 반영**: 홈 → 모임 카드 탭 → 상세 네이티브 push(MOIM-003) → 멤버 목록에 가입자(하태용) 추가 + 헤더 일정(7/4)·장소(강남역) finalize 결과 + 투표 4개 in-WebView 렌더.
+- [x] **웹 초대 생성 UI(REQ-MOIM11-002/003)**: (백엔드 재기동 후) 데스크톱 owner "초대하기" → 발급 링크 표시 → "링크 복사" → "복사됨".
+
+참고: Maestro 의 WebView 내 **투표 옵션 버튼** 탭은 a11y 해상도 한계로 자동 등록이 불안정(앱 결함 아님 — 같은 WebView 의 닉네임 입력·"모임 참여하기" 버튼 탭은 정상 등록되어 가입까지 동작). 투표 동작 자체는 데스크톱 멀티탭 워크스루 + `poll-*.live.mts` 로 검증 완료.
