@@ -48,6 +48,8 @@ export default function RootLayout(): React.JSX.Element {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
+          {/* SPEC-MOIM-011: 초대 수락 딥링크(moyura://invite/{token}) — (tabs)/(auth) 밖 공개 라우트. */}
+          <Stack.Screen name="invite/[token]" />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>

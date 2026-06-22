@@ -101,4 +101,12 @@ prisma migrate clean(트리거만 추가, 테이블/PK/FK 무변경), 백엔드 
 - [x] backend NestJS 무변경 → 신규 jest 불필요 + 기존 poll/chat jest GREEN(회귀 0) + backend/api-client tsc 0. ✓ jest 301/301, tsc 0(all) (AC-3/AC-7)
 - [x] web tsc 0(accessToken prop + 구독 훅 + router.refresh) / web lint 0 / `nx run web:build` 0. ✓ (AC-7)
 - [x] LIVE 종단 증명(`poll-realtime.live.mts` — chat.live.mts/poll-finalize.live.mts 미러): 멤버 2명이 투표(poll_vote INSERT)/생성(poll INSERT)/마감(poll UPDATE)에 `'poll_change'`를 둘 다 수신 + 비멤버 미수신(RLS) + 경량 페이로드 `{moimId,pollId}` 확인. ✓ 7/7 PASS 2026-06-22 (AC-7)
-- [ ] 디바이스 종단 검증: 두 클라이언트(브라우저 탭 2개 또는 브라우저 + iOS WebView)가 같은 상세에서 한쪽 투표/생성/마감 → 다른 쪽 리로드 없이 라이브 갱신(새 표/새 투표/마감) + 날짜 투표 finalize면 다른 쪽 헤더 일정(startsAt) 라이브 확정 + 각 멤버 myVotes 올바름 라이브 확인. — PENDING device-gated (AC-7)
+- [x] 디바이스 종단 검증: 두 클라이언트가 같은 상세에서 한쪽 투표 → 다른 쪽 리로드 없이 라이브 갱신. — 2026-06-23 검증 완료 (AC-7): (1) 데스크톱 멀티탭(같은 세션 2탭) — 한 탭에서 "점심 메뉴는?" 투표 → 다른 탭 새로고침 없이 총 1→2표 갱신. (2) **모바일 iOS WebView 직접 관찰** — 시뮬레이터 앱(로그인 멤버) 상세 WebView 연 상태에서 데스크톱이 "테스트 투표" 투표 → 앱 미터치인데 0표→1표·100% live 갱신(스크린샷). poll_vote→broadcast_poll_change→'poll_change'→usePollChannel→router.refresh 체인 in-WebView 실증.
+
+---
+
+## 웹 멀티탭 검증 완료 (2026-06-22)
+
+웹 UI 표면은 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버)으로 실제 2-멤버 브라우저 워크스루를 통과했다(투표 생성/단일·다중 투표/마감/날짜·장소 확정→헤더 갱신/실시간 cross-member 전파/per-user myVotes 정확/생성자 전용 마감/3-way 종류 선택). 상세 결과·시나리오는 `.moai/reports/mobile-verification-runbook.md` 부록 A 참조.
+
+device-gate 해소(2026-06-23): **모바일 iOS WebView 실시간 갱신** 직접 관찰 완료 — 데스크톱 투표 → 앱 WebView 새로고침 없이 live 갱신(스크린샷) + 데스크톱 멀티탭 + 백엔드/Realtime E2E 7/7. status `completed` 전환.

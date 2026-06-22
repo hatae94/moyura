@@ -26,6 +26,7 @@ const POLL_RESULT: PollWithResults = {
   closesAt: null,
   isClosed: false,
   finalizedStartsAt: null,
+  finalizedLocation: null,
   finalizeSkippedReason: null,
 };
 
@@ -44,6 +45,7 @@ const POLL_DTO = {
   closesAt: null,
   isClosed: false,
   finalizedStartsAt: null,
+  finalizedLocation: null,
   finalizeSkippedReason: null,
 };
 
@@ -221,6 +223,43 @@ describe('PollController', () => {
         'general',
         [],
       );
+    });
+
+    it('kind="place" 를 전달하면 텍스트 옵션 + kind="place"(optionDates 빈 배열) 로 createPoll 을 호출한다', async () => {
+      const { service, mocks } = makeService();
+      const controller = new PollController(service);
+
+      await controller.create(USER, 'moim-A', {
+        question: '어디서 모일까요?',
+        options: ['강남역 2번 출구', '홍대입구역 9번 출구'],
+        kind: 'place',
+      });
+
+      // 장소 투표: 옵션은 일반 텍스트(날짜 파싱 없음), kind="place", optionDates=[].
+      expect(mocks.createPoll).toHaveBeenCalledWith(
+        'sub-U',
+        'moim-A',
+        '어디서 모일까요?',
+        ['강남역 2번 출구', '홍대입구역 9번 출구'],
+        false,
+        null,
+        'place',
+        [],
+      );
+    });
+
+    it('무효 kind 면 400, 서비스 미호출', async () => {
+      const { service, mocks } = makeService();
+      const controller = new PollController(service);
+
+      await expect(
+        controller.create(USER, 'moim-A', {
+          question: '점심?',
+          options: ['A', 'B'],
+          kind: 'bogus',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mocks.createPoll).not.toHaveBeenCalled();
     });
 
     it('question 이 빈 문자열이면 400, 서비스 미호출', async () => {

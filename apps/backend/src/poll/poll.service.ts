@@ -32,7 +32,9 @@ export interface PollWithResults {
   closesAt: Date | null;
   isClosed: boolean;
   // close 응답 전용 finalize 결과 필드. list/vote 응답에서는 항상 null.
+  // 날짜 투표 close → finalizedStartsAt, 장소 투표 close → finalizedLocation(상호 배타, SPEC-MOIM-010).
   finalizedStartsAt: Date | null;
+  finalizedLocation: string | null;
   finalizeSkippedReason: 'tie' | 'no_votes' | null;
 }
 
@@ -192,36 +194,42 @@ export class PollService {
 
     const [result] = await this.aggregatePolls(sub, [updated]);
 
-    // SPEC-MOIM-008 REQ-MOIM8-003: 날짜 투표(kind="date") 일 때만 finalize 를 수행한다.
-    // 일반 투표는 finalizedStartsAt=null, finalizeSkippedReason=null 으로 반환한다.
-    if (poll.kind !== 'date') {
+    // SPEC-MOIM-008/010 REQ-MOIM8-003/REQ-MOIM10-003: 날짜("date")·장소("place") 투표만 finalize 한다.
+    // 일반 투표는 finalize 필드 모두 null 으로 반환한다.
+    if (poll.kind !== 'date' && poll.kind !== 'place') {
       return result;
     }
 
-    // 날짜 투표 finalize: 옵션별 voteCount 에서 단일 최다 득표를 판정한다.
+    // 단일 최다 득표 판정(date·place 공통): 옵션별 voteCount 내림차순 정렬 후 최상위가 유일한지 본다.
     const sortedOptions = [...result.options].sort((a, b) => b.voteCount - a.voteCount);
     const topCount = sortedOptions[0]?.voteCount ?? 0;
 
     if (topCount === 0) {
       // 무표 — finalize 스킵.
-      return { ...result, finalizedStartsAt: null, finalizeSkippedReason: 'no_votes' };
+      return { ...result, finalizeSkippedReason: 'no_votes' };
     }
 
     const winners = sortedOptions.filter((o) => o.voteCount === topCount);
     if (winners.length > 1) {
       // 동점 — finalize 스킵.
-      return { ...result, finalizedStartsAt: null, finalizeSkippedReason: 'tie' };
+      return { ...result, finalizeSkippedReason: 'tie' };
     }
 
-    // 단일 승자 — startsAt 을 winner.optionDate 로 설정(기존 startsAt 덮어씀).
     const winner = winners[0];
+
+    if (poll.kind === 'place') {
+      // SPEC-MOIM-010: 단일 승자 옵션의 label(장소명)을 Moim.location 으로 설정(기존 location 덮어씀).
+      await this.moim.setLocation(moimId, winner.label);
+      return { ...result, finalizedLocation: winner.label };
+    }
+
+    // 날짜 투표(kind="date") — startsAt 을 winner.optionDate 로 설정(기존 startsAt 덮어씀).
     if (!winner.optionDate) {
       // optionDate 가 null 이면 finalize 불가(날짜 투표인데 optionDate 없는 이상 케이스 — 방어).
-      return { ...result, finalizedStartsAt: null, finalizeSkippedReason: null };
+      return { ...result };
     }
-
     await this.moim.setStartsAt(moimId, winner.optionDate);
-    return { ...result, finalizedStartsAt: winner.optionDate, finalizeSkippedReason: null };
+    return { ...result, finalizedStartsAt: winner.optionDate };
   }
 
   // 투표 목록 + 결과 조회(REQ-MOIM7-005 / AC-5 — MOIM-006 확장). 멤버 한정 — 비멤버 403/없는 모임 404. poll 없으면 빈 배열.
@@ -294,8 +302,9 @@ export class PollService {
           optionDate: o.optionDate,
         })),
       myVotes: myVotesByPoll.get(poll.id) ?? [],
-      // SPEC-MOIM-008: finalize 필드 — 목록/투표 응답에선 항상 null. closePoll 이 별도로 설정한다.
+      // SPEC-MOIM-008/010: finalize 필드 — 목록/투표 응답에선 항상 null. closePoll 이 별도로 설정한다.
       finalizedStartsAt: null,
+      finalizedLocation: null,
       finalizeSkippedReason: null,
     }));
   }

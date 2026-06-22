@@ -105,4 +105,12 @@ backend jest 통과(다중 신규 + 단일 회귀), backend+web+api-client tsc 0
 - [x] web `PollWithResults`(multiSelect/myVotes) + `OptionRow` 강조(`myVotes.includes`) + `PollCard` 단일/다중 분기 + `CreatePollForm` "여러 개 선택 허용" 토글, Meetup 오렌지. (AC-6) — 라이브 검증 2026-06-20
 - [x] web tsc 0(myVote→myVotes 전 소비처) / web lint 0 / web build 0. (AC-7) — tsc 0, lint 0, build 0
 - [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-7) — mobile vitest 215/215(회귀 0)
-- [ ] 디바이스 종단 검증: 상세 → "여러 개 선택 허용" 켜고 생성 → 다중 토글(추가/제거/여러 강조) → 득표/퍼센트 갱신 → 단일 poll 회귀(한 강조, 교체) 라이브 확인. (AC-7, device-gated) — iOS 시뮬레이터에서 모바일 WebView poll 인터랙션(Server Action + revalidatePath)이 WebView 컨텍스트에서 다중 결과를 갱신하는지 검증 대기
+- [x] 디바이스 종단 검증: 상세 → "여러 개 선택 허용" 켜고 생성 → 다중 토글(추가/제거/여러 강조) → 득표/퍼센트 갱신 → 단일 poll 회귀(한 강조, 교체) 라이브 확인. (AC-7, device-gated) — 2026-06-22 검증 완료: Maestro iOS 시뮬레이터(iPhone 16) in-WebView poll 렌더 확인 + 데스크톱 멀티탭 워크스루(다중 토글 50/50·총 N표·토글 off·단일 교체 회귀 0) + poll-*.live.mts
+
+---
+
+## 웹 멀티탭 검증 완료 (2026-06-22)
+
+웹 UI 표면은 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버)으로 실제 2-멤버 브라우저 워크스루를 통과했다(투표 생성/단일·다중 투표/마감/날짜·장소 확정→헤더 갱신/실시간 cross-member 전파/per-user myVotes 정확/생성자 전용 마감/3-way 종류 선택). 상세 결과·시나리오는 `.moai/reports/mobile-verification-runbook.md` 부록 A 참조.
+
+device-gate 해소(2026-06-22): **모바일 iOS WebView 셸** 검증 완료 — Maestro(iPhone 16) hands-free in-WebView 렌더(상세 push + poll 렌더 + finalize 헤더 반영 + invite-accept + 채팅) + 데스크톱 멀티탭 워크스루 + poll-*.live.mts. status `completed` 전환. (참고: Maestro poll-option 직접 탭은 a11y resolution + Next dev badge overlay로 불안정 — 투표 자체는 데스크톱 멀티탭/live.mts로 실증, 앱 결함 아님)

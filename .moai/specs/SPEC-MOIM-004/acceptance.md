@@ -82,4 +82,4 @@ backend jest 통과(신규 케이스 포함), backend+web+api-client tsc 0, web 
 - [x] 홈 카드 + 상세에 일정/장소 정직 표시(null → 미정/생략), Meetup 오렌지 토큰. (AC-5) — 라이브 검증 2026-06-19
 - [x] web tsc 0 / web lint 0 / web build 0(`/moims/new` 등록). (AC-6) — 게이트 통과
 - [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-6) — mobile vitest 215/215
-- [ ] 디바이스 종단 검증: 홈 CTA → 생성 폼(일정/장소) → 제출 → 상세 push → 일정/장소 표시 라이브 확인. (AC-6, device-gated) — iOS 시뮬레이터에서 server-action redirect → `/home/{id}` 시 SPEC-MOIM-003 `detailRouteForUrl` push 트리거 검증 대기
+- [x] 디바이스 종단 검증: 홈 CTA → 생성 폼(일정/장소) → 제출 → 상세 push → 일정/장소 표시 라이브 확인. (AC-6, device-gated) — 2026-06-22 검증 완료: Maestro iOS 시뮬레이터(iPhone 16) in-WebView 모임 상세 네이티브 push 렌더 확인(server-action redirect → `/home/{id}` → `detailRouteForUrl` push) + 데스크톱 멀티탭 워크스루(생성 폼 → 제출 → 상세 → 일정/장소 표시)

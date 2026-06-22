@@ -83,11 +83,12 @@ export async function createPollAction(
   const multiSelect = formData.get("multiSelect") === "on";
   // SPEC-MOIM-007: optional 마감 시각(datetime-local) — 빈 값/무효면 미전송(마감 없음 = null).
   const closesAt = toIsoOrUndefined(String(formData.get("closesAt") ?? ""));
-  // SPEC-MOIM-008: 일정 투표 토글(name="kind") — "date" 면 날짜 투표, 그 외 일반.
-  const kind = formData.get("kind") === "date" ? "date" : "general";
+  // SPEC-MOIM-008/010: 투표 종류(name="kind") — "date"=날짜, "place"=장소, 그 외 "general".
+  const rawKind = formData.get("kind");
+  const kind = rawKind === "date" ? "date" : rawKind === "place" ? "place" : "general";
 
-  // 동적 옵션 입력은 name="option" 으로 여러 개 제출된다. 일반 투표는 trim 후 비지 않은 라벨,
-  // 날짜 투표(kind="date")는 datetime-local 값을 ISO-8601 로 변환해(무효/빈 값 제외) 백엔드에 싣는다.
+  // 동적 옵션 입력은 name="option" 으로 여러 개 제출된다. 날짜 투표(kind="date")는 datetime-local 값을
+  // ISO-8601 로 변환해(무효/빈 값 제외) 싣고, 일반·장소 투표는 trim 후 비지 않은 텍스트 라벨을 싣는다.
   const rawOptions = formData.getAll("option").map((v) => String(v));
   const options =
     kind === "date"

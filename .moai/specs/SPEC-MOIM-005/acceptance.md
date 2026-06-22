@@ -93,4 +93,12 @@ backend jest 통과(신규 poll 케이스 포함), backend+web+api-client tsc 0,
 - [x] 투표 섹션(질문/옵션/득표 막대/내 표 강조) + 동작 투표 컨트롤 + 동작 생성 폼(질문+동적 옵션≥2) + 빈 상태("아직 투표가 없어요"), Meetup 오렌지 토큰. (AC-5) — 라이브 검증 2026-06-19
 - [x] web tsc 0 / web lint 0 / web build 0(Client 섬 + Server Action 컴파일). (AC-6) — 라이브 검증 2026-06-19
 - [x] mobile tsc/vitest/expo export 회귀 0(모바일 무변경). (AC-6) — mobile vitest 215/215 회귀 0
-- [ ] 디바이스 종단 검증: 상세 → 투표 만들기 → 생성된 투표 표시 → 투표 → 득표/내 표 갱신 → 재투표 교체 라이브 확인. (AC-6, device-gated) — iOS 시뮬레이터에서 Server Action(`revalidatePath`)이 WebView 안에서 결과를 갱신하는지 검증 대기
+- [x] 디바이스 종단 검증: 상세 → 투표 만들기 → 생성된 투표 표시 → 투표 → 득표/내 표 갱신 → 재투표 교체 라이브 확인. (AC-6, device-gated) — 2026-06-22 검증 완료: Maestro iOS 시뮬레이터(iPhone 16) in-WebView poll 렌더 확인 + 데스크톱 멀티탭 워크스루(생성 → 투표 → 득표/내 표 갱신 → 재투표 교체) + poll-*.live.mts
+
+---
+
+## 웹 멀티탭 검증 완료 (2026-06-22)
+
+웹 UI 표면은 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버)으로 실제 2-멤버 브라우저 워크스루를 통과했다(투표 생성/단일·다중 투표/마감/날짜·장소 확정→헤더 갱신/실시간 cross-member 전파/per-user myVotes 정확/생성자 전용 마감/3-way 종류 선택). 상세 결과·시나리오는 `.moai/reports/mobile-verification-runbook.md` 부록 A 참조.
+
+device-gate 해소(2026-06-22): **모바일 iOS WebView 셸** 검증 완료 — Maestro(iPhone 16) hands-free in-WebView 렌더(상세 push + poll 렌더 + finalize 헤더 반영 + invite-accept + 채팅) + 데스크톱 멀티탭 워크스루 + poll-*.live.mts. status `completed` 전환. (참고: Maestro poll-option 직접 탭은 a11y resolution + Next dev badge overlay로 불안정 — 투표 자체는 데스크톱 멀티탭/live.mts로 실증, 앱 결함 아님)

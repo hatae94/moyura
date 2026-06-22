@@ -125,6 +125,16 @@ export class MoimService {
     });
   }
 
+  // @MX:NOTE: [AUTO] SPEC-MOIM-010 — createMoim 외의 유일한 location 쓰기 경로(setStartsAt 미러).
+  // 장소 투표 finalize 가 직접 prisma.moim.update 하지 않고 이 메서드를 호출한다(쓰기 단일 출처).
+  // 인가는 closePoll 이 이미 통과시킨 상태이므로 여기서는 순수하게 location 만 갱신한다.
+  async setLocation(moimId: string, location: string): Promise<void> {
+    await this.prisma.moim.update({
+      where: { id: moimId },
+      data: { location },
+    });
+  }
+
   // 모임 삭제(REQ-MOIM-003 / AC-7). owner 전용 — 비-owner 403/없는 모임 404는 assertOwner가 판정한다.
   // 종속 멤버십은 FK onDelete: Cascade로 함께 제거된다(R-5).
   async deleteMoim(sub: string, moimId: string): Promise<void> {

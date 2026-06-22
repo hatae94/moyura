@@ -3,7 +3,7 @@ engine: PostgreSQL 17.x (Supabase 관리형)
 orm: Prisma 7.8.0
 last_synced_at: 2026-06-22
 manifest_hash: manual (db.yaml auto-sync 비활성 — enabled:false)
-spec: SPEC-MOIM-009 sync (broadcast_poll_change 트리거 함수 + poll_broadcast/poll_vote_broadcast 트리거 — 20260622000000_add_poll_realtime_broadcast 비파괴 마이그레이션)
+spec: SPEC-MOIM-010 sync (kind 컬럼 허용 값에 "place" 추가 — 마이그레이션 없음, DDL 무변경)
 ---
 
 
@@ -129,7 +129,7 @@ Prisma 모델명: `Poll` | 마이그레이션: `20260619100000_add_poll` (SPEC-M
 | `created_at` | TIMESTAMP(3) | NOT NULL DEFAULT now() | 생성 시각 |
 | `multi_select` | BOOLEAN | NOT NULL DEFAULT false | poll별 다중 선택 opt-in 플래그. false = 단일 교체(MOIM-005 동작 보존), true = 토글(0..N 선택). 기존 모든 poll row는 false(additive 추가, SPEC-MOIM-006) |
 | `closes_at` | TIMESTAMP(3) | NULLABLE | 마감 시각 — deadline(생성 시 설정) + 수동 마감(closePoll이 now로 설정) 모두 이 컬럼 하나로 표현. null = 마감 없음(영구 열림, MOIM-005/006 기본 동작 보존). CLOSED 판정: closesAt != null AND closesAt <= now(서버 계산 isClosed로 노출). @default 없음 → 기존 poll row 모두 null(additive 비파괴, SPEC-MOIM-007) |
-| `kind` | TEXT | NOT NULL DEFAULT 'general' | 투표 종류 — "general"(자유 텍스트 옵션, MOIM-005/006/007 그대로) 또는 "date"(날짜 옵션, SPEC-MOIM-008). Prisma enum 아님(string 컬럼 — CREATE TYPE 회피, 컨트롤러 parseKind 검증). `@default("general")` → 기존 poll row 모두 "general"(additive 비파괴). 미지 값 → 컨트롤러 400. |
+| `kind` | TEXT | NOT NULL DEFAULT 'general' | 투표 종류 — `"general"`(자유 텍스트 옵션, MOIM-005/006/007 그대로), `"date"`(날짜 옵션, SPEC-MOIM-008), `"place"`(장소명 자유 텍스트 옵션, SPEC-MOIM-010). Prisma enum 아님(string 컬럼 — CREATE TYPE 회피, 컨트롤러 parseKind 검증). `@default("general")` → 기존 poll row 모두 "general"(additive 비파괴). 미지 값 → 컨트롤러 400. **"place" 추가는 DDL 불필요** — string 컬럼의 허용 VALUE 확장이므로 마이그레이션 없이 컨트롤러 parseKind 한 줄 확장으로 완결(MOIM-010 마이그레이션 없음 — 13 마이그레이션 그대로). finalize: kind="place" close 시 단일 최다 득표 옵션의 `label`이 `Moim.location`으로 자동 확정(`MoimService.setLocation` 단일 출처). |
 
 ### poll_option
 

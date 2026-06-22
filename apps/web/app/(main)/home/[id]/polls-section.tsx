@@ -25,6 +25,7 @@ import {
   CheckSquare,
   Clock,
   Lock,
+  MapPin,
   Plus,
   Square,
   Vote,
@@ -153,6 +154,8 @@ function PollCard({
   const closed = poll.isClosed;
   // SPEC-MOIM-008: 날짜 투표(kind="date") — 마감 시 최다 득표 날짜가 모임 일정으로 확정된다.
   const isDatePoll = poll.kind === "date";
+  // SPEC-MOIM-010: 장소 투표(kind="place") — 마감 시 최다 득표 장소가 모임 장소로 확정된다.
+  const isPlacePoll = poll.kind === "place";
   // "마감하기"는 생성자 + 열린 poll 에만 노출한다(createdBy = JWT sub = Supabase user.id).
   const canClose = poll.createdBy === currentUserId && !closed;
 
@@ -216,6 +219,14 @@ function PollCard({
         <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
           <CalendarClock size={13} />
           마감하면 최다 득표 날짜가 모임 일정으로 확정돼요
+        </p>
+      ) : null}
+
+      {/* SPEC-MOIM-010: 장소 투표 안내 — 마감 시 최다 득표 장소가 모임 장소(헤더)로 확정된다. */}
+      {isPlacePoll && !closed ? (
+        <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
+          <MapPin size={13} />
+          마감하면 최다 득표 장소가 모임 장소로 확정돼요
         </p>
       ) : null}
 
@@ -290,8 +301,8 @@ function CreatePollForm({ moimId }: { moimId: string }) {
   // 동적 옵션 입력 — 기본 2칸, 추가/제거 가능(최소 2 유지). 제어 컴포넌트로 입력값을 관리한다.
   const [options, setOptions] = useState<string[]>(["", ""]);
   const [open, setOpen] = useState(false);
-  // SPEC-MOIM-008: 일정 투표 토글 — 켜면 선택지 입력이 datetime-local 로 바뀌고 kind="date" 로 제출된다.
-  const [isDatePoll, setIsDatePoll] = useState(false);
+  // SPEC-MOIM-008/010: 투표 종류 — "date"면 선택지 입력이 datetime-local, "place"면 장소 텍스트, 그 외 일반.
+  const [pollKind, setPollKind] = useState<"general" | "date" | "place">("general");
 
   // 생성 성공 시 폼을 닫고 입력을 리셋한다 — 제출 후에도 폼이 열린 채 남던 UX 결함 해소.
   // createPollAction 을 액션 래퍼로 감싸 성공(ok) 직후 setOpen/setOptions 를 호출한다(트랜잭션 컨텍스트라
@@ -302,7 +313,7 @@ function CreatePollForm({ moimId }: { moimId: string }) {
       if (result?.ok) {
         setOpen(false);
         setOptions(["", ""]);
-        setIsDatePoll(false);
+        setPollKind("general");
       }
       return result;
     },
@@ -341,7 +352,7 @@ function CreatePollForm({ moimId }: { moimId: string }) {
       {/* moimId 는 Server Action 이 읽도록 hidden 으로 동봉한다. */}
       <input type="hidden" name="moimId" value={moimId} />
       {/* SPEC-MOIM-008: kind 는 일정 투표 토글에 따라 결정된다(체크 시 "date", 아니면 "general"). */}
-      <input type="hidden" name="kind" value={isDatePoll ? "date" : "general"} />
+      <input type="hidden" name="kind" value={pollKind} />
 
       <div className="flex items-center justify-between">
         <span className="font-bold text-card-foreground">새 투표 만들기</span>
@@ -379,39 +390,67 @@ function CreatePollForm({ moimId }: { moimId: string }) {
         />
       </div>
 
-      {/* SPEC-MOIM-008: 일정 투표 토글(체크 시 선택지가 날짜 입력으로 전환). multiSelect 와 공존 가능. */}
-      <label
-        htmlFor="poll-date-kind"
-        className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-background p-3"
-      >
-        <input
-          id="poll-date-kind"
-          type="checkbox"
-          checked={isDatePoll}
-          onChange={(e) => setIsDatePoll(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-        />
-        <span className="flex flex-col gap-0.5">
-          <span className="text-sm font-semibold text-foreground">일정 투표</span>
+      {/* SPEC-MOIM-008/010: 투표 종류 3-way 선택(일반/날짜/장소). 날짜→datetime 선택지, 장소→텍스트 선택지(마감 시
+          승자가 모임 일정/장소로 확정). multiSelect 와 공존 가능. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-semibold text-foreground">투표 종류</span>
+        <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-border bg-background p-1">
+          {(
+            [
+              { value: "general", label: "일반" },
+              { value: "date", label: "날짜" },
+              { value: "place", label: "장소" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setPollKind(opt.value)}
+              aria-pressed={pollKind === opt.value}
+              className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
+                pollKind === opt.value
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {pollKind === "date" ? (
           <span className="text-xs text-muted-foreground">
-            켜면 선택지를 날짜로 입력해요. 마감 시 최다 득표 날짜가 모임 일정으로 확정돼요.
+            마감하면 최다 득표 날짜가 모임 일정으로 확정돼요.
           </span>
-        </span>
-      </label>
+        ) : pollKind === "place" ? (
+          <span className="text-xs text-muted-foreground">
+            마감하면 최다 득표 장소가 모임 장소로 확정돼요.
+          </span>
+        ) : null}
+      </div>
 
-      {/* 동적 선택지(최소 2) — 일정 투표면 datetime-local, 일반이면 텍스트. */}
+      {/* 동적 선택지(최소 2) — 날짜 투표면 datetime-local, 일반·장소면 텍스트. */}
       <div className="flex flex-col gap-2">
         <span className="text-sm font-semibold text-foreground">
-          {isDatePoll ? "날짜 선택지" : "선택지"}
+          {pollKind === "date"
+            ? "날짜 선택지"
+            : pollKind === "place"
+              ? "장소 선택지"
+              : "선택지"}
         </span>
         {options.map((value, index) => (
           <div key={index} className="flex items-center gap-2">
             <input
               name="option"
-              type={isDatePoll ? "datetime-local" : "text"}
+              type={pollKind === "date" ? "datetime-local" : "text"}
               value={value}
               onChange={(e) => updateOption(index, e.target.value)}
-              placeholder={isDatePoll ? undefined : `선택지 ${index + 1}`}
+              placeholder={
+                pollKind === "date"
+                  ? undefined
+                  : pollKind === "place"
+                    ? `장소 ${index + 1} (예: 강남역 2번 출구)`
+                    : `선택지 ${index + 1}`
+              }
               className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
             {options.length > 2 ? (
