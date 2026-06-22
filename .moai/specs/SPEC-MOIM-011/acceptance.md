@@ -49,12 +49,13 @@
 
 ### AC-5: 웹 수락 페이지 "앱에서 열기" 버튼 — 모바일 한정 (← REQ-MOIM11-005)
 
-수락 페이지에 모바일 브라우저 한정 "앱에서 열기" 버튼이 있어 `moyura://invite/{token}` 을 발화한다. 데스크톱 미노출, 자동 리다이렉트 없음, 웹 폴백 유지.
+수락 페이지는 모바일 브라우저(앱 셸 아님)에서 로드 시 `moyura://invite/{token}` 을 1회 자동 발화하고(v0.4.0), 자동 시도 폴백용 "앱에서 열기" 버튼도 둔다. 데스크톱·앱 셸 미노출, 웹 폼 폴백 유지.
 
-- **Given** 웹 수락 페이지(`/invite/[token]`)가 모바일 브라우저에서 렌더되면 **Then** "앱에서 열기" 버튼이 닉네임 폼과 함께 노출된다.
+- **Given** 웹 수락 페이지(`/invite/[token]`)가 모바일 브라우저(앱 셸 아님)에서 렌더되면 **Then** `moyura://invite/{token}` 이 마운트당 1회 자동 발화되고(v0.4.0) "앱에서 열기" 버튼이 닉네임 폼과 함께 수동 재시도용으로 노출된다.
 - **And Given** 데스크톱 브라우저에서 렌더되면 **Then** "앱에서 열기" 버튼이 노출되지 않는다(웹 수락 폼만).
 - **And When** 사용자가 "앱에서 열기" 를 누르면 **Then** `window.location` 이 `moyura://invite/{token}`(현재 path 의 token)으로 설정돼 커스텀 scheme 이 발화된다(새 노출 없음 — 이미 URL 에 있는 토큰 그대로).
-- **And When** 앱이 설치돼 있지 않아 scheme 이 no-op 이거나 사용자가 웹을 선호하면 **Then** 기존 닉네임 수락 폼이 웹 폴백으로 유지되고, **자동 리다이렉트는 일어나지 않는다**(scheme 은 버튼 클릭으로만 발화 — 사용자가 웹에서 그대로 가입 가능).
+- **And When** 앱이 설치돼 있지 않아 scheme 이 no-op 이거나 사용자가 웹을 선호하면 **Then** 기존 닉네임 수락 폼이 웹 폴백으로 유지된다(자동 발화가 실패해도 폼 보존 — 사용자가 웹에서 그대로 가입 가능, 앱 미설치 시 iOS 시스템 확인이 1회 뜰 수 있으나 폼은 유지).
+- **And** 앱 셸(WebView, `window.ReactNativeWebView` 존재) 안에서는 자동 발화하지 않는다(이미 앱이므로 재진입 루프 방지).
 - **And** 기존 수락 흐름(익명 로그인 → 닉네임 → submitAccept → `/moims/:id/chat`, 404/410/409/400 일반화 오류)이 그대로 보존된다("앱에서 열기" 는 순수 추가 — 기존 폼/제출/오류 처리 무파손).
 - **And When** 모바일 감지가 불확실하거나 scheme 발화가 실패하면 **Then** crash 없이 웹 수락 폼에 머무른다(버튼은 best-effort, 웹 폴백 항상 동작).
 
@@ -100,7 +101,7 @@
 - **WebView origin 잠금**: originWhitelist(WEB_URL origin)가 `${WEB_URL}/invite/{token}`(동일 origin) 허용 → 통과. 다른 origin 이면 deny(보안 보존). (← REQ-MOIM11-004)
 - **수락 위임**: 네이티브는 URL 을 WebView 로 띄우는 역할만 — 수락 로직/토큰 검증/실패 코드 재구현 없음(WebView 안 웹 페이지 + 백엔드 기존 계약). (← REQ-MOIM11-004)
 - **"앱에서 열기" 모바일 한정**: 모바일 브라우저 노출, 데스크톱 미노출. UA 감지 오판해도 scheme 실패 시 웹 폴백 동작(crash 없음). (← REQ-MOIM11-005)
-- **자동 리다이렉트 없음**: 페이지 로드 시 scheme 자동 점프 안 함 — 버튼 클릭으로만 발화. 앱 미설치 사용자가 빈 화면/오류를 안 봄(웹 폼 그대로). (← REQ-MOIM11-005)
+- **로드 시 자동 발화(v0.4.0, 앱 셸 제외)**: 모바일 브라우저에서 로드 시 scheme 1회 자동 발화(`useRef` 가드). 앱 셸(`window.ReactNativeWebView`)·데스크톱 미발화. 앱 미설치 시 웹 폼 폴백(iOS 시스템 확인 1회 가능 — 확인창 없는 무탭은 Universal Links 필요, 향후). (← REQ-MOIM11-005)
 - **scheme no-op(미설치)**: 앱 미설치 → `moyura://invite/{token}` 무반응 → 사용자는 웹 닉네임 폼으로 가입(폴백). (← REQ-MOIM11-005)
 - **기존 수락 흐름 보존**: 익명 로그인 → 닉네임 → submitAccept → /moims/:id/chat, 404/410/409/400 → "앱에서 열기" 순수 추가가 안 깸. (← REQ-MOIM11-005/007)
 - **토큰 노출 동등**: 버튼/딥링크가 이미 URL 에 있는 토큰을 scheme 으로 그대로 넘김 — 새 채널(로그/query/분석) 노출 0. (← REQ-MOIM11-006)
@@ -115,7 +116,7 @@
 - [x] 백엔드 무변경 — 발급/목록/폐기/수락 4개 라우트 존재 확인, `apps/backend/src/invite/**` 무변경, 기존 invite jest GREEN(회귀). 갭 없음(변경 0). (AC-1) — **VERIFIED** (feat 2023cb9, 백엔드/마이그레이션 무변경 확인)
 - [x] `apps/web/lib/moim/invites.ts` 의 `createInvite(api, moimId, body?)` 가 polls.ts 구체-경로 패턴 미러 + InviteResult 로컬 미러 + 토큰 Bearer 헤더만 + schema 재생성 없음. (AC-2) — **VERIFIED** (web tsc 0, feat 2023cb9)
 - [x] 모임 상세 owner 전용 "초대하기"(`invite-button.tsx`) — owner 만 노출(isOwner prop) / 비-owner null 반환 + Server Action(`invite-actions.ts`) 발급 → 링크 `{origin}/invite/{token}` 표시 + `navigator.clipboard` 복사 + "복사됨" 피드백 + 오류 일반화. page.tsx `isOwner = moim.createdBy === session.user.id` 판정·prop 전달. (AC-3) — **VERIFIED** (web tsc/lint/build 0, feat 2023cb9) — ⚠️ **PENDING: 웹 UI 브라우저 워크스루** 미수행(이번 세션 웹 로그인 세션-쿠키 리다이렉트 이슈 — auth/middleware 무변경, signInWithPassword 직접 동작 확인됨, 초대 코드와 무관한 인프라 이슈)
-- [x] 수락 페이지(`/invite/[token]`) "앱에서 열기" 버튼 — `useSyncExternalStore` UA 감지로 모바일 한정 노출/데스크톱 미노출 + 클릭 `window.location = moyura://invite/{token}` + 자동 리다이렉트 없음 + 기존 닉네임 폼/익명 로그인/submitAccept/리다이렉트 보존. (AC-5) — **VERIFIED** (web tsc/lint/build 0, feat 2023cb9)
+- [x] 수락 페이지(`/invite/[token]`) 모바일 자동 열기 + "앱에서 열기" 버튼 — `useSyncExternalStore` 로 모바일/앱 셸 판정, 모바일 브라우저(앱 셸 아님) 로드 시 `useEffect`+`useRef` 가드로 `moyura://invite/{token}` 1회 자동 발화(v0.4.0) + 버튼은 모바일 한정 수동 재시도(데스크톱·앱 셸 미노출) + 기존 닉네임 폼/익명 로그인/submitAccept/리다이렉트 보존. (AC-5) — **VERIFIED** (web typecheck/lint/build 0, 2026-06-22 시뮬레이터 자동 발화 스크린샷 확인)
 - [x] 모바일 `app/invite/[token].tsx` 라우트 — `${WEB_URL}/invite/${token}` BridgedWebView 호스팅(MOIM-003 detail-in-WebView 패턴 미러) + `(tabs)`·`(auth)` 그룹 밖 공개 랜딩(가드 미상속) + 빈/malformed token 안전(WebView가 웹 수락 페이지에 위임) + 수락 WebView 위임. `app/_layout.tsx` — `<Stack.Screen name="invite/[token]" />` 추가. (AC-4) — **VERIFIED** (mobile tsc/vitest 0, feat 2023cb9)
 - [x] `moyura://invite/{token}` → `app/invite/[token]` 해석(expo-router scheme "moyura" 기존 설정 + 파일 기반 라우팅 자동 링크) + 기존 `moyura://auth-callback`/탭/detail-push/originWhitelist/route-map-core 보존. (AC-4/7) — **VERIFIED** (mobile tsc/vitest 회귀 0, feat 2023cb9) — ⚠️ **PENDING: 딥링크 앱 열림 + "앱에서 열기" 발화** device-gated(iOS 시뮬레이터 검증 필요)
 - [x] 보안 — 토큰 owner 한정(isOwner 판정 + 백엔드 403 이중 방어) + 수락 SupabaseAuthGuard + 토큰 새 채널 노출 0 + 오류 일반화. (AC-6) — **VERIFIED** (코드 리뷰 + tsc, feat 2023cb9)

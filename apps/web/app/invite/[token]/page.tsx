@@ -9,7 +9,7 @@
 // 깨지지 않는다(문서화된 cross-SPEC 의존). 채팅 화면이 생기면 그대로 동작한다.
 "use client";
 
-import { use, useState, useSyncExternalStore } from "react";
+import { use, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
 import { createApiClient } from "@moyura/api-client";
@@ -40,10 +40,32 @@ export default function InviteAcceptPage({
     () => false,
   );
 
+  // SPEC-MOIM-011: 네이티브 셸(WebView) 안에서 실행 중인지 — window.ReactNativeWebView 존재로 판별
+  // (bridge-client.ts 의 getNativeBridge 가드와 동일). 셸 안에서는 이미 앱이므로 딥링크 자동 열기를
+  // 하지 않는다(앱 안에서 다시 앱을 여는 재진입 루프 방지). useSyncExternalStore 로 SSR 불일치 회피.
+  const isInAppShell = useSyncExternalStore(
+    () => () => {},
+    () => typeof window !== "undefined" && window.ReactNativeWebView != null,
+    () => false,
+  );
+
   // 커스텀 스킴으로 앱 열기 시도. 앱 미설치면 스킴이 no-op 이라 아래 웹 수락 폼으로 그대로 진행한다(폴백).
   function openInApp(): void {
     window.location.href = `moyura://invite/${encodeURIComponent(token)}`;
   }
+
+  // SPEC-MOIM-011: 모바일 브라우저(앱 셸 아님)에서는 페이지 로드 시 앱 열기를 1회 자동 시도한다 —
+  // 버튼을 한 번 더 누르지 않아도 앱 설치 시 바로 열리도록. 앱 미설치면 스킴이 no-op(또는 OS 안내)이라
+  // 아래 웹 수락 폼으로 폴백한다. ref 가드로 마운트당 1회만 발화하고, "앱에서 열기" 버튼은 자동 시도가
+  // 차단됐거나 사용자가 앱에서 되돌아온 경우의 수동 재시도로 남긴다.
+  const autoOpenAttempted = useRef(false);
+  useEffect(() => {
+    if (autoOpenAttempted.current) return;
+    if (isMobile && !isInAppShell) {
+      autoOpenAttempted.current = true;
+      window.location.href = `moyura://invite/${encodeURIComponent(token)}`;
+    }
+  }, [isMobile, isInAppShell, token]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -103,7 +125,7 @@ export default function InviteAcceptPage({
         </p>
 
         {/* SPEC-MOIM-011: 모바일이면 앱으로 여는 버튼을 먼저 제안한다(앱 미설치 시 아래 웹 수락 폼으로 폴백). */}
-        {isMobile ? (
+        {isMobile && !isInAppShell ? (
           <div className="mb-6">
             <button
               type="button"
@@ -113,7 +135,7 @@ export default function InviteAcceptPage({
               앱에서 열기
             </button>
             <p className="text-gray-500 text-center text-xs mt-2">
-              앱이 없으면 아래에서 바로 참여할 수 있어요.
+              앱이 자동으로 열리지 않으면 위 버튼을 누르거나, 아래에서 바로 참여할 수 있어요.
             </p>
           </div>
         ) : null}
