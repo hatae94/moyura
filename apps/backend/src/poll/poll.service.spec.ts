@@ -152,6 +152,14 @@ describe('PollService', () => {
         }
         return Promise.resolve();
       }),
+      // SPEC-MOIM-010: setLocation 은 moim 테이블의 location 을 인메모리 업데이트한다(단일 출처 계약 검증).
+      setLocation: jest.fn((moimId: string, location: string) => {
+        const existing = tables.moim.get(moimId);
+        if (existing) {
+          tables.moim.set(moimId, { ...existing, location });
+        }
+        return Promise.resolve();
+      }),
     } as unknown as MoimService;
   }
 
@@ -1109,6 +1117,127 @@ describe('PollService', () => {
 
       // finalize 가 실행되지 않는다.
       expect(tables.moim.get('moim-A')?.startsAt).toEqual(originalStartsAt);
+    });
+  });
+
+  // ── SPEC-MOIM-010: closePoll 장소 투표 자동 확정 ──
+  describe('closePoll() — 장소 투표 auto-finalize(REQ-MOIM10-003 / AC-3)', () => {
+    it('단일 최다 득표 옵션이 있으면 Moim.location 이 그 label(장소명) 로 설정된다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '장소 투표',
+        ['강남역 2번 출구', '홍대입구역 9번 출구'],
+        false,
+        'creator',
+        null,
+        'place',
+      );
+      // options[0] 에 2표, options[1] 에 1표 — 단일 최다 득표 = options[0].
+      seedVote(poll.id, options[0].id, 'member-1');
+      seedVote(poll.id, options[0].id, 'member-2');
+      seedVote(poll.id, options[1].id, 'member-3');
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(tables.moim.get('moim-A')?.location).toBe('강남역 2번 출구');
+      expect(result.finalizedLocation).toBe('강남역 2번 출구');
+      expect(result.finalizedStartsAt).toBeNull();
+      expect(result.finalizeSkippedReason).toBeNull();
+    });
+
+    it('동점이면 finalize 를 건너뛰고 finalizeSkippedReason="tie", location 불변', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '장소 투표',
+        ['강남역', '홍대입구'],
+        false,
+        'creator',
+        null,
+        'place',
+      );
+      seedVote(poll.id, options[0].id, 'member-1');
+      seedVote(poll.id, options[1].id, 'member-2');
+      const originalLocation = tables.moim.get('moim-A')?.location;
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(tables.moim.get('moim-A')?.location).toEqual(originalLocation);
+      expect(result.finalizedLocation).toBeNull();
+      expect(result.finalizeSkippedReason).toBe('tie');
+    });
+
+    it('표가 없으면 finalize 를 건너뛰고 finalizeSkippedReason="no_votes", location 불변', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      const { poll } = seedPoll(
+        'moim-A',
+        '장소 투표',
+        ['강남역', '홍대입구'],
+        false,
+        'creator',
+        null,
+        'place',
+      );
+      const originalLocation = tables.moim.get('moim-A')?.location;
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(tables.moim.get('moim-A')?.location).toEqual(originalLocation);
+      expect(result.finalizedLocation).toBeNull();
+      expect(result.finalizeSkippedReason).toBe('no_votes');
+    });
+
+    it('모임에 이미 location 이 있는 경우 단일 승자 finalize 가 덮어쓴다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      tables.moim.set('moim-A', {
+        ...tables.moim.get('moim-A')!,
+        location: '기존 장소',
+      });
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '장소 투표',
+        ['강남역', '홍대입구'],
+        false,
+        'creator',
+        null,
+        'place',
+      );
+      seedVote(poll.id, options[0].id, 'member-1');
+      seedVote(poll.id, options[0].id, 'member-2');
+      seedVote(poll.id, options[1].id, 'member-3');
+
+      const result = await service.closePoll('creator', 'moim-A', poll.id);
+
+      expect(tables.moim.get('moim-A')?.location).toBe('강남역');
+      expect(result.finalizedLocation).toBe('강남역');
+    });
+
+    it('비생성자 멤버가 장소 투표를 닫으면 403(finalize 미실행, location 불변)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'creator');
+      setMember('moim-A', 'other-member');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '장소 투표',
+        ['강남역', '홍대입구'],
+        false,
+        'creator',
+        null,
+        'place',
+      );
+      seedVote(poll.id, options[0].id, 'member-1');
+      const originalLocation = tables.moim.get('moim-A')?.location;
+
+      await expect(
+        service.closePoll('other-member', 'moim-A', poll.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(tables.moim.get('moim-A')?.location).toEqual(originalLocation);
     });
   });
 

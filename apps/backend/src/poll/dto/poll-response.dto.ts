@@ -64,10 +64,11 @@ export class PollResponseDto {
   })
   multiSelect!: boolean;
 
-  // SPEC-MOIM-008 REQ-MOIM8-004: 투표 종류. "general"=일반, "date"=날짜 투표.
+  // SPEC-MOIM-008/010 REQ-MOIM8-004/REQ-MOIM10-004: 투표 종류. "general"=일반, "date"=날짜, "place"=장소.
   @ApiProperty({
-    description: '투표 종류. "general"=일반(자유 텍스트 옵션), "date"=날짜 투표(optionDate 있음).',
-    enum: ['general', 'date'],
+    description:
+      '투표 종류. "general"=일반(자유 텍스트 옵션), "date"=날짜 투표(optionDate 있음), "place"=장소 투표(마감 시 승자 → location).',
+    enum: ['general', 'date', 'place'],
     example: 'general',
   })
   kind!: string;
@@ -113,7 +114,18 @@ export class PollResponseDto {
   })
   finalizedStartsAt!: string | null;
 
-  // finalizeSkippedReason: 날짜 투표 동점="tie" / 무표="no_votes" / finalize 성공·일반 투표·vote/list 응답=null.
+  // SPEC-MOIM-010 REQ-MOIM10-005: finalizedLocation — 장소 투표 마감 시 단일 최다 득표 옵션의 label(장소명)이
+  // Moim.location 으로 설정된 경우에만 값이 있다. 날짜/일반 투표·동점·무표·vote/list 응답에선 null(finalizedStartsAt 과 상호 배타).
+  @ApiProperty({
+    description:
+      '자동 확정된 모임 장소. 장소 투표 마감 시 단일 최다 득표 옵션의 장소명이 Moim.location 으로 설정된 경우에만 값이 있다. vote/list 응답·날짜 투표에선 null.',
+    nullable: true,
+    type: String,
+    example: '강남역 2번 출구',
+  })
+  finalizedLocation!: string | null;
+
+  // finalizeSkippedReason: 날짜·장소 투표 동점="tie" / 무표="no_votes" / finalize 성공·일반 투표·vote/list 응답=null.
   @ApiProperty({
     description:
       'finalize 건너뛴 이유. "tie"=동점, "no_votes"=표 없음, null=finalize 성공 또는 일반 투표 또는 vote/list 응답.',

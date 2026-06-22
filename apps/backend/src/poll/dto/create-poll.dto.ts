@@ -38,13 +38,13 @@ export class CreatePollDto {
   })
   closesAt?: string;
 
-  // SPEC-MOIM-008 REQ-MOIM8-002: 투표 종류(optional). "general"=일반(자유 텍스트 옵션, 기본),
-  // "date"=날짜 투표(options[] 가 ISO-8601 datetime 문자열). 미지 값은 컨트롤러가 400 으로 거른다.
+  // SPEC-MOIM-008/010 REQ-MOIM8-002/REQ-MOIM10-002: 투표 종류(optional). "general"=일반(자유 텍스트 옵션, 기본),
+  // "date"=날짜 투표(options[] 가 ISO-8601 datetime 문자열), "place"=장소 투표(자유 텍스트 장소명). 미지 값은 컨트롤러가 400.
   @ApiProperty({
     description:
-      '투표 종류. "date" 면 options 가 ISO-8601 날짜 문자열 배열(옵션별 optionDate 저장). 생략/"general" 이면 일반 자유 텍스트 옵션.',
+      '투표 종류. "date" 면 options 가 ISO-8601 날짜 문자열 배열(옵션별 optionDate 저장), "place" 면 자유 텍스트 장소명(마감 시 승자 label → Moim.location). 생략/"general" 이면 일반 자유 텍스트 옵션.',
     required: false,
-    enum: ['general', 'date'],
+    enum: ['general', 'date', 'place'],
     default: 'general',
     example: 'general',
   })

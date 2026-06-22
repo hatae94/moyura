@@ -204,10 +204,10 @@ function parseKind(value: unknown): string {
   if (value === undefined || value === null || value === '') {
     return 'general';
   }
-  if (value === 'general' || value === 'date') {
+  if (value === 'general' || value === 'date' || value === 'place') {
     return value;
   }
-  throw new BadRequestException('kind 는 "general" 또는 "date" 여야 합니다');
+  throw new BadRequestException('kind 는 "general", "date", "place" 중 하나여야 합니다');
 }
 
 // SPEC-MOIM-008 REQ-MOIM8-002: 날짜 옵션 배열 파싱 헬퍼. kind="date" 일 때 사용.
@@ -272,6 +272,7 @@ function newPollToDto(poll: PollWithOptions): PollResponseDto {
     isClosed: closesAt != null && closesAt <= new Date(),
     // 갓 생성된 poll 은 finalize 없음 — 항상 null.
     finalizedStartsAt: null,
+    finalizedLocation: null,
     finalizeSkippedReason: null,
   };
 }
@@ -298,6 +299,7 @@ function resultToDto(poll: PollWithResults): PollResponseDto {
     isClosed: poll.isClosed,
     // vote/list 응답: finalize 필드는 항상 null(finalize 는 close 라우트에서만).
     finalizedStartsAt: null,
+    finalizedLocation: null,
     finalizeSkippedReason: null,
   };
 }
@@ -307,8 +309,9 @@ function resultToDto(poll: PollWithResults): PollResponseDto {
 function closeResultToDto(poll: PollWithResults): PollResponseDto {
   return {
     ...resultToDto(poll),
-    // close 응답: finalize 결과를 실제 service 값으로 덮어쓴다.
+    // close 응답: finalize 결과를 실제 service 값으로 덮어쓴다(date→startsAt, place→location).
     finalizedStartsAt: poll.finalizedStartsAt ? poll.finalizedStartsAt.toISOString() : null,
+    finalizedLocation: poll.finalizedLocation,
     finalizeSkippedReason: poll.finalizeSkippedReason,
   };
 }

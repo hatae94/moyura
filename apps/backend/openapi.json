@@ -1338,10 +1338,11 @@
           },
           "kind": {
             "type": "string",
-            "description": "투표 종류. \"date\" 면 options 가 ISO-8601 날짜 문자열 배열(옵션별 optionDate 저장). 생략/\"general\" 이면 일반 자유 텍스트 옵션.",
+            "description": "투표 종류. \"date\" 면 options 가 ISO-8601 날짜 문자열 배열(옵션별 optionDate 저장), \"place\" 면 자유 텍스트 장소명(마감 시 승자 label → Moim.location). 생략/\"general\" 이면 일반 자유 텍스트 옵션.",
             "enum": [
               "general",
-              "date"
+              "date",
+              "place"
             ],
             "default": "general",
             "example": "general"
@@ -1414,10 +1415,11 @@
           },
           "kind": {
             "type": "string",
-            "description": "투표 종류. \"general\"=일반(자유 텍스트 옵션), \"date\"=날짜 투표(optionDate 있음).",
+            "description": "투표 종류. \"general\"=일반(자유 텍스트 옵션), \"date\"=날짜 투표(optionDate 있음), \"place\"=장소 투표(마감 시 승자 → location).",
             "enum": [
               "general",
-              "date"
+              "date",
+              "place"
             ],
             "example": "general"
           },
@@ -1455,6 +1457,12 @@
             "nullable": true,
             "example": "2026-06-27T12:00:00.000Z"
           },
+          "finalizedLocation": {
+            "type": "string",
+            "description": "자동 확정된 모임 장소. 장소 투표 마감 시 단일 최다 득표 옵션의 장소명이 Moim.location 으로 설정된 경우에만 값이 있다. vote/list 응답·날짜 투표에선 null.",
+            "nullable": true,
+            "example": "강남역 2번 출구"
+          },
           "finalizeSkippedReason": {
             "type": "string",
             "description": "finalize 건너뛴 이유. \"tie\"=동점, \"no_votes\"=표 없음, null=finalize 성공 또는 일반 투표 또는 vote/list 응답.",
@@ -1478,6 +1486,7 @@
           "closesAt",
           "isClosed",
           "finalizedStartsAt",
+          "finalizedLocation",
           "finalizeSkippedReason"
         ]
       },

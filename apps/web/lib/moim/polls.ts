@@ -22,12 +22,15 @@ export interface PollWithResults {
   createdBy: string;
   createdAt: string;
   multiSelect: boolean;
-  kind: "general" | "date";
+  // SPEC-MOIM-010: "place"(장소 투표) 추가 — 옵션 label 이 장소명, 마감 시 승자 label → Moim.location.
+  kind: "general" | "date" | "place";
   options: { id: string; label: string; voteCount: number; optionDate: string | null }[];
   myVotes: string[];
   closesAt: string | null;
   isClosed: boolean;
   finalizedStartsAt: string | null;
+  // SPEC-MOIM-010: 장소 투표 close 시 확정된 장소(승자 label) 또는 null(날짜/일반/동점/무표/vote/list).
+  finalizedLocation: string | null;
   finalizeSkippedReason: "tie" | "no_votes" | null;
 }
 
