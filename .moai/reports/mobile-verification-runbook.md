@@ -149,6 +149,129 @@ cd apps/mobile && npx expo run:ios
 
 ---
 
+---
+
+## 5. MOIM-011 invite-create + 딥링크 검증
+
+작성일: 2026-06-22
+대상: SPEC-MOIM-011 — 초대 링크 생성 UI + moyura://invite 딥링크
+SPEC 커밋: 2023cb9
+
+### 5.1 사전 준비
+
+런북 §1 환경(Supabase/백엔드/웹)이 기동돼 있어야 한다.
+
+**필요 계정**: owner 계정(모임 생성자) + 게스트 계정 2개(멤버 + 비멤버 또는 익명 게스트).
+
+**초대 토큰 준비**: 웹 로그인 이슈가 해소되면 owner 계정으로 웹 브라우저에서 "초대하기" → 발급 → 토큰을 포함한 링크 복사. 또는 curl 로 직접 발급:
+
+```bash
+# owner access_token 획득 후:
+TOKEN=$(curl -s -X POST "http://localhost:3001/moims/{moimId}/invites" \
+  -H "Authorization: Bearer {owner_access_token}" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq -r '.token')
+echo "초대 토큰: $TOKEN"
+echo "초대 링크: http://localhost:3000/invite/$TOKEN"
+echo "딥링크: moyura://invite/$TOKEN"
+```
+
+---
+
+### 5.2 웹 invite-create UI 워크스루 (웹 세션 이슈 해소 후)
+
+> 사전 조건: signInAction → 303/home → 307 bounce 이슈가 해소되어 브라우저 로그인이 정상 동작해야 한다.
+
+#### owner 계정으로 초대 생성
+
+1. 브라우저에서 `http://localhost:3000` 열기 → owner 계정으로 로그인.
+2. 홈 → 모임 카드 탭 → 모임 상세(`/home/{id}`).
+3. **기대**: 페이지에 "초대하기" 버튼이 노출된다(owner 전용 어포던스).
+4. "초대하기" 클릭 → **기대**: 발급 중 로딩 → 성공 시 `http://localhost:3000/invite/{token}` 링크 표시.
+5. "복사" 버튼 클릭 → **기대**: 클립보드에 링크 복사 + "복사됨" 피드백.
+
+#### 비-owner 계정에서 버튼 미노출 확인
+
+1. 비-owner 멤버 계정으로 로그인 후 동일 모임 상세 진입.
+2. **기대**: "초대하기" 버튼이 노출되지 않는다.
+
+#### 데스크톱 수락 페이지 확인
+
+1. 발급된 링크 `http://localhost:3000/invite/{token}` 을 데스크톱 브라우저에서 열기.
+2. **기대**: "앱에서 열기" 버튼이 노출되지 않는다(데스크톱 — 닉네임 폼만).
+3. 닉네임 입력 → 수락 → `/moims/{id}/chat` 리다이렉트 확인.
+
+- [ ] owner 계정 "초대하기" 노출 + 발급 + 링크 표시 + 복사 + "복사됨" 피드백
+- [ ] 비-owner 계정 "초대하기" 미노출
+- [ ] 데스크톱 수락 페이지 "앱에서 열기" 버튼 미노출 + 닉네임 폼 동작
+
+---
+
+### 5.3 모바일 딥링크 검증 (iOS 시뮬레이터)
+
+> 사전 조건: §2 환경으로 시뮬레이터에 앱이 기동된 상태. 발급된 초대 토큰을 §5.1 에서 획득해야 한다.
+
+#### 딥링크로 직접 열기 (scheme 자동 링크 확인)
+
+```bash
+# 시뮬레이터에서 딥링크 발화
+xcrun simctl openurl booted "moyura://invite/{발급된_토큰}"
+```
+
+1. **기대**: 앱이 포그라운드로 오고 `app/invite/[token]` 라우트가 열린다.
+2. **기대**: WebView 가 `http://localhost:3000/invite/{token}` 수락 페이지를 로드한다.
+3. 닉네임 입력 → 수락 → **기대**: `/moims/{id}/chat` 으로 리다이렉트(WebView 안에서).
+
+- [ ] `xcrun simctl openurl` → 앱 포그라운드 + `app/invite/[token]` 라우트 열림
+- [ ] WebView 가 `${WEB_URL}/invite/{token}` 수락 페이지 로드
+- [ ] 닉네임 입력 → 수락 → `/moims/{id}/chat` 리다이렉트
+
+#### "앱에서 열기" 버튼 발화 확인 (모바일 브라우저 → 앱)
+
+> 모바일 브라우저(iOS Safari 시뮬레이터)에서 초대 링크를 열어 "앱에서 열기" 버튼 확인.
+
+1. 시뮬레이터 Safari 에서 `http://localhost:3000/invite/{token}` 열기.
+2. **기대**: "앱에서 열기" 버튼이 노출된다(모바일 브라우저 한정).
+3. "앱에서 열기" 클릭 → **기대**: `moyura://invite/{token}` scheme 이 발화되고 앱이 열린다.
+4. WebView 가 수락 페이지 로드 + 닉네임 → 수락 흐름 확인.
+
+- [ ] 모바일 Safari 수락 페이지에 "앱에서 열기" 버튼 노출
+- [ ] "앱에서 열기" 클릭 → scheme 발화 → 앱 열림 → WebView 수락 페이지
+
+#### 앱 미설치 시 폴백 (optional — 시뮬레이터 환경에서 검증 어려울 수 있음)
+
+1. 시뮬레이터 Safari 에서 수락 페이지 열기.
+2. "앱에서 열기" 클릭 시 scheme 이 no-op 이어도 닉네임 폼이 그대로 유지되는지 확인.
+3. **기대**: 자동 리다이렉트/자동 점프 없이 웹 폼에 머무른다.
+
+- [ ] 앱 미설치/scheme no-op 시 웹 닉네임 폼 폴백 유지(자동 리다이렉트 없음)
+
+#### 기존 딥링크/탭/detail-push 회귀 0 확인
+
+1. `xcrun simctl openurl booted "moyura://auth-callback"` → **기대**: OAuth 콜백 흐름 회귀 없음(앱이 정상 처리).
+2. 앱에서 홈 탭 → 모임 카드 탭 → 상세 push(네이티브 Stack) → 뒤로가기 확인.
+3. 탭 전환(홈/탐색/알림/프로필) 정상 동작 확인.
+
+- [ ] `moyura://auth-callback` 딥링크 회귀 0
+- [ ] 홈 카드 탭 → 모임 상세 push → 뒤로가기 정상
+- [ ] 탭 전환 정상
+
+---
+
+### 5.4 completed 전환 기준 (MOIM-011)
+
+다음 항목 모두 PASS 시 status `completed` 전환:
+
+1. [x] 자동 게이트(web tsc/lint/build 0 + mobile tsc/vitest 회귀 0 + backend jest GREEN) — 이미 완료
+2. [ ] 웹 브라우저 워크스루 — owner 초대 생성/복사 + 비-owner 미노출 + 데스크톱 수락 페이지 "앱에서 열기" 미노출
+3. [ ] iOS 시뮬레이터 딥링크(`xcrun simctl openurl booted moyura://invite/{token}`) → 앱 열림 + WebView 수락 + 닉네임 → /moims/{id}/chat
+4. [ ] iOS 시뮬레이터 모바일 Safari "앱에서 열기" → scheme 발화 → 앱 열림
+5. [ ] 기존 OAuth 딥링크/탭/detail-push 회귀 0
+
+완료 시: `.moai/specs/SPEC-MOIM-011/acceptance.md` DoD 마지막 항목(디바이스 종단 검증) [x] 처리 + iOS 시뮬레이터 검증 완료 일자 기재 → `spec.md` frontmatter `status: in-progress → completed`, `HISTORY v0.3.0` 추가 → manager-docs sync.
+
+---
+
 ## 부록 A. 웹 UI 멀티탭 워크스루 결과 (2026-06-22, 자율 검증)
 
 chrome-devtools 2 격리 세션(앨리스=생성자/방장, 밥=멤버), 모임 1개:

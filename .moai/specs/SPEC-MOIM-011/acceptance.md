@@ -112,17 +112,17 @@
 
 ## Definition of Done (DoD)
 
-- [ ] 백엔드 무변경 — 발급/목록/폐기/수락 4개 라우트 존재 확인, `apps/backend/src/invite/**` 무변경, 기존 invite jest GREEN(회귀). 갭 발견 시 그 한 항목만 기록(기대: 변경 0). (AC-1)
-- [ ] `apps/web/lib/moim/invites.ts` 의 `createInvite(api, moimId, body?)` 가 polls.ts 구체-경로 패턴 미러 + InviteResult 로컬 미러(또는 api-client 재사용) + 토큰 Bearer 헤더만 + schema 재생성 없음. (AC-2)
-- [ ] 모임 상세 owner 전용 "초대하기"(`invite-section.tsx`) — owner 만 노출/비-owner 미노출 + 발급 → 링크 `{origin}/invite/{token}` 표시 + 복사(navigator.clipboard) + "복사됨" 피드백 + 발급 오류 일반화 + Meetup 오렌지. page.tsx owner 판정·prop 전달. (AC-3)
-- [ ] 수락 페이지(`/invite/[token]`) "앱에서 열기" 버튼 — 모바일 한정 노출/데스크톱 미노출 + 클릭 `window.location = moyura://invite/{token}` + 자동 리다이렉트 없음 + 기존 닉네임 폼/익명 로그인/submitAccept/리다이렉트 보존. (AC-5)
-- [ ] 모바일 `app/invite/[token]` 라우트(+필요 시 `_layout`) — `${WEB_URL}/invite/{token}` BridgedWebView 호스팅(MOIM-003 미러) + 공개 랜딩(가드 미상속) + 빈/malformed token 안전 + 수락 WebView 위임. (AC-4)
-- [ ] `moyura://invite/{token}` → `app/invite/[token]` 해석(파일 기반 자동 또는 루트 _layout linking) + 기존 `moyura://auth-callback`/탭/detail-push/originWhitelist/route-map-core 보존. (AC-4/7)
-- [ ] 보안 — 토큰 owner 한정(이중 방어) + 수락 SupabaseAuthGuard + 토큰 새 채널 노출 0 + 오류 일반화. (AC-6)
-- [ ] web tsc 0 / web lint 0 / `nx run web:build` 0(초대 생성 섬 + 헬퍼 + 수락 버튼). (AC-7/8)
-- [ ] mobile tsc 0 / vitest 회귀 0(route-map-core 등) / `expo export` 0(신규 invite 라우트). (AC-7/8)
-- [ ] backend invite jest GREEN(무변경 회귀). (AC-1/7/8)
-- [ ] 디바이스 종단 검증: (1) iOS 시뮬레이터 owner 모임 상세 → "초대하기" → 발급 → 링크 표시 + 복사, 비-owner 미노출; (2) `xcrun simctl openurl booted moyura://invite/{token}`(또는 모바일 브라우저 "앱에서 열기") → 앱이 `app/invite/[token]` 라우트로 열려 WebView 가 `${WEB_URL}/invite/{token}` 수락 페이지 로드 → 닉네임 → 수락 → `/moims/:id/chat`; (3) 미설치/데스크톱 scheme no-op + 웹 닉네임 폼 폴백; (4) OAuth 딥링크(`moyura://auth-callback`)·탭·detail-push 회귀 0 라이브 확인. — PENDING device-gated (AC-8, iOS 시뮬레이터 scheme 열림 + WebView 수락 + "앱에서 열기" 발화 검증 대기)
+- [x] 백엔드 무변경 — 발급/목록/폐기/수락 4개 라우트 존재 확인, `apps/backend/src/invite/**` 무변경, 기존 invite jest GREEN(회귀). 갭 없음(변경 0). (AC-1) — **VERIFIED** (feat 2023cb9, 백엔드/마이그레이션 무변경 확인)
+- [x] `apps/web/lib/moim/invites.ts` 의 `createInvite(api, moimId, body?)` 가 polls.ts 구체-경로 패턴 미러 + InviteResult 로컬 미러 + 토큰 Bearer 헤더만 + schema 재생성 없음. (AC-2) — **VERIFIED** (web tsc 0, feat 2023cb9)
+- [x] 모임 상세 owner 전용 "초대하기"(`invite-button.tsx`) — owner 만 노출(isOwner prop) / 비-owner null 반환 + Server Action(`invite-actions.ts`) 발급 → 링크 `{origin}/invite/{token}` 표시 + `navigator.clipboard` 복사 + "복사됨" 피드백 + 오류 일반화. page.tsx `isOwner = moim.createdBy === session.user.id` 판정·prop 전달. (AC-3) — **VERIFIED** (web tsc/lint/build 0, feat 2023cb9) — ⚠️ **PENDING: 웹 UI 브라우저 워크스루** 미수행(이번 세션 웹 로그인 세션-쿠키 리다이렉트 이슈 — auth/middleware 무변경, signInWithPassword 직접 동작 확인됨, 초대 코드와 무관한 인프라 이슈)
+- [x] 수락 페이지(`/invite/[token]`) "앱에서 열기" 버튼 — `useSyncExternalStore` UA 감지로 모바일 한정 노출/데스크톱 미노출 + 클릭 `window.location = moyura://invite/{token}` + 자동 리다이렉트 없음 + 기존 닉네임 폼/익명 로그인/submitAccept/리다이렉트 보존. (AC-5) — **VERIFIED** (web tsc/lint/build 0, feat 2023cb9)
+- [x] 모바일 `app/invite/[token].tsx` 라우트 — `${WEB_URL}/invite/${token}` BridgedWebView 호스팅(MOIM-003 detail-in-WebView 패턴 미러) + `(tabs)`·`(auth)` 그룹 밖 공개 랜딩(가드 미상속) + 빈/malformed token 안전(WebView가 웹 수락 페이지에 위임) + 수락 WebView 위임. `app/_layout.tsx` — `<Stack.Screen name="invite/[token]" />` 추가. (AC-4) — **VERIFIED** (mobile tsc/vitest 0, feat 2023cb9)
+- [x] `moyura://invite/{token}` → `app/invite/[token]` 해석(expo-router scheme "moyura" 기존 설정 + 파일 기반 라우팅 자동 링크) + 기존 `moyura://auth-callback`/탭/detail-push/originWhitelist/route-map-core 보존. (AC-4/7) — **VERIFIED** (mobile tsc/vitest 회귀 0, feat 2023cb9) — ⚠️ **PENDING: 딥링크 앱 열림 + "앱에서 열기" 발화** device-gated(iOS 시뮬레이터 검증 필요)
+- [x] 보안 — 토큰 owner 한정(isOwner 판정 + 백엔드 403 이중 방어) + 수락 SupabaseAuthGuard + 토큰 새 채널 노출 0 + 오류 일반화. (AC-6) — **VERIFIED** (코드 리뷰 + tsc, feat 2023cb9)
+- [x] web tsc 0 / web lint 0 / `nx run web:build` 0(invite-button.tsx + invite-actions.ts + lib/moim/invites.ts + 수락 페이지 "앱에서 열기" 버튼). (AC-7/8) — **VERIFIED** (feat 2023cb9)
+- [x] mobile tsc 0 / vitest 회귀 0(route-map-core 등) / `expo export` 0(신규 invite 라우트). (AC-7/8) — **VERIFIED** (feat 2023cb9)
+- [x] backend invite jest GREEN(무변경 회귀). (AC-1/7/8) — **VERIFIED** (feat 2023cb9, 백엔드 무변경)
+- [ ] 디바이스 종단 검증: (1) iOS 시뮬레이터 owner 모임 상세 → "초대하기" → 발급 → 링크 표시 + 복사, 비-owner 미노출(웹 브라우저 워크스루 + iOS 시뮬레이터); (2) `xcrun simctl openurl booted moyura://invite/{token}`(또는 모바일 브라우저 "앱에서 열기") → 앱이 `app/invite/[token]` 라우트로 열려 WebView 가 `${WEB_URL}/invite/{token}` 수락 페이지 로드 → 닉네임 → 수락 → `/moims/:id/chat`; (3) 미설치/데스크톱 scheme no-op + 웹 닉네임 폼 폴백; (4) OAuth 딥링크(`moyura://auth-callback`)·탭·detail-push 회귀 0 라이브 확인. — **PENDING** (iOS 시뮬레이터 딥링크 + "앱에서 열기" 발화 검증 대기 + 웹 invite-create UI 워크스루 대기) (AC-8)
 
 ---
 
