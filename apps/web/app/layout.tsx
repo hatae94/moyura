@@ -31,6 +31,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // 브랜드 오렌지(globals.css --primary) — 모바일 브라우저 주소창/상태바 틴트를 브랜드와 일치.
+  themeColor: "#ff6b35",
 };
 
 export default function RootLayout({
