@@ -6,6 +6,7 @@
 // 범위 제약(R-G6): 이메일 확인/비밀번호 재설정 흐름은 구현하지 않는다.
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createApiClient } from "@moyura/api-client";
@@ -13,8 +14,19 @@ import { createApiClient } from "@moyura/api-client";
 import { API_BASE_URL } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
-// 소셜 OAuth redirectTo 의 로컬 host 리터럴(site_url host = localhost, http scheme).
-const CALLBACK_URL = "http://localhost:3000/auth/callback";
+// 소셜 OAuth redirectTo 는 요청 origin 에서 동적 구성한다(local/prod 공통 — 하드코딩 금지).
+// Vercel 등 리버스 프록시 뒤에서는 x-forwarded-host / x-forwarded-proto 가 실제 외부 호스트·스킴을 담는다.
+// 결과 URL 은 Supabase Redirect URLs 허용목록과 정확히 일치해야 한다(local: http://localhost:3000/auth/callback,
+// prod: https://<web-domain>/auth/callback) — 불일치 시 GoTrue 가 Site URL 로 폴백해 ?code= 가 "/" 로 떨어진다.
+async function resolveCallbackUrl(): Promise<string> {
+  const h = await headers();
+  const rawHost = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const host = (rawHost.split(",")[0] ?? rawHost).trim();
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.");
+  const rawProto = h.get("x-forwarded-proto") ?? (isLocal ? "http" : "https");
+  const proto = (rawProto.split(",")[0] ?? rawProto).trim();
+  return `${proto}://${host}/auth/callback`;
+}
 
 /** 인증 결과 상태(useActionState 등에서 소비). */
 export type AuthActionState = { error?: string } | undefined;
@@ -113,11 +125,12 @@ export async function signInWithOAuthAction(formData: FormData): Promise<void> {
     | "apple"
     | "kakao";
 
+  const callbackUrl = await resolveCallbackUrl();
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     // 소셜 로그인 성공 후 도착지를 /home 으로 고정한다(콜백이 ?next= 를 읽어 redirect — 비번 로그인과 일관, R-PR3).
-    options: { redirectTo: `${CALLBACK_URL}?next=/home` },
+    options: { redirectTo: `${callbackUrl}?next=/home` },
   });
 
   if (error || !data?.url) {
