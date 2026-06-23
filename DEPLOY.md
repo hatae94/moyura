@@ -107,7 +107,7 @@ pnpm --filter @moyura/backend exec prisma migrate deploy
    - iOS 네이티브 로그인용 iOS client 도 별도 생성(번들 ID 기준).
 2. **Supabase Dashboard** → Authentication → Providers → Google:
    - 위 Web client 의 **client_id / secret** 입력.
-3. **모바일**(`apps/mobile/eas.json` prod 프로파일):
+3. **모바일**(`apps/mobile/eas.json` production 프로파일):
    - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` == **Supabase Google provider 의 client_id** (= 위 Web client id).
      `signInWithIdToken` 의 audience 가 이 값과 같아야 한다.
    - `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` == 위에서 만든 iOS client id.
@@ -131,7 +131,7 @@ pnpm --filter @moyura/backend exec prisma migrate deploy
 | `SUPABASE_URL` | 백엔드 호스팅 env | Supabase Settings → API → Project URL |
 | `SUPABASE_ANON_KEY` | 백엔드 호스팅 env | Supabase Settings → API → anon public |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET` | Supabase 대시보드(권장) 또는 셸 env | Google Cloud OAuth Web client |
-| `EXPO_PUBLIC_*` (6개) | `apps/mobile/eas.json` prod 프로파일 `env` | API/웹 도메인, Supabase URL/anon, Google client id 2개 |
+| `EXPO_PUBLIC_*` (6개) | `apps/mobile/eas.json` production 프로파일 `env` | API/웹 도메인, Supabase URL/anon, Google client id 2개 |
 
 > 웹/모바일의 PUBLIC 값(anon key, client id)은 공개 전제다. 백엔드의 연결 문자열·OAuth secret·JWT secret 은
 > 시크릿이므로 호스팅 대시보드 env 에만 입력하고 파일로 커밋하지 않는다.
@@ -172,7 +172,7 @@ pnpm --filter @moyura/backend exec prisma migrate deploy
 
 ### 모바일 → EAS
 
-- `apps/mobile/eas.json` 의 `prod` 프로파일 `env`(EXPO_PUBLIC_* 6개: web/API 도메인, Supabase URL/anon, Google client id 2개)를 prod 값으로 채운 뒤 `eas build --profile prod`.
+- `apps/mobile/eas.json` 의 `production` 프로파일 `env`(EXPO_PUBLIC_* 6개: web/API 도메인, Supabase URL/anon, Google client id 2개)를 prod 값으로 채운 뒤 `eas build --profile production`.
 
 ---
 
