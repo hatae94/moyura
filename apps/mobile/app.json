@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "모여라",
+    "slug": "moyura",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "moyura",
