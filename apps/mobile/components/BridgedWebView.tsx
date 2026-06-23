@@ -13,6 +13,7 @@
 // 보는 그룹 _layout 의 선언적 <Redirect> 가 수행한다 — 여기서 imperative 전환을 하지 않는다.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import type { Edge } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import { useRouter } from "expo-router";
 import type WebView from "react-native-webview";
@@ -32,6 +33,14 @@ import { WebViewErrorOverlay } from "./WebViewErrorOverlay";
 // R-T9/C-2: WebView 를 신뢰 origin 에 잠그는 originWhitelist(WEB_URL origin literal 만 허용).
 const TRUSTED_ORIGIN = buildTargetOrigin(WEB_URL);
 const ORIGIN_WHITELIST: readonly string[] = [TRUSTED_ORIGIN];
+
+// safe-area 엣지(라우트 컨텍스트별): (tabs) 는 하단 네이티브 탭바(Tabs)가 bottom inset 을 소유하므로
+// top(+좌우)만 인셋한다 — bottom 까지 넣으면 탭바 + safe-area 이중 패딩이 된다. (auth)/공개 라우트(invite)는
+// 탭바 없는 풀스크린이라 top+bottom(+좌우) 전부 인셋한다. 좌우는 노치/랜드스케이프 대비(세로에선 0).
+const SAFE_AREA_EDGES: Record<"(tabs)" | "(auth)", readonly Edge[]> = {
+  "(tabs)": ["top", "left", "right"],
+  "(auth)": ["top", "bottom", "left", "right"],
+};
 
 /**
  * R-T8/OD-11: 컨텐츠 로드 전 per-session nonce 를 페이지에 확립하는 JS 를 만든다(App.tsx 보존).
@@ -200,6 +209,8 @@ export function BridgedWebView({
       <WebViewShell
         ref={webViewRef}
         sourceUri={sourceUri}
+        // safe-area 인셋: (tabs)=top(+좌우) / (auth)·invite=top+bottom(+좌우). 하단 탭바 이중 패딩 방지.
+        edges={SAFE_AREA_EDGES[routeContext]}
         // R-T9/C-2: WebView 를 신뢰 origin 에 잠근다(비신뢰 origin in-WebView 로드 차단).
         originWhitelist={ORIGIN_WHITELIST}
         // R-T8/OD-11: 컨텐츠 로드 전 per-session nonce 를 페이지에 확립(셸 마커는 WebViewShell 가 항상 선행 주입).
