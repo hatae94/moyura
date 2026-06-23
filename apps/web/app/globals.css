@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* 페이지 상단 여백 정책 — 단일 출처(모든 페이지 최상단 요소 공통, 향후 추가 페이지도 동일 적용).
+   데스크탑(마우스 기기)만 큰 상단 여백을 주고, 모바일은 최소 여백으로 둔다: 앱 WebView 는 네이티브
+   SafeArea 가, 모바일 웹은 브라우저 상단 크롬이 상태바 영역을 이미 처리하기 때문이다.
+   화면 width 가 아니라 pointer/hover(입력 능력)로 데스크탑을 판별한다 — 크기 무관(데스크탑 창을 좁혀도
+   유지, 큰 화면 모바일도 오작동 없음). 새 페이지는 최상단 헤더/컨테이너에 `pt-page` 만 쓰면 된다. */
+@utility pt-page {
+  padding-top: 1rem; /* 모바일(앱 SafeArea / 모바일 웹 브라우저 크롬이 상단 처리) — 최소 여백 */
+  @media (hover: hover) and (pointer: fine) {
+    padding-top: 3rem; /* 데스크탑(마우스 기기) — 넉넉한 상단 여백(기존 pt-12 와 동일 48px) */
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
