@@ -22,7 +22,7 @@ const APP_NAME = IS_PROD ? "모여라" : "모여라 debug";
 const IOS_GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const IOS_URL_SCHEME = IOS_GOOGLE_CLIENT_ID
   ? `com.googleusercontent.apps.${IOS_GOOGLE_CLIENT_ID.replace(/\.apps\.googleusercontent\.com$/, "")}`
-  : "com.googleusercontent.apps.1069980037272-4k1a3qlvm4ounerhrmcdp4v3vpeodhii";
+  : "com.googleusercontent.apps.185492637271-5hb5e3jl3piv4mk700b7bvmd0j3ge87p";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default (_ctx: ConfigContext): ExpoConfig => ({
