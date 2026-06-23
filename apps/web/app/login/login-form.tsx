@@ -69,7 +69,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
   // 소셜 랜딩 뷰(R-A1~R-A5).
   if (!showEmailForm) {
     return (
-      <div className="size-full flex flex-col bg-white">
+      <div className="size-full flex flex-col grow bg-white">
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
           <div className="w-full max-w-md">
             {/* 헤더: 로고 배지 + 타이틀 + 서브타이틀(R-A2) */}
