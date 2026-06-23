@@ -5,6 +5,7 @@
   },
   "build": {
     "local": {
+      "environment": "development",
       "developmentClient": true,
       "distribution": "internal",
       "env": {
@@ -12,6 +13,7 @@
       }
     },
     "local-sim": {
+      "environment": "development",
       "ios": {
         "simulator": true
       },
@@ -23,6 +25,7 @@
       }
     },
     "production": {
+      "environment": "production",
       "distribution": "store",
       "android": {
         "buildType": "apk"
