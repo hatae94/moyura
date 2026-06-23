@@ -23,7 +23,7 @@ services:
     autoDeploy: true      # master push 시 자동 재배포.
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm exec nx build backend
     startCommand: node apps/backend/dist/src/main.js
-    healthCheckPath: /    # app.controller.ts 의 GET / (200) 로 헬스 체크.
+    healthCheckPath: /health    # 백엔드 GET /health(DB ping, 200/503 — src/health/health.controller.ts)로 헬스 체크.
     envVars:
       - key: NODE_VERSION
         value: "22"
