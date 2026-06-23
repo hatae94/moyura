@@ -151,6 +151,31 @@ pnpm --filter @moyura/backend exec prisma migrate deploy
 
 ---
 
+## H. 호스팅 배포 (web = Vercel · backend = Render · mobile = EAS)
+
+### 백엔드 → Render (`render.yaml`)
+
+백엔드는 `app.listen()` 으로 떠 있는 **영속 NestJS 서버**라 serverless 전용인 **Vercel 에 맞지 않는다**(어댑터 없이는 요청을 못 받는다). 영속 Node 호스트인 **Render** 를 쓴다.
+
+1. Render Dashboard → **New → Blueprint** → 이 레포 연결 → 루트 `render.yaml` 자동 감지 → **Apply**.
+2. Apply 시 `sync:false` 시크릿을 대시보드에서 입력: `DATABASE_URL`(pooler 6543 `?pgbouncer=true`), `DIRECT_URL`(direct 5432), `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `CORS_ORIGINS`(prod 웹 origin). 선택: `SUPABASE_JWT_SECRET`, `FIREBASE_CREDENTIALS`. `PORT` 는 Render 가 자동 주입한다.
+3. 빌드 `corepack enable && pnpm install --frozen-lockfile && pnpm exec nx build backend` → 시작 `node apps/backend/dist/src/main.js` → 헬스 `GET /` (전부 `render.yaml` 에 정의됨). prisma generate 는 Render 의 `DIRECT_URL` 로 통과한다(Vercel 에서 났던 PrismaConfigEnvError 없음).
+4. **스키마는 빌드에 포함되지 않는다** — C 단계 `prisma migrate deploy` 를 prod DB 에 선행한다(또는 유료 플랜의 `preDeployCommand` 로 자동화).
+
+> Render 무료 플랜은 비활성 시 슬립(콜드스타트 ~50s). 실서비스는 starter 이상 권장.
+
+### 웹 → Vercel
+
+- 빌드는 `nx build web` = `next build` **단독**이다(백엔드/Prisma 체인 디커플 — `packages/api-client/src/schema.d.ts` 커밋됨). 따라서 **`DIRECT_URL` 을 web Vercel 프로젝트에 넣지 않는다**(불필요).
+- 빌드타임에 **`NEXT_PUBLIC_*` 3개**(`NEXT_PUBLIC_API_BASE_URL` / `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`)가 인라인되므로 Vercel env 에 설정 후 **redeploy** 한다(기존 빌드엔 소급 안 됨, Production/Preview 스코프 주의).
+- 백엔드 API(openapi) 변경 시: `pnpm exec nx run api-client:generate` 재실행 → `schema.d.ts` 재커밋(typecheck 가 드리프트 감지).
+
+### 모바일 → EAS
+
+- `apps/mobile/eas.json` 의 `prod` 프로파일 `env`(EXPO_PUBLIC_* 6개: web/API 도메인, Supabase URL/anon, Google client id 2개)를 prod 값으로 채운 뒤 `eas build --profile prod`.
+
+---
+
 ## 보안 주의
 
 - 실 시크릿을 **절대 커밋하지 않는다**: `.env`, `.env.local`, `.env.production`(실값), DB 연결 문자열, OAuth client secret, JWT secret.

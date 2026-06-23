@@ -1,0 +1,47 @@
+# Render Blueprint — moyura backend (NestJS 영속 서버). web 은 Vercel 에 배포한다(분리).
+#
+# 적용: Render Dashboard → New → Blueprint → 이 레포 연결 → render.yaml 자동 감지 → Apply.
+# 시크릿(sync:false)은 Apply 시 Render 대시보드에서 입력한다(레포에 커밋되지 않음).
+#
+# 빌드 체인: `nx build backend` = backend:prisma-generate(→ prisma.config.ts env('DIRECT_URL') 필요) + nest build.
+#   Render 에는 DIRECT_URL 이 설정돼 있으므로 Vercel 에서 났던 PrismaConfigEnvError 가 발생하지 않는다.
+# 런타임: node apps/backend/dist/src/main.js — PrismaClient 는 DATABASE_URL(pooler)을 pg 어댑터로 사용한다.
+#   PORT 는 Render 가 자동 주입한다(main.ts 가 config.get('PORT')로 listen). 별도 설정 불필요.
+#
+# 마이그레이션: 스키마 적용은 별도 단계다(DEPLOY.md C). 한 번:
+#   DATABASE_URL=... DIRECT_URL=... pnpm --filter @moyura/backend exec prisma migrate deploy
+# 매 배포 자동 적용을 원하면 아래 web 서비스에 preDeployCommand 를 추가한다(유료 플랜):
+#   preDeployCommand: pnpm --filter @moyura/backend exec prisma migrate deploy
+
+services:
+  - type: web
+    name: moyura-backend
+    runtime: node
+    plan: free            # 무료 플랜은 비활성 시 슬립(콜드스타트 ~50s). 실서비스는 starter 이상 권장.
+    region: singapore     # 한국 근접 리전(필요 시 oregon 등으로 변경).
+    branch: master
+    autoDeploy: true      # master push 시 자동 재배포.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm exec nx build backend
+    startCommand: node apps/backend/dist/src/main.js
+    healthCheckPath: /    # app.controller.ts 의 GET / (200) 로 헬스 체크.
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # --- 필수 (Apply 시 대시보드 입력) ---
+      - key: DATABASE_URL          # Supabase pooler(6543, transaction) + ?pgbouncer=true — 런타임 PrismaClient
+        sync: false
+      - key: DIRECT_URL            # Supabase direct(5432) — prisma generate(빌드) / migrate
+        sync: false
+      - key: SUPABASE_URL          # https://<ref>.supabase.co (JWKS/issuer 파생)
+        sync: false
+      - key: SUPABASE_ANON_KEY     # Dashboard → Settings → API → anon public
+        sync: false
+      - key: CORS_ORIGINS          # prod web origin (예: https://moyura.app). 와일드카드 금지.
+        sync: false
+      # --- 선택 (미설정 가능) ---
+      - key: SUPABASE_JWT_SECRET   # 레거시 HS256 폴백(JWKS/ES256 primary 면 미설정)
+        sync: false
+      - key: FIREBASE_CREDENTIALS  # FCM 서비스계정 키 JSON(미설정 시 푸시 발송 no-op)
+        sync: false
