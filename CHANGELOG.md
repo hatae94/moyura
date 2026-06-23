@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **모바일 네이티브 Google 로그인 main→login 바운스 수정 (SPEC-MOBILE-004 후속, 2026-06-23, v0.3.1)**: 네이티브 Google 로그인 성공 후 홈으로 진입했다가 즉시 로그인 화면으로 튕기던 버그 수정. 원인은 cross-WebView 쿠키 격리 — 로그인 WebView 의 `setSession()` 이 세션 쿠키를 `document.cookie`(WKWebView store, useWebKit=true)에만 쓰는데, expo-router 가 `(tabs)/home` 을 별개 WebView 로 마운트하고 그 WebView 는 `sharedCookiesEnabled` 로 NSHTTPCookieStorage(useWebKit=false)를 읽어 첫 GET 에 쿠키가 없어 `requireNamedSession()` 가 `/login` 으로 302. (이메일 로그인은 서버 Set-Cookie 라 NSHTTPCookieStorage 에 바로 들어가 무영향 — 대조 확인.) 수정: 신규 `apps/mobile/lib/auth/cookie-seed.ts` `seedSharedCookiesFromWebKit()` 가 `session:synced` 수신 시(홈 리다이렉트 직전) WKWebView store 의 `sb-*` 세션 쿠키를 NSHTTPCookieStorage 로 선주입한다(`cookie-clear.ts` 역방향 미러, @supabase/ssr 포맷 비복제 — 웹이 만든 실제 쿠키 복사). `useAuthBridge.onMessage` case "save" 에서 synced 신호 직전 await 선주입(실패해도 finally 로 synced 보장). 검증: mobile typecheck 0 + vitest 215/215 + iOS 시뮬레이터 실검증(로그인 후 바운스 없음). 동반: `login-form.tsx` 로그인 랜딩 flex `grow` 1줄.
+
 ### Changed
 
 - **SPEC-MOIM-009 투표 실시간 갱신 device-gated 검증 완료 → completed (2026-06-23, v0.3.0)**: 모바일 iOS WebView cross-surface 실시간을 직접 관찰 — 시뮬레이터 앱(로그인 멤버)이 모임 상세 WebView를 연 상태에서 데스크톱(앨리스)이 투표하자, 앱을 건드리지 않았는데 앱 WebView의 "테스트 투표"가 새로고침 없이 0표→1표·100%로 live 갱신됨(스크린샷). `poll_vote`→`broadcast_poll_change()`→`'poll_change'`(moim:{id})→`usePollChannel`→`router.refresh` 체인을 in-WebView 실증 + 데스크톱 멀티탭(한 탭 투표→다른 탭 새로고침 없이 갱신) + 백엔드/Realtime E2E 7/7(2026-06-22). status in-progress→completed.
@@ -16,7 +20,9 @@
 
 ### Added
 
-- **초대 링크 생성 UI + moyura://invite 딥링크** (SPEC-MOIM-011 — **in-progress** — web tsc/lint/`nx run web:build` 0 error, mobile tsc/vitest 0 error(회귀 0), **백엔드/마이그레이션 무변경**(기존 초대 라우트 4개 재사용 — POST /moims/:id/invites owner 전용/GET 목록/DELETE 폐기/POST /invites/:token/accept, invite jest 회귀 GREEN) / 딥링크 `moyura://invite/{token}` 앱 열림 + "앱에서 열기" 발화 device-gated + 웹 invite-create UI 워크스루 대기 → in-progress 유지): 기존 초대 백엔드(SPEC-MOIM-002)가 발급/목록/폐기/수락을 완전 구축했으나 (a) 초대를 **생성**할 UI 가 없었고 (b) 초대 링크에서 모바일 앱으로 들어올 **딥링크**가 없었다. 본 SPEC은 이 두 갭을 채운다. SPEC-MOIM-003~010 의 형제(MOIM 시리즈).
+- **마이 페이지 — 개인정보 조회 + 표시 이름 수정** (SPEC-PROFILE-001 — **in-progress** — web typecheck/lint/`nx run web:build` 0, **백엔드 무변경**(GET/PATCH /me 재사용) / 모바일 "마이" 탭 WebView 워크스루 device-gated → in-progress): `(main)/profile` 플레이스홀더(SPEC-MOBILE-003)를 실 기능으로 대체. Server Component(`requireNamedSession` → 이메일 read-only + 가입일 + 표시 이름) + `profile-form.tsx`(useActionState — 이름 수정/저장 피드백, redirect 없음) + `actions.ts`(`updateProfileAction` → `patchMe` + revalidatePath, onboarding 미러) + 로그아웃(`signOutAction` 재사용). Meetup 오렌지 토큰. 모바일 "마이" 탭(`(tabs)/profile.tsx`)이 이미 `${WEB_URL}/profile` 을 WebView 호스팅 → 신규 네이티브 코드 0(웹이 양 표면 커버).
+- **웹 줌 비활성화 + 인풋 포커스 자동 줌 방지** (SPEC-WEB-VIEWPORT-001 — **in-progress** — web typecheck/lint/build 0 / iOS WebView 인풋 비확대·핀치 줌 차단 device-gated → in-progress): 루트 레이아웃(`app/layout.tsx`)에 Next 16 `export const viewport` 추가 — `maximumScale: 1` + `userScalable: false`(+ width=device-width/initialScale=1). 핀치 줌인/줌아웃과 iOS 인풋 포커스 자동 줌을 모두 차단(네이티브 셸 WebView·모바일 브라우저 공통, 앱 같은 고정 레이아웃 UX). 컴포넌트 무변경(순수 메타).
+- **초대 링크 생성 UI + moyura://invite 딥링크** (SPEC-MOIM-011 — **completed** — web tsc/lint/`nx run web:build` 0 error, mobile tsc/vitest 0 error(회귀 0), **백엔드/마이그레이션 무변경**(기존 초대 라우트 4개 재사용 — POST /moims/:id/invites owner 전용/GET 목록/DELETE 폐기/POST /invites/:token/accept, invite jest 회귀 GREEN) / 딥링크 `moyura://invite/{token}` 앱 열림 + "앱에서 열기" 발화 device-gated 2026-06-22 Maestro 검증 완료 + 웹 invite-create UI 데스크톱 워크스루 → completed): 기존 초대 백엔드(SPEC-MOIM-002)가 발급/목록/폐기/수락을 완전 구축했으나 (a) 초대를 **생성**할 UI 가 없었고 (b) 초대 링크에서 모바일 앱으로 들어올 **딥링크**가 없었다. 본 SPEC은 이 두 갭을 채운다. SPEC-MOIM-003~010 의 형제(MOIM 시리즈).
   - **백엔드/마이그레이션 무변경(핵심)**: 발급/목록/폐기/수락 4개 라우트 모두 이미 존재(SPEC-MOIM-002 재사용). `apps/backend/src/invite/**` 한 줄도 변경하지 않았다. DTO·라우트·마이그레이션·jest 무변경. MVP 생성 UI 는 body 를 비워 백엔드 기본값(+7d 만료/무제한)을 사용한다.
   - **초대 생성 헬퍼 `lib/moim/invites.ts`**: `createInvite(api, moimId, body?)` 구체-경로 헬퍼(`POST /moims/:moimId/invites`, `lib/moim/polls.ts` 패턴 미러). `InviteResult { token; expiresAt }` 로컬 미러 타입(schema 재생성 불필요 — 백엔드 무변경). 토큰은 Bearer 헤더로만 인증.
   - **초대 생성 Server Action `invite-actions.ts`**: `createInviteAction(moimId, accessToken)` — `createInvite` 헬퍼 호출 → `InviteResult` 반환(토큰 서버 경계에서 처리, `poll-actions.ts` 패턴 미러).

@@ -33,6 +33,7 @@ import {
 } from "../lib/auth/supabase-mobile";
 import { saveTokens, clearTokens, type SessionTokens } from "../lib/auth/token-store";
 import { clearWebViewCookies } from "../lib/auth/cookie-clear";
+import { seedSharedCookiesFromWebKit } from "../lib/auth/cookie-seed";
 import { unregisterDevice } from "../lib/push/register-device";
 import {
   serializeBridgeMessage,
@@ -247,15 +248,23 @@ export function useAuthBridge({
       // R-T8: nonce 인증 — 위조/미인증 메시지는 decideInboundAction 이 ignore 로 거부한다(C-1).
       const action = decideInboundAction(message, nonce);
       switch (action.kind) {
-        case "save":
+        case "save": {
           // R-T5: 웹이 ack(synced) — 재시도 중단, SecureStore 갱신, 콜드스타트 해결.
           ackedRef.current = true;
           clearRetryTimer();
           void saveTokens(action.tokens);
           onHandshakeResolved();
-          // R-AS2/R-NC5: 갱신 토큰과 함께 synced 신호 보고 → AuthContext isSignedIn=true → 가드 전환.
-          onAuthSignal?.("session:synced", action.tokens);
+          // SPEC-MOBILE-004 후속(Google 네이티브 로그인 main→login 바운스 수정): synced 신호로 (tabs)/home 이
+          // *새 WebView* 로 마운트되기 직전에, 로그인 WebView setSession 이 WKWebView store 에만 쓴 세션 쿠키를
+          // 공유 NSHTTPCookieStorage 로 선주입한다. 그래야 새 홈 WebView 의 첫 GET 이 쿠키를 싣는다(cross-WebView
+          // 격리 해소). 선주입은 idempotent·best-effort(no-op 흡수)이며, 실패해도 finally 로 synced 는 반드시 보고한다.
+          const syncedTokens = action.tokens;
+          void seedSharedCookiesFromWebKit().finally(() => {
+            // R-AS2/R-NC5: 갱신 토큰과 함께 synced 신호 보고 → AuthContext isSignedIn=true → 가드 전환.
+            onAuthSignal?.("session:synced", syncedTokens);
+          });
           break;
+        }
         case "clear":
           // R-R3/R-R4/M-3: SecureStore 클리어(로그아웃 cleared, 또는 none → stale refresh 제거).
           void clearTokens();
