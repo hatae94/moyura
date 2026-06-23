@@ -11,7 +11,6 @@
     "build": {
       "executor": "nx:run-commands",
       "cache": true,
-      "dependsOn": ["api-client:generate"],
       "outputs": ["{projectRoot}/.next"],
       "options": { "command": "next build", "cwd": "apps/web" }
     },
