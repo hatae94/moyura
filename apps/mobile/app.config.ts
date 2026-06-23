@@ -15,6 +15,15 @@ const IS_PROD = process.env.EAS_BUILD_PROFILE === "production";
 const BUNDLE_ID = IS_PROD ? "com.hatae.moyura" : "com.hatae.moyura.debug";
 const APP_NAME = IS_PROD ? "모여라" : "모여라 debug";
 
+// iOS Google Sign-In reversed client scheme — EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID 에서 파생해 변형(dev/prod)
+// 별 iOS OAuth 클라이언트와 자동 일치시킨다. 형식: com.googleusercontent.apps.<client-id 앞부분>.
+// 변형별 client id 는 EAS env / eas.json 프로파일 / 로컬 .env 의 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID 로 주입.
+// 미설정 시 prod 클라이언트로 폴백(기존 동작 보존).
+const IOS_GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const IOS_URL_SCHEME = IOS_GOOGLE_CLIENT_ID
+  ? `com.googleusercontent.apps.${IOS_GOOGLE_CLIENT_ID.replace(/\.apps\.googleusercontent\.com$/, "")}`
+  : "com.googleusercontent.apps.1069980037272-4k1a3qlvm4ounerhrmcdp4v3vpeodhii";
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default (_ctx: ConfigContext): ExpoConfig => ({
   name: APP_NAME,
@@ -59,11 +68,9 @@ export default (_ctx: ConfigContext): ExpoConfig => ({
     [
       "@react-native-google-signin/google-signin",
       {
-        // 주의: iOS Google Sign-In 의 reversed client id 는 번들 id 에 묶인다. 이 값은 prod
-        // (com.hatae.moyura)용 — debug 번들에서 네이티브 Google 로그인을 쓰려면 debug 번들 id 용 iOS
-        // OAuth 클라이언트를 별도 발급해 분기해야 한다(현재는 prod 클라이언트 고정).
-        iosUrlScheme:
-          "com.googleusercontent.apps.1069980037272-4k1a3qlvm4ounerhrmcdp4v3vpeodhii",
+        // iOS reversed client scheme — 변형별 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID 에서 파생(위 IOS_URL_SCHEME).
+        // dev/prod iOS OAuth 클라이언트가 번들 id 분기와 자동으로 일치한다(env 미설정 시 prod 폴백).
+        iosUrlScheme: IOS_URL_SCHEME,
       },
     ],
     "./plugins/withModularHeaders",
