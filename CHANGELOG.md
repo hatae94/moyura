@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **모바일 네이티브 Google 로그인 main→login 바운스 수정 (SPEC-MOBILE-004 후속, 2026-06-23, v0.3.1)**: 네이티브 Google 로그인 성공 후 홈으로 진입했다가 즉시 로그인 화면으로 튕기던 버그 수정. 원인은 cross-WebView 쿠키 격리 — 로그인 WebView 의 `setSession()` 이 세션 쿠키를 `document.cookie`(WKWebView store, useWebKit=true)에만 쓰는데, expo-router 가 `(tabs)/home` 을 별개 WebView 로 마운트하고 그 WebView 는 `sharedCookiesEnabled` 로 NSHTTPCookieStorage(useWebKit=false)를 읽어 첫 GET 에 쿠키가 없어 `requireNamedSession()` 가 `/login` 으로 302. (이메일 로그인은 서버 Set-Cookie 라 NSHTTPCookieStorage 에 바로 들어가 무영향 — 대조 확인.) 수정: 신규 `apps/mobile/lib/auth/cookie-seed.ts` `seedSharedCookiesFromWebKit()` 가 `session:synced` 수신 시(홈 리다이렉트 직전) WKWebView store 의 `sb-*` 세션 쿠키를 NSHTTPCookieStorage 로 선주입한다(`cookie-clear.ts` 역방향 미러, @supabase/ssr 포맷 비복제 — 웹이 만든 실제 쿠키 복사). `useAuthBridge.onMessage` case "save" 에서 synced 신호 직전 await 선주입(실패해도 finally 로 synced 보장). 검증: mobile typecheck 0 + vitest 215/215 + iOS 시뮬레이터 실검증(로그인 후 바운스 없음). 동반: `login-form.tsx` 로그인 랜딩 flex `grow` 1줄.
+
 ### Changed
 
 - **SPEC-MOIM-009 투표 실시간 갱신 device-gated 검증 완료 → completed (2026-06-23, v0.3.0)**: 모바일 iOS WebView cross-surface 실시간을 직접 관찰 — 시뮬레이터 앱(로그인 멤버)이 모임 상세 WebView를 연 상태에서 데스크톱(앨리스)이 투표하자, 앱을 건드리지 않았는데 앱 WebView의 "테스트 투표"가 새로고침 없이 0표→1표·100%로 live 갱신됨(스크린샷). `poll_vote`→`broadcast_poll_change()`→`'poll_change'`(moim:{id})→`usePollChannel`→`router.refresh` 체인을 in-WebView 실증 + 데스크톱 멀티탭(한 탭 투표→다른 탭 새로고침 없이 갱신) + 백엔드/Realtime E2E 7/7(2026-06-22). status in-progress→completed.

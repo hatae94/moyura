@@ -1,9 +1,9 @@
 ---
 id: SPEC-MOBILE-004
-version: 0.3.0
+version: 0.3.1
 status: completed
 created: 2026-06-11
-updated: 2026-06-17
+updated: 2026-06-23
 author: hatae
 priority: high
 issue_number: 0
@@ -13,6 +13,7 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-23 (v0.3.1): 사후 버그 수정(post-completion) — 네이티브 Google 로그인 후 메인 진입 직후 로그인으로 튕기는 **cross-WebView 쿠키 격리** 버그 수정. 원인: 네이티브 Google 사인인은 로그인 WebView 안에서 web `setSession()` 으로 세션을 확립하는데, 이는 `document.cookie` 로 @supabase/ssr 세션 쿠키를 WKWebView 자체 store(useWebKit=true)에만 쓴다. 로그인 성공 → isSignedIn=true → expo-router 가 `(tabs)/home` 을 *별개 WebView* 로 마운트하고 그 WebView 는 `sharedCookiesEnabled` 로 NSHTTPCookieStorage(useWebKit=false)에서 쿠키를 읽으므로, 첫 GET 에 세션 쿠키가 없어 서버 가드 `requireNamedSession()` 가 `/login` 으로 302(main→login 바운스). 이메일 로그인은 서버 Set-Cookie 가 NSHTTPCookieStorage 에 바로 들어가 무영향(대조 확인). 수정: 신규 `apps/mobile/lib/auth/cookie-seed.ts` `seedSharedCookiesFromWebKit()` — `session:synced` 수신 시(홈 리다이렉트 직전) WKWebView store 의 `sb-*` 세션 쿠키를 NSHTTPCookieStorage 로 복사해 새 홈 WebView 첫 GET 이 쿠키를 싣게 한다(`cookie-clear.ts` 역방향 미러, @supabase/ssr 포맷 비복제 — 웹이 만든 실제 쿠키 복사라 ssr 업그레이드 무관). `useAuthBridge.onMessage` case "save" 에서 synced 신호 직전 await 선주입(실패해도 finally 로 synced 보장). 검증: mobile typecheck 0 + vitest 215/215 + **iOS 시뮬레이터 실검증(로그인 후 바운스 없음 — 사용자 확인 2026-06-23)**. status `completed` 유지(패치). 동반: `login-form.tsx` 로그인 랜딩 flex `grow` 1줄.
 - 2026-06-17 (v0.3.0): sync 단계 — status `in-progress` → `completed` 전환. **디바이스 게이트(device-gate) 완전 충족**: iOS 시뮬레이터(iPhone 16 Pro, expo run:ios dev build) + 로컬 Supabase + 실 Google 계정으로 라이브 E2E 검증 완료(2026-06-17T17:19:03 UTC 세션 확인). 아래 3개 추가 변경사항이 두 커밋(0700e7d, a03fe75)에 포함됨:
   - **GoogleSignin.configure 배선(0700e7d)**: `apps/mobile/app/_layout.tsx`에서 앱 부트 시 `GoogleSignin.configure` 호출(실제 OAuth 클라이언트 ID — `apps/mobile/.env`, gitignored). `app.json` `iosUrlScheme` 플레이스홀더를 실 reversed iOS client scheme으로 교체. `.gitignore /credentials/` 추가.
   - **설계 변경 + 버그 수정(a03fe75): OAuth 네비게이션 인터셉트 → bridge 커맨드 `auth:google-request` 전환**: 원래 SPEC 설계는 WebView의 `onShouldStartLoadWithRequest(decideWebViewLoad)`에서 Google OAuth 네비게이션을 인터셉트하여 네이티브 SDK를 트리거하는 방식이었다. **라이브 테스트로 이 경로가 실패함을 확인**: Google 버튼(`signInWithOAuthAction` → GoTrue authorize URL)을 WebView 안에서 탭하면 `onShouldStartLoadWithRequest`가 해당 네비게이션에 대해 **발동하지 않음**(진단: `/login` 로드에만 발동 확인). 결과적으로 react-native-webview가 OAuth URL을 외부 브라우저로 열어버려 네이티브 SDK에 도달하지 못하고 로그인 완료 불가. **수정(결정론적, 취약한 인터셉션 대체)**: `auth:google-request`라는 추가적(additive) web→native bridge 커맨드 타입(토큰 없음, nonce 인증)을 **양쪽 bridge protocol에 동시 추가**(`apps/mobile/lib/auth/bridge-protocol.ts` + `apps/web/lib/native-bridge/bridge-protocol.ts` — BRIDGE_VERSION 1 유지, additive). 웹 로그인 폼의 Google 버튼은 네이티브 셸 내(`window.ReactNativeWebView` 존재 시) OAuth 네비게이션 대신 `window.ReactNativeWebView.postMessage`로 이 커맨드를 전송 + form submit preventDefault. 데스크톱 브라우저에서는 `requestNativeGoogleSignIn()`이 false를 반환하여 기존 웹 OAuth 흐름 유지(변경 없음). 모바일 `useAuthBridge.onMessage`가 nonce 검증 후 커맨드를 `{ kind: "google-signin" }`으로 매핑 → 네이티브 GoogleSignin SDK 실행. vitest 4건 신규 추가(bridge command).
