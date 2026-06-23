@@ -34,6 +34,8 @@ yarn-error.log*
 .env*
 # 단, 커밋 대상인 .env.example 은 추적 제외에서 제외한다(SPEC-ENV-SETUP-001).
 !.env.example
+# prod 값 템플릿(placeholder만)도 커밋 대상이다. .env* 무시에서 제외한다.
+!.env.production.example
 
 # vercel
 .vercel

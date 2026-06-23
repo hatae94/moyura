@@ -1,2 +1,8 @@
-# openapi-typescript 가 생성하는 타입 파일 — `nx run api-client:generate` 로 재생성되므로 추적 제외(R-D4).
-src/schema.d.ts
+# openapi-typescript 가 backend openapi.json 에서 생성하는 타입 파일(src/schema.d.ts).
+#
+# 배포 디커플(Vercel)을 위해 *커밋*한다 — apps/web/project.json 의 web:build 가 더 이상
+# api-client:generate(→ backend:openapi → backend:build → backend:prisma-generate)에 의존하지 않으므로,
+# 생성물을 git 에 추적해 web 배포가 백엔드 빌드/DIRECT_URL 없이 성립하게 한다.
+#
+# 백엔드 API(openapi.json) 변경 시: `pnpm exec nx run api-client:generate` 로 재생성 후 커밋한다.
+# 드리프트는 api-client:typecheck / web:typecheck(둘 다 generate 에 의존 유지)가 잡는다.

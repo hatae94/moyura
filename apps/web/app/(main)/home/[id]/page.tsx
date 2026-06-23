@@ -125,7 +125,7 @@ export default async function MoimDetailPage({
   return (
     <div className="flex flex-1 flex-col bg-background">
       {/* 헤더: 모임 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일. */}
-      <header className="px-5 pb-5 pt-12">
+      <header className="px-5 pb-5 pt-page">
         <h1 className="text-2xl font-extrabold text-foreground">{moim.name}</h1>
         {/* 일정 — startsAt 있으면 포맷, 없으면 "일정 미정"(허위 값 금지). */}
         <div className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">

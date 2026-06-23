@@ -96,7 +96,7 @@ export function HomeTab({ displayName, avatarInitial, greeting, moims }: HomeTab
   return (
     <div className="flex flex-1 flex-col bg-background">
       {/* 헤더: 인사말 + 표시 이름 + 아바타 이니셜. */}
-      <header className="px-5 pb-5 pt-12">
+      <header className="px-5 pb-5 pt-page">
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-1">
             <span className="text-sm text-muted-foreground">{greeting} 👋</span>
