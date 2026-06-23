@@ -19,10 +19,11 @@ module.exports = function withModularHeaders(config) {
       );
       let contents = fs.readFileSync(podfilePath, "utf8");
       if (!contents.includes("use_modular_headers!")) {
-        // Podfile 루트 스코프(target 선언 직전)에 전역 주입한다.
+        // 타깃명은 앱 이름에 따라 달라진다(dev 변형 "모여라 debug" → target 'debug',
+        // 프로덕션 "모여라" → target 'moyura'). 하드코딩하지 않고 첫 target 선언 앞(루트 스코프)에 전역 주입한다.
         contents = contents.replace(
-          /target 'app' do/,
-          "use_modular_headers!\n\ntarget 'app' do",
+          /^(target\s+'[^']+'\s+do)/m,
+          "use_modular_headers!\n\n$1",
         );
         fs.writeFileSync(podfilePath, contents);
       }
