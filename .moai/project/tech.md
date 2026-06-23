@@ -93,7 +93,7 @@
   - **생성 도구(D2 확정)**: `openapi-typescript 7.13.0` 타입 생성(`src/schema.d.ts`, gitignore — 재생성) + 얇은 타입드 fetch 래퍼(`createApiClient`, `getHealth`). openapi.json 계약 산출물은 커밋된다.
 - **로컬 DB**: **Supabase CLI `2.104.0` 로컬 스택**(Docker: Postgres + Auth/GoTrue + Studio), `supabase/config.toml` + `supabase/README.md`(start/stop). canonical 로컬 DB. R-C1~R-C4.
   - 로컬 스택은 `6543` pooler를 노출하지 않음 → 로컬은 **direct Postgres `:54322`** 운영(pooler는 prod 전용). 이 경우 prepared-statement 비활성은 N/A(R-C2, K8). prod에서만 pooled(6543) 적용.
-- **백엔드 prod 호스팅**: **Render** (Web Service). build `pnpm nx build backend`, start `node dist/src/main.js`, health check path `/health`, env는 Render secrets 주입. 가이드: `docs/deploy-render.md`. SPEC 결정 #4.
+- **백엔드 prod 호스팅**: **Render** (Web Service). build `pnpm exec nx build backend`, start `node apps/backend/dist/src/main.js`, health check path `/health`, env는 Render secrets(`sync:false`) 주입. Blueprint `render.yaml`(루트) + 런북 `DEPLOY.md`(초기 계획안 `docs/deploy-render.md`는 보존). **2026-06-23 실 배포 — web=Vercel / backend=Render / mobile=EAS 분리**. SPEC 결정 #4.
 - **CORS**: 환경별 web + mobile origin allowlist를 `CORS_ORIGINS`(validated config)에서 로드, 와일드카드(`*`) 금지. R-F1~R-F3.
 - **헬스 엔드포인트**: `GET /health` — `PrismaService.pingDatabase()`(`SELECT 1`)로 DB 연결 확인. 200(`ok`/`up`) / 503(`degraded`/`down`). end-to-end 배선 증명용(로컬 e2e 검증 완료). R-G1~R-G4.
 - **프런트 env 주입**: web `NEXT_PUBLIC_API_BASE_URL`(`apps/web/lib/env.ts` 가드, 루트 레이아웃에서 실행), mobile `EXPO_PUBLIC_API_BASE_URL`(`apps/mobile/lib/env.ts` 가드, `index.ts`에서 실행). 미설정 시 명시적 throw(R-E4 — `NEXT_PUBLIC_*`/`EXPO_PUBLIC_*`는 build/bundle 시점 정적 인라인). web은 api-client를 `transpilePackages`로 처리.
@@ -105,11 +105,11 @@
   - **소셜/모바일 스캐폴드**: `supabase/config.toml` `[auth.external.google|kakao|apple]`(`enabled = false`, `env()` 시크릿). `apps/mobile` app scheme `"moyura"` + 시스템 브라우저 OAuth 헬퍼(`lib/auth/oauth.ts`), `EXPO_PUBLIC_SUPABASE_*`. 네이티브 토큰 저장소 미도입(webview가 웹 세션 공유 — OD-4).
   - 검증: 백엔드 보안 테스트 53건(14개 적대적 공격 토큰 차단), statement 커버리지 95.71%, 웹 세션→`GET /me`→200 profile LIVE e2e, evaluator-active PASS(Functionality 0.95 / Security 0.97 / Craft 0.78 / Consistency 0.93). R-A1~R-J3.
 - **FCM 푸시 인프라**(SPEC-CHAT-002): `firebase-admin@^13.10.0`(backend, Node 20+ 호환) + `expo-notifications@~56.0.17`(mobile, SDK 56). `FIREBASE_CREDENTIALS` env(optional Zod, 단일 행 JSON 직렬화 서비스 계정 키, gitignored) — `apps/backend/src/config/env.validation.ts`에 선언. `FcmSender`는 `JSON.parse(FIREBASE_CREDENTIALS)` → `admin.credential.cert()` 경로로 초기화. 부재 시 graceful no-op(개발/CI 환경에서 부팅·테스트 차단 없음). **라이브 검증(2026-06-18)**: 서비스 계정(`project_id=moyura-498500`) 배선 후 firebase-admin 초기화 + Google 인증 통과 + FCM 도달가능성 확인(FCM API 비활성화로 per-token `messaging/mismatched-credential` 반환 — 자격증명 자체는 유효). 잔여 게이트: `fcm.googleapis.com` 활성화(Google Cloud Console), 모바일 클라이언트 config `moyura-498500` 프로젝트 일치, 실기기 dev build 검증(device-gated).
-- **CI / EAS**: `.github/workflows/ci.yml`(install → prisma generate → `nx affected` build/lint/test/typecheck; **migrate/deploy 없음**) + `apps/mobile/eas.json` `local`/`prod` 프로파일 **스켈레톤**. R-I1~R-I3.
+- **CI / EAS**: `.github/workflows/ci.yml`(install → prisma generate → `nx affected` build/lint/test/typecheck; **migrate/deploy 없음**) + `apps/mobile/eas.json` `local`/`local-sim`/`production` 프로파일(2026-06-23 EAS projectId 링크 + `expo-dev-client` + production android apk 셋업). R-I1~R-I3.
 
 ### follow-up (PLANNED — 의도적으로 연기)
 
-- **prod 배포 파이프라인**(SPEC-ENV-SETUP-001 연기): 자동 Prisma migrate + deploy, Render/Supabase 실 배포, prod e2e 증명(R-G4 prod — 현재는 Render health check path가 `/health`임만 확인). named follow-up.
+- **prod 배포 파이프라인**(SPEC-ENV-SETUP-001 연기 → **2026-06-23 수동 배포 진행**): web=Vercel / backend=Render(`render.yaml`) / mobile=EAS 분리 배포 + Supabase 클라우드 + `prisma migrate deploy`(수동, Session pooler `DIRECT_URL`) 적용. **여전히 미구현**: 자동 Prisma migrate + CI deploy 파이프라인, prod e2e 자동 증명. named follow-up.
 - **인증 후속 과제**(SPEC-AUTH-001 연기): 실제 소셜 provider 키 발급/배선(Google/Apple/Kakao 콘솔), 모바일 런타임 OAuth 라운드트립(디바이스/시뮬레이터 — 현재 코드+config 스캐폴드만), 이메일 확인 + 비밀번호 재설정, RBAC/인가, prod HTTPS 강제. 모두 named follow-up(Non-Goal로 spec.md에 명시).
 - **프런트 자동 테스트 타겟**(SPEC-AUTH-001 evaluator MAJOR): web/mobile/api-client에 자동화 테스트 타겟 부재. 테스트 가능한 순수 함수(`resolveCallbackOutcome`/`resolveSupabaseConfig`/api-client Bearer 주입/`launchSocialOAuth`)가 회귀 보호되지 않음(빌드 시점 node sanity로만 검증). 별도 후속 작업으로 도입.
 
@@ -181,9 +181,12 @@
 | `apps/backend/openapi.ts`, `openapi.json` | OpenAPI emit 스크립트 + 커밋된 계약 산출물 |
 | `supabase/config.toml`, `supabase/README.md` | 로컬 Supabase CLI 스택(direct `:54322`) |
 | `apps/web/lib/env.ts`, `apps/mobile/lib/env.ts` | 프런트 env 가드(미설정 시 throw) |
-| `apps/mobile/eas.json` | EAS `local`/`prod` 프로파일 스켈레톤 |
+| `apps/mobile/eas.json` | EAS `local`/`local-sim`/`production` 프로파일 |
 | `.github/workflows/ci.yml` | CI(install/build/lint/test/typecheck, migrate/deploy 없음) |
-| `docs/deploy-render.md` | Render 배포 가이드 |
+| `render.yaml` (루트) | Render Blueprint(백엔드 호스팅) |
+| `DEPLOY.md` (루트) | prod 배포 런북(web=Vercel/backend=Render/mobile=EAS) |
+| `docs/deploy-render.md` | Render 배포 초기 계획안 |
+| `apps/{web,backend}/.env.production.example`, `supabase/.env.production.example` | prod env fill-in 템플릿 |
 
 ## 참조
 

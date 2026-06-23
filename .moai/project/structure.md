@@ -59,7 +59,7 @@ moyura/
 │  │  ├─ lib/           # env.ts(가드), api.ts(api-client 소비), route-map-core.ts(@MX:ANCHOR, URL↔라우트 매핑 + detailRouteForUrl/urlForDetailRoute 순수 함수 — SPEC-MOIM-003), auth/(oauth.ts·oauth-bridge.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·nonce-core.ts·token-store.ts·token-store-core.ts·auth-bridge-core.ts(decideWebViewLoad detail-push 변형 추가 — SPEC-MOIM-003)·app-lifecycle-core.ts·auth-state-core.ts(@MX:ANCHOR)·AuthContext.tsx(로그인 후 FCM registerDevice 배선 — SPEC-CHAT-002)·google-signin-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·google-signin.ts(SDK 래퍼)·signin-id-token-core.ts(순수 vitest 코어 — SPEC-MOBILE-004)·supabase-mobile.ts(SDK 래퍼) + 보안/단위 테스트), push/(register-device-core.ts·register-device-core.test.ts·notification-core.ts·notification-core.test.ts·register-device.ts·notification-handler.ts — SPEC-CHAT-002)
 │  │  ├─ plugins/       # withModularHeaders.js(Expo config plugin — use_modular_headers! Podfile 주입, GoogleSignin 8.x AppCheckCore 정적 통합 pod install 오류 해소 — SPEC-MOBILE-004 v0.3.0)
 │  │  ├─ patches/       # @react-native-cookies__cookies.patch(jcenter→mavenCentral, Android Gradle 9 호환)
-│  │  └─ eas.json       # EAS local/prod 프로파일 스켈레톤
+│  │  └─ eas.json       # EAS local/local-sim/production 프로파일(projectId 링크 + expo-dev-client)
 │  └─ web/              # @moyura/web     — Next.js 16 (app/, public/)
 │     ├─ lib/           # env.ts(가드), api.ts(api-client 소비), supabase/(browser·server 클라이언트, 세션 미들웨어), auth/(actions, callback, require-named-session.ts(공유 서버 가드 — SPEC-MOBILE-004)), native-bridge/(bridge-client.ts·bridge-protocol.ts(auth:google-request 커맨드 추가 — SPEC-MOBILE-004 v0.3.0)·NativeBridgeProvider.tsx·LogoutBridgeNotifier.tsx), invite/accept.ts(초대 수락 클라이언트 로직), chat/useChatChannel.ts(Supabase Realtime private channel 구독 훅 — SPEC-CHAT-001), poll/usePollChannel.ts(신규 — 모임 투표 실시간 구독 훅, useChatChannel 미러 — SPEC-MOIM-009; `moim:{id}` private 채널 `'poll_change'` 이벤트 구독, 수신 시 onChange(router.refresh) 호출, 언마운트 removeChannel, 토큰 가드), moim/api.ts(신규 — getMoim/getMoimMembers 헬퍼, chat/api.ts 패턴 미러 — SPEC-MOIM-003; MoimDetail 인터페이스에 startsAt/location nullable 추가 — SPEC-MOIM-004), moim/polls.ts(신규 — listPolls/createPoll/votePoll 구체-경로 헬퍼 — SPEC-MOIM-005; PollWithResults 타입 multiSelect+myVotes[] 갱신·myVote 제거 — SPEC-MOIM-006; PollWithResults closesAt/isClosed 추가 + closePoll 헬퍼 신규 — SPEC-MOIM-007; PollWithResults kind/옵션 optionDate 추가 + close 결과 타입 finalizedStartsAt/finalizeSkippedReason — SPEC-MOIM-008; **PollWithResults kind union "place" 확장 + close 결과 타입 finalizedLocation 추가 — SPEC-MOIM-010**), **moim/invites.ts(신규 — createInvite(api, moimId, body?) 구체-경로 헬퍼(POST /moims/:moimId/invites, lib/moim/polls.ts 패턴 미러) + InviteResult { token; expiresAt } 로컬 미러 타입 — SPEC-MOIM-011)**
 │     ├─ app/           # auth/callback/route.ts(PKCE 콜백), login/, me/(require-named-session 가드 적용 — SPEC-MOBILE-004), invite/[token]/(초대 랜딩 — Server Component page.tsx[로그인 회원이면 GET /me Profile.name 을 input prefill, 게스트/익명 빈 값 — v0.5.0] + Client invite-accept-form.tsx[익명 로그인 → nickname → accept → /moims/[id]/chat]; **모바일 자동 열기 — useSyncExternalStore 로 모바일/앱 셸 판정, 모바일 브라우저(앱 셸 아님) 로드 시 useEffect+useRef 가드로 moyura://invite/{token} 1회 자동 발화(v0.4.0); "앱에서 열기" 버튼은 수동 재시도 폴백(데스크톱·앱 셸 미노출), 기존 닉네임 폼 보존 — SPEC-MOIM-011**), onboarding/(이름 입력 온보딩 — SPEC-MOBILE-004, (main) 그룹 외부, 루프 안전)
@@ -99,10 +99,12 @@ moyura/
 ├─ tsconfig.base.json   # 루트 공유 TS 컴파일러 옵션
 ├─ .npmrc               # node-linker=hoisted
 ├─ .mcp.json
+├─ render.yaml          # Render Blueprint(백엔드 호스팅 — prod 배포)
+├─ DEPLOY.md            # prod 배포 런북(web=Vercel/backend=Render/mobile=EAS)
 └─ CLAUDE.md
 ```
 
-> `packages/api-client/`는 **SPEC-ENV-SETUP-001(completed)에서 생성되어 디스크에 존재**한다(아래 표 참조). `apps/backend/src/generated/`와 `packages/api-client/src/schema.d.ts`는 gitignore되며 Nx 타겟으로 재생성된다.
+> `packages/api-client/`는 **SPEC-ENV-SETUP-001(completed)에서 생성되어 디스크에 존재**한다(아래 표 참조). `apps/backend/src/generated/`는 gitignore되며 Nx 타겟으로 재생성된다. `packages/api-client/src/schema.d.ts`는 **Vercel 배포 디커플을 위해 커밋**된다(2026-06-23 — web 빌드가 backend/prisma 체인에 의존하지 않도록; 백엔드 OpenAPI 변경 시 `nx run api-client:generate`로 재생성 후 재커밋).
 
 ## 워크스페이스 패키지 표
 
