@@ -115,11 +115,43 @@ app/layout.tsx (모든 페이지 공통)
 
 ---
 
-## 6. 다음 단계
+## 6. After (개선 적용 결과) — supabase-js 지연 로드
 
-1. (분석 완료) ← 현재 문서
-2. 최적화 #1(supabase 지연 로드) 구현 — 사용자 승인 후
-3. **동일 프로토콜(§0)로 after 측정** → 본 문서에 "After" 섹션 추가하여 before/after 비교
+- 적용 커밋: `8793916`(구현) → `eed11f5`(master 머지), Vercel 배포 반영 확인 후 측정.
+- 변경: `NativeBridgeProvider`(root) / `ShellSessionAnnouncer`((main))를 `ReactNativeWebView` 가드 후 `dynamic import("./bridge-client")`로 전환 → supabase-js가 realtime 미사용 라우트의 First Load JS에서 분리(async chunk).
+- 측정 프로토콜: §0과 동일(배포 sin1, 빈 /home, navigate+evaluate, 4x throttle).
+
+### 6.1 번들 (확정 개선)
+
+| 지표 | Before | After | 변화 |
+|------|--------|-------|------|
+| /home JS 청크 수 | 13 | 11 | -2 |
+| First Load JS (transfer, 압축) | 224KB | **159KB** | **-65KB (-29%)** |
+| First Load JS (decoded, 파싱 대상) | 760KB | **520KB** | **-240KB (-32%)** |
+| 최대 청크 | supabase-js 238KB | react-dom 222KB | supabase 제거 |
+| /home → supabase 청크 정적 참조 | 1 | **0** | async 분리 |
+| realtime 라우트(chat/expenses/상세 등) | supabase 포함 | 유지 | 동작 보존 |
+
+### 6.2 런타임 타이밍 (4x throttle)
+
+| 조건 | Before | After |
+|------|--------|-------|
+| 4x warm — domInteractive | 743 | 714 / 769 (중앙 ~740) |
+| 4x warm — LCP | 1060 | 1000 / 1088 (중앙 ~1044) |
+| 4x cold — LCP | 1020~1412 | 1868 / 2528(#1 warm-up outlier) |
+
+### 6.3 정직한 해석 (중요)
+
+- **번들 다이어트는 확정적 성과**: First Load JS decoded **-32%**, transfer **-29%**. supabase-js(realtime)가 `/home`·`/explore`·`/notifications`·`/profile`에서 완전히 빠지고 async chunk로 분리됨. realtime 라우트는 그대로 유지.
+- **warm 타이밍 개선은 미미**(변동 범위 내). 이유: (a) 캐시 warm 상태에선 다운로드가 0이라 65KB 절감이 타이밍에 안 드러남, (b) `/home`에서 supabase는 원래 **실행되지 않고(브라우저 no-op) 파싱만** 됐는데, 남은 react-dom(222KB)+앱 코드 평가가 LCP render delay를 여전히 지배.
+- **실효 효과는 cold + 느린 네트워크(모바일 데이터)·저사양 기기**에서 나타남: 65KB 덜 다운로드 + 238KB 덜 파싱. 본 측정 환경(한국 고속망 + 캐시 warm)에선 두드러지지 않는다.
+- cold 타이밍은 CDN/네트워크 변동이 효과보다 커서(측정 노이즈 > 절감폭) before/after 직접 비교에 부적합. **번들 크기(물리적 확정)와 warm 측정**으로 평가하는 것이 타당하다.
+
+### 6.4 남은 기회 (후속)
+
+- react-dom/앱 청크가 이제 최대(222KB) — 추가 절감은 코드 분할 여지(효과/리스크 재평가 필요).
+- 폰트(Geist) display 전략 점검(LCP가 텍스트 요소).
+- **Render free 콜드스타트(~50s)** — 여전히 최대 잔여 병목(별도 과제, 미해결).
 
 ---
 
