@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Moim, MoimMember } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { MoimService } from './moim.service';
@@ -71,12 +75,10 @@ function makeTxClient(tables: Tables, ids: { next: () => string }) {
 }
 
 // $transaction(인터랙티브 콜백)을 캡처하는 타입드 스텁(인자 형태 단언용).
-type TransactionMock = jest.Mock<
-  Promise<unknown>,
-  [(tx: ReturnType<typeof makeTxClient>) => Promise<unknown>]
->;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type TransactionMock = jest.Mock<Promise<unknown>, [any]>;
 
-// MoimService에 주입할 fake PrismaService. $transaction은 인터랙티브 콜백 형태만 지원한다.
+// MoimService에 주입할 fake PrismaService. $transaction은 콜백 형태(createMoim)와 배열 형태(transferOwner) 모두 지원한다.
 function makePrisma(seed?: { moims?: Moim[]; members?: MoimMember[] }): {
   prisma: PrismaService;
   tables: Tables;
@@ -103,10 +105,17 @@ function makePrisma(seed?: { moims?: Moim[]; members?: MoimMember[] }): {
       memberKey(where.moimId_userId.moimId, where.moimId_userId.userId),
     ) ?? null;
 
-  const transaction: TransactionMock = jest.fn(
-    (cb: (tx: ReturnType<typeof makeTxClient>) => Promise<unknown>) =>
-      cb(makeTxClient(tables, ids)),
-  );
+  // 콜백(createMoim) 또는 배열(transferOwner) 형태를 모두 처리한다.
+  const transaction: TransactionMock = jest.fn((arg: unknown) => {
+    if (typeof arg === 'function') {
+      // 인터랙티브 콜백 형태: createMoim.
+      return (arg as (tx: ReturnType<typeof makeTxClient>) => Promise<unknown>)(
+        makeTxClient(tables, ids),
+      );
+    }
+    // 배열 형태: 각 Promise를 순서대로 실행한다.
+    return Promise.all(arg as Promise<unknown>[]);
+  });
 
   const prisma = {
     $transaction: transaction,
@@ -161,6 +170,24 @@ function makePrisma(seed?: { moims?: Moim[]; members?: MoimMember[] }): {
             ),
           );
           return Promise.resolve(existing);
+        },
+      ),
+      update: jest.fn(
+        (arg: {
+          where: { moimId_userId: { moimId: string; userId: string } };
+          data: { role: string };
+        }) => {
+          const key = memberKey(
+            arg.where.moimId_userId.moimId,
+            arg.where.moimId_userId.userId,
+          );
+          const existing = tables.member.get(key);
+          if (existing) {
+            const updated: MoimMember = { ...existing, role: arg.data.role };
+            tables.member.set(key, updated);
+            return Promise.resolve(updated);
+          }
+          return Promise.resolve(null);
         },
       ),
     },
@@ -565,6 +592,130 @@ describe('MoimService', () => {
       await expect(service.deleteMoim('sub-U', 'missing')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('kickMember (owner 전용 강제 퇴장)', () => {
+    it('owner가 일반 멤버를 강제 퇴장 시 해당 멤버십만 삭제된다', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma, tables } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma);
+
+      await service.kickMember('sub-owner', 'moim-A', 'sub-member');
+
+      expect(tables.member.has('moim-A:sub-member')).toBe(false);
+      // owner 멤버십은 불변.
+      expect(tables.member.has('moim-A:sub-owner')).toBe(true);
+    });
+
+    it('비-owner가 강제 퇴장 시도는 403', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.kickMember('sub-member', 'moim-A', 'sub-owner'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('대상이 모임의 멤버가 아니면 404', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.kickMember('sub-owner', 'moim-A', 'sub-stranger'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('대상이 owner이면 403(owner는 퇴장 불가)', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const service = new MoimService(prisma);
+
+      // owner가 자기 자신을 강제 퇴장 시도(대상 role === owner → 403).
+      await expect(
+        service.kickMember('sub-owner', 'moim-A', 'sub-owner'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('존재하지 않는 모임이면 404', async () => {
+      const { prisma } = makePrisma();
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.kickMember('sub-owner', 'missing', 'sub-member'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('transferOwner (소유권 이양)', () => {
+    it('성공 시 현 owner → member, 대상 → owner로 변경하고 createdBy는 불변이다', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma, tables } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma);
+
+      await service.transferOwner('sub-owner', 'moim-A', 'sub-member');
+
+      expect(tables.member.get('moim-A:sub-owner')?.role).toBe('member');
+      expect(tables.member.get('moim-A:sub-member')?.role).toBe('owner');
+      // createdBy 불변.
+      expect(tables.moim.get('moim-A')?.createdBy).toBe('sub-owner');
+    });
+
+    it('비-owner가 이양 시도는 403', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.transferOwner('sub-member', 'moim-A', 'sub-owner'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('자기 자신에게 이양은 400(BadRequestException)', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.transferOwner('sub-owner', 'moim-A', 'sub-owner'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('빈 userId는 400(BadRequestException)', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.transferOwner('sub-owner', 'moim-A', '   '),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('대상이 모임의 멤버가 아니면 404', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.transferOwner('sub-owner', 'moim-A', 'sub-stranger'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('존재하지 않는 모임이면 404', async () => {
+      const { prisma } = makePrisma();
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.transferOwner('sub-owner', 'missing', 'sub-member'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

@@ -26,6 +26,7 @@ import type { Moim, MoimMember } from '../generated/prisma/client';
 import { CreateMoimDto } from './dto/create-moim.dto';
 import { MemberResponseDto } from './dto/member-response.dto';
 import { MoimResponseDto } from './dto/moim-response.dto';
+import { TransferOwnerDto } from './dto/transfer-owner.dto';
 import { MoimService } from './moim.service';
 
 // @MX:NOTE: [AUTO] 모임 HTTP 표면(REQ-MOIM-001~008). 6개 라우트 모두 per-route @UseGuards(SupabaseAuthGuard)로
@@ -139,6 +140,40 @@ export class MoimController {
     @Param('id') id: string,
   ): Promise<void> {
     await this.moimService.leave(user.sub, id);
+  }
+
+  // DELETE /moims/:moimId/members/:userId — 멤버 강제 퇴장(owner 전용). 204.
+  // 비-owner 403, 대상 없음 404, 대상이 owner 403, 모임 없음 404.
+  @Delete(':moimId/members/:userId')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: '멤버 강제 퇴장(owner 전용)' })
+  @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
+  @ApiForbiddenResponse({
+    description: '비-owner 또는 대상이 owner — 403',
+  })
+  @ApiNotFoundResponse({ description: '모임 없음 또는 대상 멤버십 없음 — 404' })
+  async kick(
+    @CurrentUser() user: VerifiedUser,
+    @Param('moimId') moimId: string,
+    @Param('userId') userId: string,
+  ): Promise<void> {
+    await this.moimService.kickMember(user.sub, moimId, userId);
+  }
+
+  // POST /moims/:moimId/owner — 소유권 이양(owner 전용). 204.
+  // 비-owner 403, self-transfer 400, 빈 userId 400, 대상 없음 404, 모임 없음 404.
+  @Post(':moimId/owner')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: '소유권 이양(owner → 대상 멤버)' })
+  @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
+  @ApiForbiddenResponse({ description: '비-owner — 403' })
+  @ApiNotFoundResponse({ description: '모임 없음 또는 대상 멤버십 없음 — 404' })
+  async transferOwner(
+    @CurrentUser() user: VerifiedUser,
+    @Param('moimId') moimId: string,
+    @Body() body: TransferOwnerDto,
+  ): Promise<void> {
+    await this.moimService.transferOwner(user.sub, moimId, body?.userId ?? '');
   }
 }
 

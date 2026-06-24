@@ -116,6 +116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/moims/{moimId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["MoimController_kick"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{moimId}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MoimController_transferOwner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/moims/{moimId}/invites": {
         parameters: {
             query?: never;
@@ -393,6 +425,13 @@ export interface components {
              * @example 2026-06-13T00:00:00.000Z
              */
             joinedAt: string;
+        };
+        TransferOwnerDto: {
+            /**
+             * @description 소유권을 이양받을 대상 멤버 userId(비어 있을 수 없음)
+             * @example 00000000-0000-4000-8000-000000000002
+             */
+            userId: string;
         };
         CreateInviteDto: {
             /**
@@ -993,6 +1032,93 @@ export interface operations {
                 content?: never;
             };
             /** @description 멤버십 부재(가입한 적 없음) — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MoimController_kick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                moimId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 멤버 강제 퇴장(owner 전용) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 비-owner 또는 대상이 owner — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 모임 없음 또는 대상 멤버십 없음 — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MoimController_transferOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                moimId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferOwnerDto"];
+            };
+        };
+        responses: {
+            /** @description 소유권 이양(owner → 대상 멤버) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 비-owner — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 모임 없음 또는 대상 멤버십 없음 — 404 */
             404: {
                 headers: {
                     [name: string]: unknown;
