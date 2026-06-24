@@ -200,9 +200,13 @@ describe('ExpenseService', () => {
 
     const moimMemberClient = {
       findUnique: jest.fn(
-        (arg: { where: { moimId_userId: { moimId: string; userId: string } } }) => {
+        (arg: {
+          where: { moimId_userId: { moimId: string; userId: string } };
+        }) => {
           const { moimId, userId } = arg.where.moimId_userId;
-          return Promise.resolve(tables.member.get(memberKey(moimId, userId)) ?? null);
+          return Promise.resolve(
+            tables.member.get(memberKey(moimId, userId)) ?? null,
+          );
         },
       ),
       findMany: jest.fn((arg: { where: { moimId: string } }) => {
@@ -242,10 +246,7 @@ describe('ExpenseService', () => {
         },
       ),
       findUnique: jest.fn(
-        (arg: {
-          where: { id: string };
-          include?: { shares?: boolean };
-        }) => {
+        (arg: { where: { id: string }; include?: { shares?: boolean } }) => {
           const exp = tables.expense.get(arg.where.id);
           if (!exp) return Promise.resolve(null);
           if (arg.include?.shares) {
@@ -270,7 +271,9 @@ describe('ExpenseService', () => {
             return Promise.resolve(
               rows.map((e) => ({
                 ...e,
-                shares: [...tables.share.values()].filter((s) => s.expenseId === e.id),
+                shares: [...tables.share.values()].filter(
+                  (s) => s.expenseId === e.id,
+                ),
               })),
             );
           }
@@ -289,10 +292,7 @@ describe('ExpenseService', () => {
         return Promise.resolve(existing ?? null);
       }),
       update: jest.fn(
-        (arg: {
-          where: { id: string };
-          data: Partial<Expense>;
-        }) => {
+        (arg: { where: { id: string }; data: Partial<Expense> }) => {
           const existing = tables.expense.get(arg.where.id);
           if (!existing) return Promise.resolve(null);
           const updated = { ...existing, ...arg.data };
@@ -418,13 +418,12 @@ describe('ExpenseService', () => {
     };
 
     // $transaction(인터랙티브 콜백) — createExpense/updateExpense 의 원자 write 를 그대로 실행.
-    const $transaction = jest.fn(
-      (cb: (tx: unknown) => Promise<unknown>) =>
-        cb({
-          expense: expenseClient,
-          expenseShare: expenseShareClient,
-          settlement: settlementClient,
-        }),
+    const $transaction = jest.fn((cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        expense: expenseClient,
+        expenseShare: expenseShareClient,
+        settlement: settlementClient,
+      }),
     );
 
     return {
@@ -541,8 +540,12 @@ describe('ExpenseService', () => {
 
       const shareSum = result.shares.reduce((acc, s) => acc + s.shareAmount, 0);
       expect(shareSum).toBe(9000);
-      expect(result.shares.find((s) => s.userId === 'owner')?.shareAmount).toBe(6000);
-      expect(result.shares.find((s) => s.userId === 'user-B')?.shareAmount).toBe(3000);
+      expect(result.shares.find((s) => s.userId === 'owner')?.shareAmount).toBe(
+        6000,
+      );
+      expect(
+        result.shares.find((s) => s.userId === 'user-B')?.shareAmount,
+      ).toBe(3000);
     });
   });
 
@@ -902,7 +905,9 @@ describe('ExpenseService', () => {
 
       expect(tables.expense.has(exp.id)).toBe(false);
       // share 도 cascade 제거.
-      expect([...tables.share.values()].filter((s) => s.expenseId === exp.id)).toHaveLength(0);
+      expect(
+        [...tables.share.values()].filter((s) => s.expenseId === exp.id),
+      ).toHaveLength(0);
     });
 
     it('비-owner 가 삭제하면 403', async () => {
@@ -963,7 +968,10 @@ describe('ExpenseService', () => {
         undefined,
       );
 
-      const shareSum = updated.shares.reduce((acc, s) => acc + s.shareAmount, 0);
+      const shareSum = updated.shares.reduce(
+        (acc, s) => acc + s.shareAmount,
+        0,
+      );
       expect(shareSum).toBe(8000);
     });
 
@@ -1118,7 +1126,13 @@ describe('ExpenseService', () => {
         { userId: 'user-B', shareAmount: 5000 },
       ]);
       // 기존 마커 시드.
-      const existing = seedSettlement('moim-A', 'user-B', 'owner', 5000, 'owner');
+      const existing = seedSettlement(
+        'moim-A',
+        'user-B',
+        'owner',
+        5000,
+        'owner',
+      );
 
       const result = await service.createSettlement(
         'owner',
@@ -1171,7 +1185,13 @@ describe('ExpenseService', () => {
       seedSettlement('moim-A', 'user-B', 'owner', 5000, 'owner');
 
       // 마커 삭제.
-      await service.deleteSettlement('owner', 'moim-A', 'user-B', 'owner', 5000);
+      await service.deleteSettlement(
+        'owner',
+        'moim-A',
+        'user-B',
+        'owner',
+        5000,
+      );
 
       // 삭제 후 다시 조회하면 settled=false.
       const result = await service.listExpenses('owner', 'moim-A');

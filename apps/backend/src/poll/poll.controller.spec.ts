@@ -1,7 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
 import type { VerifiedUser } from '../auth/token-verifier.service';
 import { PollController } from './poll.controller';
-import type { PollWithOptions, PollWithResults, PollService } from './poll.service';
+import type {
+  PollWithOptions,
+  PollWithResults,
+  PollService,
+} from './poll.service';
 
 // SPEC-MOIM-008: PollResponseDto 의 신규 필드(kind/optionDate/finalizedStartsAt/finalizeSkippedReason) 포함.
 

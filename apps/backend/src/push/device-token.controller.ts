@@ -55,7 +55,9 @@ export class DeviceTokenController {
   // 사용자라도 자신이 소유한 토큰만 해제할 수 있다(타인 토큰 문자열을 알아도 매칭 0건 → no-op 204).
   @Delete(':token')
   @HttpCode(204)
-  @ApiNoContentResponse({ description: '디바이스 토큰 해제(소유자 한정, orphan token 방지)' })
+  @ApiNoContentResponse({
+    description: '디바이스 토큰 해제(소유자 한정, orphan token 방지)',
+  })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   async unregister(
     @CurrentUser() user: VerifiedUser,

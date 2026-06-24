@@ -79,7 +79,7 @@ function makeTxClient(tables: Tables, ids: { next: () => string }) {
 }
 
 // $transaction(인터랙티브 콜백)을 캡처하는 타입드 스텁(인자 형태 단언용).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type TransactionMock = jest.Mock<Promise<unknown>, [any]>;
 
 // MoimService에 주입할 fake PrismaService. $transaction은 콜백 형태(createMoim)와 배열 형태(transferOwner) 모두 지원한다.
@@ -134,17 +134,15 @@ function makePrisma(seed?: { moims?: Moim[]; members?: MoimMember[] }): {
             .filter((m): m is Moim => m !== undefined),
         ),
       ),
-      update: jest.fn(
-        (arg: { where: { id: string }; data: Partial<Moim> }) => {
-          const existing = tables.moim.get(arg.where.id);
-          if (!existing) {
-            return Promise.resolve(null);
-          }
-          const updated: Moim = { ...existing, ...arg.data };
-          tables.moim.set(updated.id, updated);
-          return Promise.resolve(updated);
-        },
-      ),
+      update: jest.fn((arg: { where: { id: string }; data: Partial<Moim> }) => {
+        const existing = tables.moim.get(arg.where.id);
+        if (!existing) {
+          return Promise.resolve(null);
+        }
+        const updated: Moim = { ...existing, ...arg.data };
+        tables.moim.set(updated.id, updated);
+        return Promise.resolve(updated);
+      }),
       delete: jest.fn((arg: { where: { id: string } }) => {
         const existing = tables.moim.get(arg.where.id);
         tables.moim.delete(arg.where.id);
@@ -636,7 +634,10 @@ describe('MoimService', () => {
 
     it('비-owner가 강제 퇴장 시도는 403', async () => {
       const { moim, owner, member } = seededMoim();
-      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
       const service = new MoimService(prisma);
 
       await expect(
@@ -646,7 +647,10 @@ describe('MoimService', () => {
 
     it('대상이 모임의 멤버가 아니면 404', async () => {
       const { moim, owner, member } = seededMoim();
-      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
       const service = new MoimService(prisma);
 
       await expect(
@@ -656,7 +660,10 @@ describe('MoimService', () => {
 
     it('대상이 owner이면 403(owner는 퇴장 불가)', async () => {
       const { moim, owner, member } = seededMoim();
-      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
       const service = new MoimService(prisma);
 
       // owner가 자기 자신을 강제 퇴장 시도(대상 role === owner → 403).
@@ -694,7 +701,10 @@ describe('MoimService', () => {
 
     it('비-owner가 이양 시도는 403', async () => {
       const { moim, owner, member } = seededMoim();
-      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
       const service = new MoimService(prisma);
 
       await expect(
@@ -704,7 +714,10 @@ describe('MoimService', () => {
 
     it('자기 자신에게 이양은 400(BadRequestException)', async () => {
       const { moim, owner, member } = seededMoim();
-      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
       const service = new MoimService(prisma);
 
       await expect(
@@ -714,7 +727,10 @@ describe('MoimService', () => {
 
     it('빈 userId는 400(BadRequestException)', async () => {
       const { moim, owner, member } = seededMoim();
-      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
       const service = new MoimService(prisma);
 
       await expect(
@@ -724,7 +740,10 @@ describe('MoimService', () => {
 
     it('대상이 모임의 멤버가 아니면 404', async () => {
       const { moim, owner, member } = seededMoim();
-      const { prisma } = makePrisma({ moims: [moim], members: [owner, member] });
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
       const service = new MoimService(prisma);
 
       await expect(
@@ -836,10 +855,18 @@ describe('MoimService', () => {
       });
       const service = new MoimService(prisma);
 
-      const updated = await service.updateMoimSettings('sub-owner', 'moim-A', undefined, 100000);
+      const updated = await service.updateMoimSettings(
+        'sub-owner',
+        'moim-A',
+        undefined,
+        100000,
+      );
 
       expect(updated.budget).toBe(100000);
-      expect((tables.moim.get('moim-A') as Moim & { budget?: number | null })?.budget).toBe(100000);
+      expect(
+        (tables.moim.get('moim-A') as Moim & { budget?: number | null })
+          ?.budget,
+      ).toBe(100000);
     });
 
     it('budget=null 로 설정하면 예산이 해제된다', async () => {
@@ -852,7 +879,12 @@ describe('MoimService', () => {
       });
       const service = new MoimService(prisma);
 
-      const updated = await service.updateMoimSettings('sub-owner', 'moim-A', undefined, null);
+      const updated = await service.updateMoimSettings(
+        'sub-owner',
+        'moim-A',
+        undefined,
+        null,
+      );
 
       expect(updated.budget).toBeNull();
     });

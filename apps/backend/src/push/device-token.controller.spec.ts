@@ -93,7 +93,10 @@ describe('DeviceTokenController', () => {
     it('다른 사용자의 sub 로는 그 사용자 토큰만 owner-scoped 삭제 대상이 된다 (타인 토큰 보호)', async () => {
       const { service, mocks } = makeService();
       const controller = new DeviceTokenController(service);
-      const attacker: VerifiedUser = { sub: 'sub-attacker', role: 'authenticated' };
+      const attacker: VerifiedUser = {
+        sub: 'sub-attacker',
+        role: 'authenticated',
+      };
 
       // 공격자가 피해자 token 문자열을 path 로 넘겨도, 서비스에는 공격자 sub 가 전달된다 →
       // deleteMany(token AND userId=공격자)는 매칭 0건(피해자 등록 보호 — IDOR 차단).

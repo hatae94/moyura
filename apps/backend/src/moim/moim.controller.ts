@@ -189,7 +189,12 @@ export class MoimController {
         ? requireValidMaxMembers(body.maxMembers)
         : undefined;
     const budget = parseOptionalBudget(body?.budget);
-    const moim = await this.moimService.updateMoimSettings(user.sub, id, maxMembers, budget);
+    const moim = await this.moimService.updateMoimSettings(
+      user.sub,
+      id,
+      maxMembers,
+      budget,
+    );
     return toMoimDto(moim);
   }
 
@@ -226,7 +231,9 @@ function parseOptionalStartsAt(value: unknown): Date | undefined {
   }
   const date = new Date(value.trim());
   if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException('startsAt 은(는) 유효한 ISO-8601 날짜여야 합니다');
+    throw new BadRequestException(
+      'startsAt 은(는) 유효한 ISO-8601 날짜여야 합니다',
+    );
   }
   return date;
 }
@@ -270,7 +277,9 @@ function parseOptionalBudget(value: unknown): number | null | undefined {
     return null; // 명시적 해제
   }
   if (!Number.isInteger(value) || (value as number) < 0) {
-    throw new BadRequestException('budget 은 0 이상의 정수 또는 null 이어야 합니다');
+    throw new BadRequestException(
+      'budget 은 0 이상의 정수 또는 null 이어야 합니다',
+    );
   }
   return value as number;
 }

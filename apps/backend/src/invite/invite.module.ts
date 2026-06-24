@@ -17,7 +17,11 @@ import { InviteService } from './invite.service';
 // 공개 컨트롤러를 수락 컨트롤러 앞에 등록해 NestJS 라우터가 GET을 먼저 매칭한다.
 @Module({
   imports: [AuthModule, MoimModule],
-  controllers: [MoimInviteController, InvitePublicController, InviteAcceptController],
+  controllers: [
+    MoimInviteController,
+    InvitePublicController,
+    InviteAcceptController,
+  ],
   providers: [InviteService],
 })
 export class InviteModule {}

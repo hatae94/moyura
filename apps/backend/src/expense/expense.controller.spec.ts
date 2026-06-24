@@ -1,7 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
 import type { VerifiedUser } from '../auth/token-verifier.service';
 import { ExpenseController, SettlementController } from './expense.controller';
-import type { ExpenseListResult, ExpenseService, ExpenseWithShares } from './expense.service';
+import type {
+  ExpenseListResult,
+  ExpenseService,
+  ExpenseWithShares,
+} from './expense.service';
 
 // ExpenseController / SettlementController 단위 테스트(SPEC-MOIM-EXPENSE-001).
 // ExpenseService 는 mock 으로 대체해 라우팅 + DTO 매핑 + 수동 400 검증만 검증한다.
@@ -22,8 +26,18 @@ const EXPENSE_WITH_SHARES: ExpenseWithShares = {
   createdAt: new Date('2026-06-24T00:00:00.000Z'),
   updatedAt: new Date('2026-06-24T00:00:00.000Z'),
   shares: [
-    { expenseId: 'exp-1', userId: 'sub-owner', shareAmount: 5000, createdAt: new Date('2026-06-24T00:00:00.000Z') },
-    { expenseId: 'exp-1', userId: 'user-B', shareAmount: 5000, createdAt: new Date('2026-06-24T00:00:00.000Z') },
+    {
+      expenseId: 'exp-1',
+      userId: 'sub-owner',
+      shareAmount: 5000,
+      createdAt: new Date('2026-06-24T00:00:00.000Z'),
+    },
+    {
+      expenseId: 'exp-1',
+      userId: 'user-B',
+      shareAmount: 5000,
+      createdAt: new Date('2026-06-24T00:00:00.000Z'),
+    },
   ],
 };
 
@@ -45,7 +59,8 @@ const LIST_RESULT: ExpenseListResult = {
 function makeService(): {
   service: ExpenseService;
   mocks: {
-    createExpense: jest.Mock;
+    // createExpense 의 calls 를 타입 안전하게 읽기 위해 인자 튜플을 unknown[] 로 타이핑한다.
+    createExpense: jest.Mock<Promise<ExpenseWithShares>, unknown[]>;
     listExpenses: jest.Mock;
     updateExpense: jest.Mock;
     deleteExpense: jest.Mock;
@@ -55,7 +70,9 @@ function makeService(): {
   };
 } {
   const mocks = {
-    createExpense: jest.fn().mockResolvedValue(EXPENSE_WITH_SHARES),
+    createExpense: jest
+      .fn<Promise<ExpenseWithShares>, unknown[]>()
+      .mockResolvedValue(EXPENSE_WITH_SHARES),
     listExpenses: jest.fn().mockResolvedValue(LIST_RESULT),
     updateExpense: jest.fn().mockResolvedValue(EXPENSE_WITH_SHARES),
     deleteExpense: jest.fn().mockResolvedValue(undefined),
@@ -154,7 +171,7 @@ describe('ExpenseController', () => {
           amount: 5000,
           category: '식비',
           payerUserId: 'sub-owner',
-          splitMethod: 'bogus' as never,
+          splitMethod: 'bogus',
         }),
       ).rejects.toThrow(BadRequestException);
       expect(mocks.createExpense).not.toHaveBeenCalled();
@@ -224,7 +241,11 @@ describe('ExpenseController', () => {
 
       await controller.remove(USER, 'moim-A', 'exp-1');
 
-      expect(mocks.deleteExpense).toHaveBeenCalledWith('sub-owner', 'moim-A', 'exp-1');
+      expect(mocks.deleteExpense).toHaveBeenCalledWith(
+        'sub-owner',
+        'moim-A',
+        'exp-1',
+      );
     });
   });
 });
@@ -285,11 +306,11 @@ describe('SettlementController', () => {
       const { service, mocks } = makeService();
       const controller = new SettlementController(service);
 
-      await controller.removeByFields(
-        USER,
-        'moim-A',
-        { fromUserId: 'user-B', toUserId: 'sub-owner', amount: 5000 },
-      );
+      await controller.removeByFields(USER, 'moim-A', {
+        fromUserId: 'user-B',
+        toUserId: 'sub-owner',
+        amount: 5000,
+      });
 
       expect(mocks.deleteSettlement).toHaveBeenCalledWith(
         'sub-owner',

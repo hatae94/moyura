@@ -1,11 +1,11 @@
 import type { ChatMessageCreatedPayload } from '../chat/chat-events';
-import type {
-  DeviceToken,
-  MoimMember,
-} from '../generated/prisma/client';
+import type { DeviceToken, MoimMember } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
-import type { FcmSender } from './fcm-sender';
+import type { FcmSender, PushData, PushNotification } from './fcm-sender';
 import { PushListener } from './push.listener';
+
+// deviceToken.findMany 가 받는 where 인자 형태(수신 대상 userId in 필터).
+type DeviceFindManyArg = { where: { userId: { in: string[] } } };
 
 // PushListener 단위 테스트(REQ-PUSH-001/006 / AC-1,4). prisma(멤버/디바이스/sender 닉네임)와 FcmSender를
 // mock으로 대체해 수신 대상 산정(멤버 - sender ⋈ device_token) + sender 제외 + 게스트(미등록) 제외 +
@@ -39,10 +39,11 @@ function device(token: string, userId: string): DeviceToken {
 }
 
 interface Mocks {
-  memberFindMany: jest.Mock;
-  memberFindUnique: jest.Mock;
-  deviceFindMany: jest.Mock;
-  send: jest.Mock;
+  memberFindMany: jest.Mock<Promise<MoimMember[]>, [unknown]>;
+  memberFindUnique: jest.Mock<Promise<MoimMember | null>, [unknown]>;
+  deviceFindMany: jest.Mock<Promise<DeviceToken[]>, [DeviceFindManyArg]>;
+  // FcmSender.send(tokens, notification, data?) 시그니처로 타이핑 — mock.calls 접근을 타입 안전하게.
+  send: jest.Mock<Promise<void>, [string[], PushNotification, PushData?]>;
 }
 
 function makeListener(opts: {
@@ -50,22 +51,25 @@ function makeListener(opts: {
   devices: DeviceToken[];
   senderMember?: MoimMember | null;
 }): { listener: PushListener; mocks: Mocks } {
-  const memberFindMany = jest.fn().mockResolvedValue(opts.members);
+  const memberFindMany = jest
+    .fn<Promise<MoimMember[]>, [unknown]>()
+    .mockResolvedValue(opts.members);
   const memberFindUnique = jest
-    .fn()
+    .fn<Promise<MoimMember | null>, [unknown]>()
     .mockResolvedValue(
       opts.senderMember === undefined
         ? member('sub-sender', '발신자호스트')
         : opts.senderMember,
     );
   // 실제 Prisma처럼 where.userId.in 필터를 적용한다(naive mock이 sender 디바이스를 흘려보내지 않도록).
-  const deviceFindMany = jest.fn(
-    (arg: { where: { userId: { in: string[] } } }) =>
-      Promise.resolve(
-        opts.devices.filter((d) => arg.where.userId.in.includes(d.userId)),
-      ),
+  const deviceFindMany = jest.fn((arg: DeviceFindManyArg) =>
+    Promise.resolve(
+      opts.devices.filter((d) => arg.where.userId.in.includes(d.userId)),
+    ),
   );
-  const send = jest.fn().mockResolvedValue(undefined);
+  const send = jest
+    .fn<Promise<void>, [string[], PushNotification, PushData?]>()
+    .mockResolvedValue(undefined);
 
   const prisma = {
     moimMember: { findMany: memberFindMany, findUnique: memberFindUnique },

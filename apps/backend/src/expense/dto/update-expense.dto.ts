@@ -3,7 +3,11 @@ import { ApiProperty } from '@nestjs/swagger';
 // SPEC-MOIM-EXPENSE-001 REQ-EXP-007: 경비 수정 요청 바디.
 // 검증 규칙은 CreateExpenseDto 와 동일(REQ-EXP-002/004).
 export class UpdateExpenseDto {
-  @ApiProperty({ description: '지출 금액(KRW 정수, ≥1)', example: 30000, required: false })
+  @ApiProperty({
+    description: '지출 금액(KRW 정수, ≥1)',
+    example: 30000,
+    required: false,
+  })
   amount?: number;
 
   @ApiProperty({

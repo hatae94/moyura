@@ -21,8 +21,7 @@ export class PollOptionResponseDto {
   // SPEC-MOIM-008 REQ-MOIM8-004: 날짜 옵션 시각(ISO-8601) 또는 null(일반 투표 옵션).
   // 웹이 이 값을 사람이 읽을 수 있게 포맷해 표시한다(raw ISO label 노출 금지).
   @ApiProperty({
-    description:
-      '날짜 투표 옵션의 시각(ISO-8601). 일반 투표 옵션은 null.',
+    description: '날짜 투표 옵션의 시각(ISO-8601). 일반 투표 옵션은 null.',
     nullable: true,
     type: String,
     example: '2026-06-27T12:00:00.000Z',
@@ -59,7 +58,8 @@ export class PollResponseDto {
   createdAt!: string;
 
   @ApiProperty({
-    description: '여러 개 선택 허용 여부(true=다중 선택/토글, false=단일 선택/교체).',
+    description:
+      '여러 개 선택 허용 여부(true=다중 선택/토글, false=단일 선택/교체).',
     example: false,
   })
   multiSelect!: boolean;

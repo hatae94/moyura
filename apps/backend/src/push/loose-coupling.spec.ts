@@ -26,16 +26,17 @@ function collectTsFiles(dir: string): string[] {
 // chat-events.ts import는 chat 자신의 파일이므로 대상이 아니며, push가 chat-events를 import하는 것은 허용이다.
 function findPushImports(filePath: string): string[] {
   const content = readFileSync(filePath, 'utf8');
-  return content
-    .split('\n')
-    .filter((line) => {
-      const isImportish = /\b(import|require)\b/.test(line);
-      if (!isImportish) {
-        return false;
-      }
-      // chat/** 에서 push 디렉터리를 가리키는 상대경로 import 탐지.
-      return /from\s+['"]\.{1,2}\/push(\/|['"])/.test(line) || /['"]\.{1,2}\/push(\/|['"])/.test(line);
-    });
+  return content.split('\n').filter((line) => {
+    const isImportish = /\b(import|require)\b/.test(line);
+    if (!isImportish) {
+      return false;
+    }
+    // chat/** 에서 push 디렉터리를 가리키는 상대경로 import 탐지.
+    return (
+      /from\s+['"]\.{1,2}\/push(\/|['"])/.test(line) ||
+      /['"]\.{1,2}\/push(\/|['"])/.test(line)
+    );
+  });
 }
 
 describe('느슨한 결합 정적 검사 (REQ-PUSH-004 / AC-3)', () => {

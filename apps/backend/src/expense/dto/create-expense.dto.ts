@@ -18,11 +18,16 @@ export class CreateExpenseDto {
   })
   payerUserId!: string;
 
-  @ApiProperty({ description: '메모(선택)', example: '점심 식사', required: false })
+  @ApiProperty({
+    description: '메모(선택)',
+    example: '점심 식사',
+    required: false,
+  })
   memo?: string;
 
   @ApiProperty({
-    description: '분배 방식: equal(N빵 기본) / custom(멤버별 금액) / ratio(멤버별 비율)',
+    description:
+      '분배 방식: equal(N빵 기본) / custom(멤버별 금액) / ratio(멤버별 비율)',
     example: 'equal',
     required: false,
   })

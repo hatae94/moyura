@@ -49,11 +49,7 @@ export class PushListener {
       const title = await this.resolveSenderNickname(moimId, senderId);
 
       // 4) best-effort 발송. 토큰 0개면 FcmSender.send가 no-op으로 처리한다(발송 0건은 에러 아님).
-      await this.fcm.send(
-        tokens,
-        { title, body: preview },
-        { moimId },
-      );
+      await this.fcm.send(tokens, { title, body: preview }, { moimId });
     } catch (err) {
       // best-effort 격리: 수신 대상 조회/닉네임 해석 실패는 로깅만(삼킴 아님). 발행 측으로 전파 금지.
       console.error(

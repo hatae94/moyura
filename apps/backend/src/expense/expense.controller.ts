@@ -54,10 +54,15 @@ export class ExpenseController {
 
   // POST /moims/:id/expenses — 경비 기록(owner 전용, REQ-EXP-002/004 / AC-1/2/2b). 201.
   @Post()
-  @ApiCreatedResponse({ description: '경비 생성(Expense+ExpenseShare)', type: ExpenseDto })
+  @ApiCreatedResponse({
+    description: '경비 생성(Expense+ExpenseShare)',
+    type: ExpenseDto,
+  })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   @ApiForbiddenResponse({ description: 'owner 아님(또는 모임 미존재) — 403' })
-  @ApiBadRequestResponse({ description: '금액/카테고리/결제자/분배 검증 실패 — 400' })
+  @ApiBadRequestResponse({
+    description: '금액/카테고리/결제자/분배 검증 실패 — 400',
+  })
   async create(
     @CurrentUser() user: VerifiedUser,
     @Param('id') moimId: string,
@@ -84,7 +89,10 @@ export class ExpenseController {
 
   // GET /moims/:id/expenses — 경비 목록 + 요약 + 정산(멤버 한정, REQ-EXP-005 / AC-5). 200.
   @Get()
-  @ApiOkResponse({ description: '경비 목록 + 요약 + 정산(settled 포함)', type: ExpenseListResponseDto })
+  @ApiOkResponse({
+    description: '경비 목록 + 요약 + 정산(settled 포함)',
+    type: ExpenseListResponseDto,
+  })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   @ApiForbiddenResponse({ description: '멤버 아님(또는 모임 미존재) — 403' })
   async list(
@@ -101,7 +109,10 @@ export class ExpenseController {
 
   // PATCH /moims/:id/expenses/:expenseId — 경비 수정(owner 전용, REQ-EXP-007 / AC-11). 200.
   @Patch(':expenseId')
-  @ApiOkResponse({ description: '경비 수정(ExpenseShare 재 materialize)', type: ExpenseDto })
+  @ApiOkResponse({
+    description: '경비 수정(ExpenseShare 재 materialize)',
+    type: ExpenseDto,
+  })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   @ApiForbiddenResponse({ description: 'owner 아님(또는 모임 미존재) — 403' })
   @ApiNotFoundResponse({ description: '타-모임 또는 미존재 expenseId — 404' })
@@ -114,7 +125,9 @@ export class ExpenseController {
   ): Promise<ExpenseDto> {
     // 전달된 필드만 검증(미전달 undefined 허용).
     const amount =
-      body?.amount !== undefined ? requirePositiveInt(body.amount, 'amount') : undefined;
+      body?.amount !== undefined
+        ? requirePositiveInt(body.amount, 'amount')
+        : undefined;
     const category =
       body?.category !== undefined ? requireCategory(body.category) : undefined;
     const payerUserId =
@@ -122,7 +135,9 @@ export class ExpenseController {
         ? requireNonEmpty(body.payerUserId, 'payerUserId')
         : undefined;
     const splitMethod =
-      body?.splitMethod !== undefined ? parseSplitMethod(body.splitMethod) : undefined;
+      body?.splitMethod !== undefined
+        ? parseSplitMethod(body.splitMethod)
+        : undefined;
 
     const expense = await this.expenseService.updateExpense(
       user.sub,
@@ -166,10 +181,15 @@ export class SettlementController {
 
   // POST /moims/:id/settlements — 정산 완료 마커 생성(owner 전용, REQ-EXP-009 / AC-12). 201. 멱등.
   @Post()
-  @ApiCreatedResponse({ description: '정산 완료 마커 생성(멱등)', type: SettlementResponseDto })
+  @ApiCreatedResponse({
+    description: '정산 완료 마커 생성(멱등)',
+    type: SettlementResponseDto,
+  })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   @ApiForbiddenResponse({ description: 'owner 아님(또는 모임 미존재) — 403' })
-  @ApiBadRequestResponse({ description: '현재 거래 집합에 존재하지 않는 거래 — 400' })
+  @ApiBadRequestResponse({
+    description: '현재 거래 집합에 존재하지 않는 거래 — 400',
+  })
   async create(
     @CurrentUser() user: VerifiedUser,
     @Param('id') moimId: string,
@@ -206,9 +226,16 @@ export class SettlementController {
     // body 우선, 없으면 query params.
     const fromUserId = requireNonEmpty(body?.fromUserId ?? qFrom, 'fromUserId');
     const toUserId = requireNonEmpty(body?.toUserId ?? qTo, 'toUserId');
-    const rawAmount = body?.amount ?? (qAmount !== undefined ? Number(qAmount) : undefined);
+    const rawAmount =
+      body?.amount ?? (qAmount !== undefined ? Number(qAmount) : undefined);
     const amount = requirePositiveInt(rawAmount, 'amount');
-    await this.expenseService.deleteSettlement(user.sub, moimId, fromUserId, toUserId, amount);
+    await this.expenseService.deleteSettlement(
+      user.sub,
+      moimId,
+      fromUserId,
+      toUserId,
+      amount,
+    );
   }
 
   // DELETE /moims/:id/settlements/:settlementId — settlementId 로 마커 삭제. 204.
@@ -217,13 +244,19 @@ export class SettlementController {
   @ApiNoContentResponse({ description: '정산 완료 마커 삭제(id 기준)' })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   @ApiForbiddenResponse({ description: 'owner 아님(또는 모임 미존재) — 403' })
-  @ApiNotFoundResponse({ description: '타-모임 또는 미존재 settlementId — 404' })
+  @ApiNotFoundResponse({
+    description: '타-모임 또는 미존재 settlementId — 404',
+  })
   async removeById(
     @CurrentUser() user: VerifiedUser,
     @Param('id') moimId: string,
     @Param('settlementId') settlementId: string,
   ): Promise<void> {
-    await this.expenseService.deleteSettlementById(user.sub, moimId, settlementId);
+    await this.expenseService.deleteSettlementById(
+      user.sub,
+      moimId,
+      settlementId,
+    );
   }
 }
 
@@ -240,14 +273,19 @@ function requireNonEmpty(value: unknown, field: string): string {
 // 1 이상의 정수 검증(400). KRW 정수 정책(REQ-EXP-002).
 function requirePositiveInt(value: unknown, field: string): number {
   if (!Number.isInteger(value) || (value as number) < 1) {
-    throw new BadRequestException(`${field}은(는) 1 이상의 정수여야 합니다(KRW 정수)`);
+    throw new BadRequestException(
+      `${field}은(는) 1 이상의 정수여야 합니다(KRW 정수)`,
+    );
   }
   return value as number;
 }
 
 // 카테고리 프리셋 검증(400, REQ-EXP-003).
 function requireCategory(value: unknown): string {
-  if (typeof value !== 'string' || !EXPENSE_CATEGORIES.includes(value as never)) {
+  if (
+    typeof value !== 'string' ||
+    !EXPENSE_CATEGORIES.includes(value as never)
+  ) {
     throw new BadRequestException(
       `category 는 ${EXPENSE_CATEGORIES.join('/')} 중 하나여야 합니다`,
     );
@@ -263,7 +301,9 @@ function parseSplitMethod(value: unknown): 'equal' | 'custom' | 'ratio' {
   if (value === 'equal' || value === 'custom' || value === 'ratio') {
     return value;
   }
-  throw new BadRequestException('splitMethod 는 equal/custom/ratio 중 하나여야 합니다');
+  throw new BadRequestException(
+    'splitMethod 는 equal/custom/ratio 중 하나여야 합니다',
+  );
 }
 
 // ── DTO 변환 함수 ─────────────────────────────────────────────────────────────

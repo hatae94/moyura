@@ -1,19 +1,28 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Expense, ExpenseShare, Settlement } from '../generated/prisma/client';
+import type {
+  Expense,
+  ExpenseShare,
+  Settlement,
+} from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 // 카테고리 프리셋(REQ-EXP-003). DB enum 없이 컨트롤러/서비스에서 검증.
-export const EXPENSE_CATEGORIES = ['식비', '교통', '숙박', '입장', '준비물', '기타'] as const;
+export const EXPENSE_CATEGORIES = [
+  '식비',
+  '교통',
+  '숙박',
+  '입장',
+  '준비물',
+  '기타',
+] as const;
 
-// 분배 방식 프리셋(REQ-EXP-004).
-const SPLIT_METHODS = ['equal', 'custom', 'ratio'] as const;
-type SplitMethod = (typeof SPLIT_METHODS)[number];
+// 분배 방식 프리셋(REQ-EXP-004). 런타임 검증은 컨트롤러(parseSplitMethod)가 하므로 여기선 타입만 정의한다.
+type SplitMethod = 'equal' | 'custom' | 'ratio';
 
 // 분담 입력 타입(컨트롤러에서 전달).
 export interface ShareInput {
@@ -111,7 +120,7 @@ export class ExpenseService {
         where: { id: expense.id },
         include: { shares: true },
       });
-      return created as ExpenseWithShares;
+      return created;
     });
   }
 
@@ -122,7 +131,9 @@ export class ExpenseService {
     await this.moim.assertMember(sub, moimId);
 
     // moim.budget 조회.
-    const moimRow = await this.prisma.moim.findUnique({ where: { id: moimId } });
+    const moimRow = await this.prisma.moim.findUnique({
+      where: { id: moimId },
+    });
     const budget = (moimRow as { budget?: number | null })?.budget ?? null;
 
     // 경비 목록(분담 포함).
@@ -145,7 +156,7 @@ export class ExpenseService {
 
     if (expenses.length === 0) {
       return {
-        expenses: expenses as ExpenseWithShares[],
+        expenses: expenses,
         summary: { total: 0, perPerson: 0, budget, remaining },
         settlement: { balances: [], transactions: [] },
       };
@@ -183,16 +194,22 @@ export class ExpenseService {
     }));
 
     return {
-      expenses: expenses as ExpenseWithShares[],
+      expenses: expenses,
       summary: { total, perPerson, budget, remaining },
       settlement: { balances, transactions: txWithSettled },
     };
   }
 
   // 경비 삭제(REQ-EXP-006 / AC-7). owner 전용 + expense-moim 일관성 검증.
-  async deleteExpense(sub: string, moimId: string, expenseId: string): Promise<void> {
+  async deleteExpense(
+    sub: string,
+    moimId: string,
+    expenseId: string,
+  ): Promise<void> {
     await this.moim.assertOwner(sub, moimId);
-    const expense = await this.prisma.expense.findUnique({ where: { id: expenseId } });
+    const expense = await this.prisma.expense.findUnique({
+      where: { id: expenseId },
+    });
     if (!expense || expense.moimId !== moimId) {
       throw new NotFoundException();
     }
@@ -217,7 +234,9 @@ export class ExpenseService {
     await this.moim.assertOwner(sub, moimId);
 
     // expense-moim 일관성 검증(타-모임/미존재 → 404).
-    const existing = await this.prisma.expense.findUnique({ where: { id: expenseId } });
+    const existing = await this.prisma.expense.findUnique({
+      where: { id: expenseId },
+    });
     if (!existing || existing.moimId !== moimId) {
       throw new NotFoundException();
     }
@@ -282,7 +301,7 @@ export class ExpenseService {
         where: { id: expenseId },
         include: { shares: true },
       });
-      return updated as ExpenseWithShares;
+      return updated;
     });
   }
 
@@ -342,7 +361,9 @@ export class ExpenseService {
     settlementId: string,
   ): Promise<void> {
     await this.moim.assertOwner(sub, moimId);
-    const marker = await this.prisma.settlement.findUnique({ where: { id: settlementId } });
+    const marker = await this.prisma.settlement.findUnique({
+      where: { id: settlementId },
+    });
     if (!marker || marker.moimId !== moimId) {
       throw new NotFoundException();
     }
@@ -378,7 +399,9 @@ export class ExpenseService {
       if (participantUserIds && participantUserIds.length > 0) {
         participants = participantUserIds;
       } else {
-        const members = await this.prisma.moimMember.findMany({ where: { moimId } });
+        const members = await this.prisma.moimMember.findMany({
+          where: { moimId },
+        });
         participants = members.map((m) => m.userId);
       }
       if (participants.length === 0) {
@@ -408,7 +431,10 @@ export class ExpenseService {
           `custom 분배 합(${total})이 amount(${amount})와 일치하지 않습니다`,
         );
       }
-      return shares.map((s) => ({ userId: s.userId, shareAmount: s.amount ?? 0 }));
+      return shares.map((s) => ({
+        userId: s.userId,
+        shareAmount: s.amount ?? 0,
+      }));
     }
 
     // ratio
@@ -451,7 +477,9 @@ function ratioSplit(
   shares: { userId: string; ratio: number }[],
 ): { userId: string; shareAmount: number }[] {
   const totalRatio = shares.reduce((acc, s) => acc + s.ratio, 0);
-  const baseAmounts = shares.map((s) => Math.floor((amount * s.ratio) / totalRatio));
+  const baseAmounts = shares.map((s) =>
+    Math.floor((amount * s.ratio) / totalRatio),
+  );
   const allocated = baseAmounts.reduce((acc, v) => acc + v, 0);
   let remainder = amount - allocated;
   return shares.map((s, idx) => {
@@ -497,6 +525,10 @@ function computeMinTransactions(
 }
 
 // settled 마커 매칭 키.
-function markerKey(fromUserId: string, toUserId: string, amount: number): string {
+function markerKey(
+  fromUserId: string,
+  toUserId: string,
+  amount: number,
+): string {
   return `${fromUserId}:${toUserId}:${amount}`;
 }

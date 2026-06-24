@@ -317,7 +317,10 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
       })
       .expect(201);
 
-    const created = res.body as { startsAt: string | null; location: string | null };
+    const created = res.body as {
+      startsAt: string | null;
+      location: string | null;
+    };
     expect(created.startsAt).toBe('2026-07-01T10:00:00.000Z');
     expect(created.location).toBe('강남역 스타벅스');
   });
@@ -348,9 +351,13 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
     const byId = new Map(
-      (list.body as { id: string; startsAt: string | null; location: string | null }[]).map(
-        (m) => [m.id, m],
-      ),
+      (
+        list.body as {
+          id: string;
+          startsAt: string | null;
+          location: string | null;
+        }[]
+      ).map((m) => [m.id, m]),
     );
     expect(byId.get('moim-EVT')?.startsAt).toBe('2026-07-01T10:00:00.000Z');
     expect(byId.get('moim-EVT')?.location).toBe('강남역 스타벅스');
@@ -362,7 +369,10 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
       .get('/moims/moim-EVT')
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
-    const one = detail.body as { startsAt: string | null; location: string | null };
+    const one = detail.body as {
+      startsAt: string | null;
+      location: string | null;
+    };
     expect(one.startsAt).toBe('2026-07-01T10:00:00.000Z');
     expect(one.location).toBe('강남역 스타벅스');
   });

@@ -51,7 +51,8 @@ export class PollController {
     description: '대상 모임의 멤버가 아님(또는 없는 모임) — 403/404',
   })
   @ApiBadRequestResponse({
-    description: '빈 question / 유효 옵션 <2 / 무효 closesAt ISO / 미지 kind / 무효 날짜 옵션 ISO — 400',
+    description:
+      '빈 question / 유효 옵션 <2 / 무효 closesAt ISO / 미지 kind / 무효 날짜 옵션 ISO — 400',
   })
   async create(
     @CurrentUser() user: VerifiedUser,
@@ -98,7 +99,8 @@ export class PollController {
   // GET /moims/:id/polls — 투표 목록 + 결과 집계(멤버 한정, REQ-MOIM5-004 / AC-4). 200.
   @Get()
   @ApiOkResponse({
-    description: '모임의 투표 목록(옵션별 voteCount + multiSelect + 호출자 myVotes 포함)',
+    description:
+      '모임의 투표 목록(옵션별 voteCount + multiSelect + 호출자 myVotes 포함)',
     type: [PollResponseDto],
   })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
@@ -153,7 +155,8 @@ export class PollController {
   @Post(':pollId/close')
   @HttpCode(200)
   @ApiOkResponse({
-    description: '마감된 poll 결과(closesAt=now, isClosed:true, finalize 필드 포함)',
+    description:
+      '마감된 poll 결과(closesAt=now, isClosed:true, finalize 필드 포함)',
     type: PollResponseDto,
   })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
@@ -207,7 +210,9 @@ function parseKind(value: unknown): string {
   if (value === 'general' || value === 'date' || value === 'place') {
     return value;
   }
-  throw new BadRequestException('kind 는 "general", "date", "place" 중 하나여야 합니다');
+  throw new BadRequestException(
+    'kind 는 "general", "date", "place" 중 하나여야 합니다',
+  );
 }
 
 // SPEC-MOIM-008 REQ-MOIM8-002: 날짜 옵션 배열 파싱 헬퍼. kind="date" 일 때 사용.
@@ -220,11 +225,15 @@ function parseOptionDates(value: unknown): { dates: Date[] } {
   const dates: Date[] = [];
   for (const item of value) {
     if (typeof item !== 'string' || item.trim().length === 0) {
-      throw new BadRequestException('날짜 투표 옵션은 ISO-8601 문자열이어야 합니다');
+      throw new BadRequestException(
+        '날짜 투표 옵션은 ISO-8601 문자열이어야 합니다',
+      );
     }
     const d = new Date(item.trim());
     if (Number.isNaN(d.getTime())) {
-      throw new BadRequestException(`날짜 투표 옵션 "${item}" 이(가) 유효한 날짜/시각이 아닙니다`);
+      throw new BadRequestException(
+        `날짜 투표 옵션 "${item}" 이(가) 유효한 날짜/시각이 아닙니다`,
+      );
     }
     dates.push(d);
   }
@@ -310,7 +319,9 @@ function closeResultToDto(poll: PollWithResults): PollResponseDto {
   return {
     ...resultToDto(poll),
     // close 응답: finalize 결과를 실제 service 값으로 덮어쓴다(date→startsAt, place→location).
-    finalizedStartsAt: poll.finalizedStartsAt ? poll.finalizedStartsAt.toISOString() : null,
+    finalizedStartsAt: poll.finalizedStartsAt
+      ? poll.finalizedStartsAt.toISOString()
+      : null,
     finalizedLocation: poll.finalizedLocation,
     finalizeSkippedReason: poll.finalizeSkippedReason,
   };

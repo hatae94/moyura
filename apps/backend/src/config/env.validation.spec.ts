@@ -107,7 +107,8 @@ describe('validateEnv (AC-B1 / AC-B2)', () => {
   });
 
   it('FIREBASE_CREDENTIALS가 있으면 그대로 보존한다 (발송 활성)', () => {
-    const creds = '{"project_id":"demo","client_email":"x@y.z","private_key":"k"}';
+    const creds =
+      '{"project_id":"demo","client_email":"x@y.z","private_key":"k"}';
     const env = validateEnv({ ...baseValidEnv, FIREBASE_CREDENTIALS: creds });
     expect(env.FIREBASE_CREDENTIALS).toBe(creds);
   });

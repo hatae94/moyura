@@ -29,13 +29,20 @@ const CREDS_JSON = JSON.stringify({
 });
 
 describe('FcmSender', () => {
-  let sendEachForMulticast: jest.Mock;
+  // sendEachForMulticast 인자를 MulticastMessage 로 타이핑 — mock.calls 접근을 any 가 아닌 타입 안전하게.
+  let sendEachForMulticast: jest.Mock<
+    Promise<admin.messaging.BatchResponse>,
+    [admin.messaging.MulticastMessage]
+  >;
   let warnSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
     sendEachForMulticast = jest
-      .fn()
+      .fn<
+        Promise<admin.messaging.BatchResponse>,
+        [admin.messaging.MulticastMessage]
+      >()
       .mockResolvedValue({ successCount: 1, failureCount: 0, responses: [] });
     // admin.messaging() → { sendEachForMulticast }. firebase-admin auto-mock이 namespace getter를
     // jest.fn으로 만들지 않을 수 있으므로 명시적으로 jest.fn을 할당한다(타입 만족용 Object.assign 우회).
@@ -45,7 +52,10 @@ describe('FcmSender', () => {
       initializeApp: jest.fn().mockReturnValue({}),
     });
     // 초기화 가드용 apps 배열(빈 상태 = 미초기화).
-    Object.defineProperty(mockedAdmin, 'apps', { value: [], configurable: true });
+    Object.defineProperty(mockedAdmin, 'apps', {
+      value: [],
+      configurable: true,
+    });
     warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
@@ -153,7 +163,7 @@ describe('FcmSender', () => {
 
   describe('자격증명 파싱/초기화 실패 — graceful 비활성', () => {
     it('FIREBASE_CREDENTIALS가 유효 JSON이 아니면 init 실패를 흡수하고 send는 no-op이 된다', async () => {
-      const sender = new FcmSender(makeConfig("not-a-json"));
+      const sender = new FcmSender(makeConfig('not-a-json'));
       sender.onModuleInit();
 
       // JSON.parse 실패(SyntaxError) → catch → 비활성. messaging 미설정 → send no-op.
@@ -162,11 +172,13 @@ describe('FcmSender', () => {
     });
 
     it('initializeApp이 non-Error 로 throw 해도 unknown error 로 흡수한다 (init catch ternary fallback)', () => {
-      (mockedAdmin.initializeApp as unknown as jest.Mock).mockImplementationOnce(
-        () => {
-          throw 'init blew up'; // non-Error throw — err instanceof Error 의 false 분기 커버.
-        },
-      );
+      (
+        mockedAdmin.initializeApp as unknown as jest.Mock
+      ).mockImplementationOnce(() => {
+        // 의도적으로 non-Error 값을 throw — 프로덕션의 `err instanceof Error ? ... : 'unknown error'` false 분기 검증용.
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
+        throw 'init blew up';
+      });
       const sender = new FcmSender(makeConfig(CREDS_JSON));
 
       expect(() => sender.onModuleInit()).not.toThrow();

@@ -47,13 +47,24 @@ export class ExpenseSummaryDto {
   @ApiProperty({ description: '총 지출(KRW 정수)', example: 39000 })
   total!: number;
 
-  @ApiProperty({ description: '1인당(총지출÷멤버수, KRW 정수)', example: 13000 })
+  @ApiProperty({
+    description: '1인당(총지출÷멤버수, KRW 정수)',
+    example: 13000,
+  })
   perPerson!: number;
 
-  @ApiProperty({ description: '예산(KRW 정수 또는 null)', nullable: true, type: Number })
+  @ApiProperty({
+    description: '예산(KRW 정수 또는 null)',
+    nullable: true,
+    type: Number,
+  })
   budget!: number | null;
 
-  @ApiProperty({ description: '남은 예산(budget-total 또는 null)', nullable: true, type: Number })
+  @ApiProperty({
+    description: '남은 예산(budget-total 또는 null)',
+    nullable: true,
+    type: Number,
+  })
   remaining!: number | null;
 }
 
@@ -68,7 +79,10 @@ export class SettlementTransactionDto {
   @ApiProperty({ description: '정산 금액(KRW 정수)', example: 4000 })
   amount!: number;
 
-  @ApiProperty({ description: '정산 완료 여부(마커 존재하면 true)', example: false })
+  @ApiProperty({
+    description: '정산 완료 여부(마커 존재하면 true)',
+    example: false,
+  })
   settled!: boolean;
 }
 
@@ -77,7 +91,10 @@ export class ExpenseSettlementDto {
   @ApiProperty({ description: '멤버별 balance(양수=받을 돈, 음수=낼 돈)' })
   balances!: { userId: string; balance: number }[];
 
-  @ApiProperty({ description: '최소 거래 목록', type: [SettlementTransactionDto] })
+  @ApiProperty({
+    description: '최소 거래 목록',
+    type: [SettlementTransactionDto],
+  })
   transactions!: SettlementTransactionDto[];
 }
 
@@ -86,10 +103,16 @@ export class ExpenseListResponseDto {
   @ApiProperty({ description: '경비 목록', type: [ExpenseDto] })
   expenses!: ExpenseDto[];
 
-  @ApiProperty({ description: '요약(총지출/1인당/예산/남은예산)', type: ExpenseSummaryDto })
+  @ApiProperty({
+    description: '요약(총지출/1인당/예산/남은예산)',
+    type: ExpenseSummaryDto,
+  })
   summary!: ExpenseSummaryDto;
 
-  @ApiProperty({ description: '정산(balances + 최소 거래 목록)', type: ExpenseSettlementDto })
+  @ApiProperty({
+    description: '정산(balances + 최소 거래 목록)',
+    type: ExpenseSettlementDto,
+  })
   settlement!: ExpenseSettlementDto;
 }
 

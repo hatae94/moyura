@@ -319,11 +319,7 @@ describe('MoimController', () => {
       const { service, mocks } = makeService();
       const controller = new MoimController(service);
 
-      await controller.transferOwner(
-        USER,
-        'moim-A',
-        {} as { userId: string },
-      );
+      await controller.transferOwner(USER, 'moim-A', {} as { userId: string });
 
       // 컨트롤러는 body?.userId ?? '' 를 그대로 전달 — 400 판정은 서비스 책임.
       expect(mocks.transferOwner).toHaveBeenCalledWith('sub-U', 'moim-A', '');

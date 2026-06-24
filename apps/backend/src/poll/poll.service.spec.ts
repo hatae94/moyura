@@ -211,10 +211,7 @@ describe('PollService', () => {
         Promise.resolve(tables.poll.get(arg.where.id) ?? null),
       ),
       findMany: jest.fn(
-        (arg: {
-          where: { moimId: string };
-          include?: { options?: boolean };
-        }) =>
+        (arg: { where: { moimId: string }; include?: { options?: boolean } }) =>
           Promise.resolve(
             [...tables.poll.values()]
               .filter((p) => p.moimId === arg.where.moimId)
@@ -847,7 +844,14 @@ describe('PollService', () => {
       const service = makeService();
       setMember('moim-A', 'creator');
       seedPoll('moim-A', '열린 poll', ['A', 'B'], false, 'creator', null);
-      const { poll } = seedPoll('moim-A', '내 투표', ['X', 'Y'], false, 'creator', null);
+      const { poll } = seedPoll(
+        'moim-A',
+        '내 투표',
+        ['X', 'Y'],
+        false,
+        'creator',
+        null,
+      );
 
       // 두 번째 poll 을 테스트 대상으로.
       const result = await service.closePoll('creator', 'moim-A', poll.id);
@@ -862,7 +866,14 @@ describe('PollService', () => {
       const service = makeService();
       setMember('moim-A', 'creator');
       setMember('moim-A', 'other-member');
-      const { poll } = seedPoll('moim-A', '내 투표', ['A', 'B'], false, 'creator', null);
+      const { poll } = seedPoll(
+        'moim-A',
+        '내 투표',
+        ['A', 'B'],
+        false,
+        'creator',
+        null,
+      );
 
       await expect(
         service.closePoll('other-member', 'moim-A', poll.id),
@@ -874,7 +885,14 @@ describe('PollService', () => {
     it('비멤버가 closePoll 을 호출하면 403(assertMember — 생성자 비교에 도달하지 않음)', async () => {
       const service = makeService();
       setMember('moim-A', 'creator');
-      const { poll } = seedPoll('moim-A', '내 투표', ['A', 'B'], false, 'creator', null);
+      const { poll } = seedPoll(
+        'moim-A',
+        '내 투표',
+        ['A', 'B'],
+        false,
+        'creator',
+        null,
+      );
 
       await expect(
         service.closePoll('stranger', 'moim-A', poll.id),
@@ -885,7 +903,14 @@ describe('PollService', () => {
       const service = makeService();
       setMember('moim-A', 'creator');
       existingMoims.add('moim-B');
-      const { poll } = seedPoll('moim-B', '다른 모임 poll', ['A', 'B'], false, 'creator', null);
+      const { poll } = seedPoll(
+        'moim-B',
+        '다른 모임 poll',
+        ['A', 'B'],
+        false,
+        'creator',
+        null,
+      );
 
       await expect(
         service.closePoll('creator', 'moim-A', poll.id),
@@ -896,7 +921,14 @@ describe('PollService', () => {
       const service = makeService();
       setMember('moim-A', 'creator');
       // 이미 마감된 poll(closesAt=NOW).
-      const { poll } = seedPoll('moim-A', '마감 poll', ['A', 'B'], false, 'creator', NOW);
+      const { poll } = seedPoll(
+        'moim-A',
+        '마감 poll',
+        ['A', 'B'],
+        false,
+        'creator',
+        NOW,
+      );
 
       const result = await service.closePoll('creator', 'moim-A', poll.id);
 
@@ -1051,7 +1083,13 @@ describe('PollService', () => {
     it('일반 투표(kind="general") 를 닫으면 finalize 를 수행하지 않는다(startsAt 불변, 두 필드 null)', async () => {
       const service = makeService();
       setMember('moim-A', 'creator');
-      const { poll, options } = seedPoll('moim-A', '일반 투표', ['A', 'B'], false, 'creator');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '일반 투표',
+        ['A', 'B'],
+        false,
+        'creator',
+      );
       seedVote(poll.id, options[0].id, 'member-1');
       const originalStartsAt = tables.moim.get('moim-A')?.startsAt;
 
@@ -1068,7 +1106,7 @@ describe('PollService', () => {
       const existingStartsAt = new Date('2026-06-01T00:00:00.000Z');
       // 기존 startsAt 을 모임에 설정한다.
       tables.moim.set('moim-A', {
-        ...tables.moim.get('moim-A')!,
+        ...tables.moim.get('moim-A'),
         startsAt: existingStartsAt,
       });
       const date1 = new Date('2026-06-27T12:00:00.000Z');
@@ -1197,7 +1235,7 @@ describe('PollService', () => {
       const service = makeService();
       setMember('moim-A', 'creator');
       tables.moim.set('moim-A', {
-        ...tables.moim.get('moim-A')!,
+        ...tables.moim.get('moim-A'),
         location: '기존 장소',
       });
       const { poll, options } = seedPoll(
@@ -1338,7 +1376,9 @@ describe('PollService', () => {
 
       expect(polls[0].isClosed).toBe(true);
       expect(polls[0].myVotes).toEqual([options[0].id]);
-      expect(polls[0].options.find((o) => o.id === options[0].id)?.voteCount).toBe(1);
+      expect(
+        polls[0].options.find((o) => o.id === options[0].id)?.voteCount,
+      ).toBe(1);
     });
   });
 });

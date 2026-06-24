@@ -39,7 +39,9 @@ export class FcmSender implements OnModuleInit {
       const serviceAccount = JSON.parse(credentials) as admin.ServiceAccount;
       // 중복 초기화(initializeApp 재호출은 throw) 방지 — 기본 앱이 없을 때만 초기화한다.
       if (admin.apps.length === 0) {
-        admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
       }
       this.messaging = admin.messaging();
     } catch (err) {

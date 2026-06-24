@@ -27,7 +27,12 @@ export interface PollWithResults {
   createdAt: Date;
   multiSelect: boolean;
   kind: string;
-  options: { id: string; label: string; voteCount: number; optionDate: Date | null }[];
+  options: {
+    id: string;
+    label: string;
+    voteCount: number;
+    optionDate: Date | null;
+  }[];
   myVotes: string[];
   closesAt: Date | null;
   isClosed: boolean;
@@ -90,7 +95,7 @@ export class PollService {
         },
         include: { options: true },
       });
-      return created as PollWithOptions;
+      return created;
     });
   }
 
@@ -125,7 +130,9 @@ export class PollService {
       where: { id: optionId },
     });
     if (!option || option.pollId !== pollId) {
-      throw new BadRequestException('optionId 가 해당 투표의 선택지가 아닙니다');
+      throw new BadRequestException(
+        'optionId 가 해당 투표의 선택지가 아닙니다',
+      );
     }
 
     if (poll.multiSelect) {
@@ -201,7 +208,9 @@ export class PollService {
     }
 
     // 단일 최다 득표 판정(date·place 공통): 옵션별 voteCount 내림차순 정렬 후 최상위가 유일한지 본다.
-    const sortedOptions = [...result.options].sort((a, b) => b.voteCount - a.voteCount);
+    const sortedOptions = [...result.options].sort(
+      (a, b) => b.voteCount - a.voteCount,
+    );
     const topCount = sortedOptions[0]?.voteCount ?? 0;
 
     if (topCount === 0) {

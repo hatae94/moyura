@@ -32,7 +32,8 @@ export class MoimResponseDto {
 
   // SPEC-MOIM-012 REQ-MOIM12-001: 모임 정원. 기본 15, 1 이상.
   @ApiProperty({
-    description: '모임 정원(기본 15). 현재 멤버 수가 이 값 이상이면 신규 가입이 409로 거부된다.',
+    description:
+      '모임 정원(기본 15). 현재 멤버 수가 이 값 이상이면 신규 가입이 409로 거부된다.',
     example: 15,
   })
   maxMembers!: number;

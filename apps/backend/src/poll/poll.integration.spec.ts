@@ -417,7 +417,11 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
     const res = await request(app.getHttpServer())
       .post('/moims/moim-A/polls')
       .set('Authorization', `Bearer ${token}`)
-      .send({ question: '가능한 날짜?', options: ['토', '일', '월'], multiSelect: true })
+      .send({
+        question: '가능한 날짜?',
+        options: ['토', '일', '월'],
+        multiSelect: true,
+      })
       .expect(201);
 
     const body = res.body as { multiSelect: boolean; myVotes: string[] };
@@ -522,7 +526,12 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
   it('AC-3: 다중 멤버 투표 → 토글(A 추가 → B 추가 둘 다 보유 → A 다시 제거)', async () => {
     const memberSub = uniqueSub();
     seedMoimWithMembers('moim-A', [memberSub]);
-    const { poll, options } = seedPoll('moim-A', '가능?', ['A', 'B', 'C'], true);
+    const { poll, options } = seedPoll(
+      'moim-A',
+      '가능?',
+      ['A', 'B', 'C'],
+      true,
+    );
     const token = await tokenFor(memberSub);
     const voteUrl = `/moims/moim-A/polls/${poll.id}/vote`;
 
@@ -670,7 +679,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
     }[];
     expect(body).toHaveLength(2);
 
-    const singleDto = body.find((p) => p.id === single.poll.id)!;
+    const singleDto = body.find((p) => p.id === single.poll.id);
     expect(singleDto.multiSelect).toBe(false);
     const singleCounts = new Map(
       singleDto.options.map((o) => [o.label, o.voteCount]),
@@ -679,7 +688,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
     expect(singleCounts.get('B')).toBe(0);
     expect(singleDto.myVotes).toEqual([single.options[0].id]);
 
-    const multiDto = body.find((p) => p.id === multi.poll.id)!;
+    const multiDto = body.find((p) => p.id === multi.poll.id);
     expect(multiDto.multiSelect).toBe(true);
     expect(multiDto.myVotes.sort()).toEqual(
       [multi.options[0].id, multi.options[2].id].sort(),
