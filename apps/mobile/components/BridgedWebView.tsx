@@ -12,7 +12,7 @@
 // reportSignal 로 AuthContext 에 보고한다(R-AS2). 가드 전환(R-NC5/R-PR5)은 AuthContext.isSignedIn 을
 // 보는 그룹 _layout 의 선언적 <Redirect> 가 수행한다 — 여기서 imperative 전환을 하지 않는다.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import type { Edge } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import { useRouter } from "expo-router";
@@ -126,6 +126,26 @@ export function BridgedWebView({
     [router],
   );
 
+  // SPEC-MOIM-011 후속: 웹 초대 수락 페이지가 로드 시 무효 초대(미지/만료/폐기)를 invite:invalid 로 통지하면
+  // 네이티브가 처리한다(웹 모달 대신 — 앱 컨텍스트). 실제 계정 로그인 사용자면 안내 Alert(backdrop 비활성 —
+  // cancelable:false)를 띄우고 확인 시 메인 탭((tabs)/home)으로, 미로그인/익명이면 로그인((auth)/login)으로
+  // router.replace 한다. WebView 자체 이동이 아니라 네이티브 라우터 전환이라 무효 초대 화면이 스택에 남지 않는다.
+  const onInviteInvalid = useCallback(
+    (loggedIn: boolean): void => {
+      if (loggedIn) {
+        Alert.alert(
+          "유효하지 않은 초대입니다.",
+          undefined,
+          [{ text: "확인", onPress: () => router.replace("/(tabs)/home" as never) }],
+          { cancelable: false },
+        );
+      } else {
+        router.replace("/(auth)/login" as never);
+      }
+    },
+    [router],
+  );
+
   // R-O1~R-O4 보존 + R-T2/R-T5/R-T7/R-R1/R-R3/R-T8/R-T9 + R-NC2/R-AS2: OAuth 브리지 + 토큰 동기화 + 신호 보고.
   const { onShouldStartLoadWithRequest, onMessage, injectRestore, injectRevalidate } =
     useAuthBridge({
@@ -140,6 +160,8 @@ export function BridgedWebView({
       onCrossRouteDispatch,
       // MOIM-003 REQ-MOIM3-003: 같은 탭 내 detail → router.push((tabs)/home/[id]).
       onDetailPush,
+      // SPEC-MOIM-011 후속: 무효 초대 통지 → 네이티브 Alert + (tabs)/home 또는 (auth)/login 전환.
+      onInviteInvalid,
     });
 
   // R-T2/R-N5: 신뢰 origin 로드 완료 + 토큰 로드 완료 시 1회 session:restore 주입(App.tsx maybeInjectRestore 보존).

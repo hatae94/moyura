@@ -38,12 +38,24 @@ export const BRIDGE_MESSAGE_TYPES = {
    * 띄우기 위한 결정적 경로(웹의 OAuth 네비게이션 인터셉트 의존 제거). additive type 이므로 v1 유지.
    */
   GOOGLE_SIGNIN_REQUEST: "auth:google-request",
+  /**
+   * web→native: 초대 수락 페이지에서 로드 시 초대가 무효(미지/만료/폐기)로 판정됐을 때, 네이티브가
+   * Alert + 라우팅을 수행하도록 요청하는 명령(SPEC-MOIM-011 후속). payload.loggedIn(실제 계정 세션 여부)에
+   * 따라 네이티브가 분기한다: true → "유효하지 않은 초대입니다." Alert → (tabs)/home, false → (auth)/login.
+   * 토큰을 싣지 않는다(불리언 신호만 — PII 0). additive type 이므로 v1 유지.
+   */
+  INVITE_INVALID: "invite:invalid",
 } as const;
 
 /** 토큰 페이로드 — access/refresh 만(userId/프로필 미포함 — PII 최소화 OD-4). */
 export interface TokenPayload {
   access: string;
   refresh: string;
+}
+
+/** invite:invalid 페이로드 — 실제 계정 로그인 여부만(토큰/PII 미포함 — OD-4). */
+export interface InviteInvalidPayload {
+  loggedIn: boolean;
 }
 
 /**
@@ -56,7 +68,8 @@ export type BridgeMessage =
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.REVALIDATE; nonce: string; payload: TokenPayload }
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.NONE; nonce: string }
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.CLEARED; nonce: string }
-  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.GOOGLE_SIGNIN_REQUEST; nonce: string };
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.GOOGLE_SIGNIN_REQUEST; nonce: string }
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.INVITE_INVALID; nonce: string; payload: InviteInvalidPayload };
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set<string>(
   Object.values(BRIDGE_MESSAGE_TYPES),
@@ -76,6 +89,14 @@ function isValidTokenPayload(value: unknown): value is TokenPayload {
   }
   const p = value as Record<string, unknown>;
   return typeof p.access === "string" && !!p.access && typeof p.refresh === "string" && !!p.refresh;
+}
+
+/** invite:invalid 페이로드 형태 가드(loggedIn 이 boolean). */
+function isValidInviteInvalidPayload(value: unknown): value is InviteInvalidPayload {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return typeof (value as Record<string, unknown>).loggedIn === "boolean";
 }
 
 /** 브리지 메시지를 postMessage 로 보낼 JSON 문자열로 직렬화한다. */
@@ -129,7 +150,18 @@ export function parseBridgeMessage(raw: string): BridgeMessage | null {
       payload: { access: candidate.payload.access, refresh: candidate.payload.refresh },
     } as BridgeMessage;
   }
-  // none/cleared — payload 없는 신호 메시지.
+  if (candidate.type === BRIDGE_MESSAGE_TYPES.INVITE_INVALID) {
+    if (!isValidInviteInvalidPayload(candidate.payload)) {
+      return null; // invite:invalid 인데 payload(loggedIn:boolean) 불완전 — 무시.
+    }
+    return {
+      version: candidate.version,
+      type: BRIDGE_MESSAGE_TYPES.INVITE_INVALID,
+      nonce,
+      payload: { loggedIn: candidate.payload.loggedIn },
+    };
+  }
+  // none/cleared/google-request — payload 없는 신호 메시지.
   return { version: candidate.version, type: candidate.type, nonce } as BridgeMessage;
 }
 
@@ -187,6 +219,11 @@ export type InboundAction =
   | { kind: "clear"; resolvesHandshake: boolean; clearCookies: boolean }
   /** auth:google-request(nonce 인증 통과) → 네이티브 Google Sign-In SDK 실행(SPEC-MOBILE-004). */
   | { kind: "google-signin" }
+  /**
+   * invite:invalid(nonce 인증 통과) → 네이티브 무효 초대 처리(SPEC-MOIM-011 후속).
+   * loggedIn(실제 계정 세션 여부)에 따라 호출부가 분기한다: true → Alert → (tabs)/home, false → (auth)/login.
+   */
+  | { kind: "invite-invalid"; loggedIn: boolean }
   /** 네이티브 발신 type(restore/revalidate) 수신, 또는 nonce 불일치(미인증) 등 — 무시. */
   | { kind: "ignore" };
 
@@ -252,6 +289,9 @@ export function decideInboundAction(
     case BRIDGE_MESSAGE_TYPES.GOOGLE_SIGNIN_REQUEST:
       // SPEC-MOBILE-004: 셸의 Google 버튼 탭 — 네이티브 Google Sign-In SDK 를 실행한다(nonce 인증 통과분만).
       return { kind: "google-signin" };
+    case BRIDGE_MESSAGE_TYPES.INVITE_INVALID:
+      // SPEC-MOIM-011 후속: 무효 초대 — loggedIn 에 따라 호출부가 Alert→(tabs)/home 또는 (auth)/login 분기.
+      return { kind: "invite-invalid", loggedIn: message.payload.loggedIn };
     default:
       // session:restore / resume:revalidate 등 네이티브 발신 type — 수신 분기에서 무시.
       return { kind: "ignore" };

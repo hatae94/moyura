@@ -180,6 +180,32 @@ export class InviteService {
     });
   }
 
+  // @MX:ANCHOR: [AUTO] 비인증 초대 유효성 단일 진입점(SPEC-MOIM-011). 웹/모바일 랜딩 페이지가
+  // 로드 시점에 이 계약에 의존한다(fan_in: InvitePublicController + 향후 웹 랜딩).
+  // @MX:REASON: 읽기 전용이며 부작용 없음을 보장한다 — usedCount·멤버십은 절대 변경하지 않는다.
+  // maxUses 초과는 유효하다고 판정한다(한도 소진은 수락 시점에만 검사 — AC 설계 의도).
+  async checkValidity(token: string): Promise<{ moimId: string }> {
+    const invite = await this.prisma.moimInvite.findUnique({
+      where: { token },
+    });
+    // 미지 토큰 → 404(accept 동일 시맨틱).
+    if (!invite) {
+      throw new NotFoundException();
+    }
+    const now = Date.now();
+    // 폐기 초대 → 410(accept 동일 메시지).
+    if (invite.revokedAt !== null) {
+      throw new GoneException('폐기된 초대입니다');
+    }
+    // 만료 초대 → 410(accept 동일 메시지).
+    if (invite.expiresAt.getTime() <= now) {
+      throw new GoneException('만료된 초대입니다');
+    }
+    // maxUses/usedCount는 검사하지 않는다 — 한도 소진 초대도 "유효"이며,
+    // 기존 멤버가 링크를 재열면 200을 받아야 한다. 초과 거부는 accept() 전용.
+    return { moimId: invite.moimId };
+  }
+
   // 만료 시각 해석: 미지정 시 now+7d, 지정 시 상한(now+30d) 검사(초과 400).
   private resolveExpiry(raw: string | undefined, now: number): Date {
     if (raw === undefined) {

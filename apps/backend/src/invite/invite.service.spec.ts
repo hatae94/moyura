@@ -220,6 +220,62 @@ describe('InviteService', () => {
     jest.useRealTimers();
   });
 
+  // ── T-007: checkValidity() — 읽기 전용 유효성 확인(SPEC-MOIM-011) ──
+  describe('checkValidity() (SPEC-MOIM-011)', () => {
+    it('유효 토큰이면 { moimId }를 반환한다', async () => {
+      const { service } = makeService();
+      seedInvite({ moimId: 'moim-A', token: 'valid-token' });
+
+      const result = await service.checkValidity('valid-token');
+
+      expect(result).toEqual({ moimId: 'moim-A' });
+    });
+
+    it('미지 토큰 → 404', async () => {
+      const { service } = makeService();
+
+      await expect(service.checkValidity('unknown')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('폐기 토큰 → 410(폐기된 초대입니다)', async () => {
+      const { service } = makeService();
+      seedInvite({ moimId: 'moim-A', token: 'revoked', revokedAt: NOW });
+
+      await expect(service.checkValidity('revoked')).rejects.toBeInstanceOf(
+        GoneException,
+      );
+    });
+
+    it('만료 토큰 → 410(만료된 초대입니다)', async () => {
+      const { service } = makeService();
+      seedInvite({
+        moimId: 'moim-A',
+        token: 'expired',
+        expiresAt: new Date(NOW.getTime() - DAY_MS),
+      });
+
+      await expect(service.checkValidity('expired')).rejects.toBeInstanceOf(
+        GoneException,
+      );
+    });
+
+    it('maxUses 소진 초대(usedCount >= maxUses)도 유효하다고 판정한다(checkValidity는 한도 검사 안 함)', async () => {
+      const { service } = makeService();
+      seedInvite({
+        moimId: 'moim-A',
+        token: 'exhausted',
+        maxUses: 2,
+        usedCount: 2,
+      });
+
+      // 한도 소진 상태여도 만료·폐기가 아니면 200(moimId 반환).
+      const result = await service.checkValidity('exhausted');
+      expect(result).toEqual({ moimId: 'moim-A' });
+    });
+  });
+
   // ── T-002: create() — assertOwner + 토큰 엔트로피 + 만료 기본/상한 ──
   describe('create() (REQ-INV-001 / AC-1)', () => {
     it('owner가 발급하면 토큰·기본 만료(now+7d)·usedCount=0 초대를 만든다', async () => {
