@@ -127,21 +127,19 @@ export function BridgedWebView({
   );
 
   // SPEC-MOIM-011 후속: 웹 초대 수락 페이지가 로드 시 무효 초대(미지/만료/폐기)를 invite:invalid 로 통지하면
-  // 네이티브가 처리한다(웹 모달 대신 — 앱 컨텍스트). 실제 계정 로그인 사용자면 안내 Alert(backdrop 비활성 —
-  // cancelable:false)를 띄우고 확인 시 메인 탭((tabs)/home)으로, 미로그인/익명이면 로그인((auth)/login)으로
-  // router.replace 한다. WebView 자체 이동이 아니라 네이티브 라우터 전환이라 무효 초대 화면이 스택에 남지 않는다.
+  // 네이티브가 처리한다(웹 모달 대신 — 앱 컨텍스트). 로그인 여부와 무관하게 안내 Alert("유효하지 않은
+  // 초대입니다.", backdrop 비활성 — cancelable:false)를 띄우고, 확인 시 목적지로 router.replace 한다:
+  // 실제 계정 로그인 → 메인 탭((tabs)/home), 미로그인/익명 → 로그인((auth)/login). 미로그인도 조용히
+  // 이동하지 않고 동일 안내를 먼저 보여준다(UX — 무효 사유 인지). 네이티브 라우터 전환이라 무효 화면이 스택에 안 남는다.
   const onInviteInvalid = useCallback(
     (loggedIn: boolean): void => {
-      if (loggedIn) {
-        Alert.alert(
-          "유효하지 않은 초대입니다.",
-          undefined,
-          [{ text: "확인", onPress: () => router.replace("/(tabs)/home" as never) }],
-          { cancelable: false },
-        );
-      } else {
-        router.replace("/(auth)/login" as never);
-      }
+      const dest = loggedIn ? "/(tabs)/home" : "/(auth)/login";
+      Alert.alert(
+        "유효하지 않은 초대입니다.",
+        undefined,
+        [{ text: "확인", onPress: () => router.replace(dest as never) }],
+        { cancelable: false },
+      );
     },
     [router],
   );
