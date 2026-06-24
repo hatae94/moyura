@@ -49,6 +49,7 @@ describe('InviteService', () => {
       maxMembers,
       createdBy: 'owner-sub',
       createdAt: NOW,
+      budget: null,
     };
     tables.moim.set(moimId, moim);
     return moim;

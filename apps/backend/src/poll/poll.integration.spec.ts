@@ -73,8 +73,10 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       name: `모임 ${moimId}`,
       startsAt: null,
       location: null,
+      maxMembers: 15,
       createdBy: memberSubs[0] ?? 'owner',
       createdAt: new Date('2026-06-19T00:00:00.000Z'),
+      budget: null,
     });
     memberSubs.forEach((sub, idx) => {
       tables.member.set(memberKey(moimId, sub), {

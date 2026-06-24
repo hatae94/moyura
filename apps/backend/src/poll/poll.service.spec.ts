@@ -70,8 +70,10 @@ describe('PollService', () => {
         name: `모임 ${moimId}`,
         startsAt: null,
         location: null,
+        maxMembers: 15,
         createdBy: sub,
         createdAt: NOW,
+        budget: null,
       });
     }
     const set = members.get(moimId) ?? new Set<string>();

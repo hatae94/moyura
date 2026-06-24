@@ -57,6 +57,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
       maxMembers: 15,
       createdBy: ownerSub,
       createdAt: new Date('2026-06-13T00:00:00.000Z'),
+      budget: null,
     });
     tables.member.set(memberKey(moimId, ownerSub), {
       moimId,
@@ -114,6 +115,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
                     maxMembers: arg.data.maxMembers ?? 15,
                     createdBy: arg.data.createdBy,
                     createdAt: new Date('2026-06-13T00:00:00.000Z'),
+                    budget: null,
                   };
                   tables.moim.set(created.id, created);
                   return Promise.resolve(created);
