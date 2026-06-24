@@ -128,7 +128,6 @@ describe('ExpenseService', () => {
     tables.expense.set(id, exp);
     const shares: ExpenseShare[] = sharesInput.map((s) => {
       const share: ExpenseShare = {
-        id: nextId('share'),
         expenseId: id,
         userId: s.userId,
         shareAmount: s.shareAmount,
@@ -309,9 +308,8 @@ describe('ExpenseService', () => {
           data: { expenseId: string; userId: string; shareAmount: number }[];
         }) => {
           for (const d of arg.data) {
-            const id = nextId('share');
+            nextId('share');
             const share: ExpenseShare = {
-              id,
               expenseId: d.expenseId,
               userId: d.userId,
               shareAmount: d.shareAmount,

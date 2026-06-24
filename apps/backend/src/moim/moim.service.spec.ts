@@ -432,6 +432,7 @@ describe('MoimService', () => {
         maxMembers: 15,
         createdBy: 'sub-owner',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
+        budget: null,
       };
       const moimB: Moim = {
         id: 'moim-B',
@@ -441,6 +442,7 @@ describe('MoimService', () => {
         maxMembers: 15,
         createdBy: 'sub-U',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
+        budget: null,
       };
       const moimC: Moim = {
         id: 'moim-C',
@@ -450,6 +452,7 @@ describe('MoimService', () => {
         maxMembers: 15,
         createdBy: 'sub-other',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
+        budget: null,
       };
       // U는 A(멤버), B(owner)에만 속하고 C에는 속하지 않는다.
       const members: MoimMember[] = [

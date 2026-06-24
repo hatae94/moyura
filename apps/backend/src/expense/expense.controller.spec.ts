@@ -22,8 +22,8 @@ const EXPENSE_WITH_SHARES: ExpenseWithShares = {
   createdAt: new Date('2026-06-24T00:00:00.000Z'),
   updatedAt: new Date('2026-06-24T00:00:00.000Z'),
   shares: [
-    { id: 'share-1', expenseId: 'exp-1', userId: 'sub-owner', shareAmount: 5000, createdAt: new Date('2026-06-24T00:00:00.000Z') },
-    { id: 'share-2', expenseId: 'exp-1', userId: 'user-B', shareAmount: 5000, createdAt: new Date('2026-06-24T00:00:00.000Z') },
+    { expenseId: 'exp-1', userId: 'sub-owner', shareAmount: 5000, createdAt: new Date('2026-06-24T00:00:00.000Z') },
+    { expenseId: 'exp-1', userId: 'user-B', shareAmount: 5000, createdAt: new Date('2026-06-24T00:00:00.000Z') },
   ],
 };
 
