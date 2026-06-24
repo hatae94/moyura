@@ -1,9 +1,9 @@
 ---
 id: SPEC-CHAT-002
-version: "0.3.0"
+version: "0.4.0"
 status: in-progress
 created: 2026-06-11
-updated: 2026-06-18
+updated: 2026-06-25
 author: hatae
 priority: medium
 issue_number: 0
@@ -15,6 +15,13 @@ issue_number: 0
 
 ## HISTORY
 
+- 2026-06-25 (v0.4.0): 알림 탭 핸들러(REQ-PUSH-007) 앱 통합 + iOS 시뮬레이터 포그라운드 배너·딥링크 라우팅 검증 — status in-progress 유지.
+  - **탭 핸들러 앱 배선(이전엔 정의만 됨)**: v0.2.0에서 `registerNotificationTapHandler`(R-PUSH-007)가 구현되었으나 앱 진입점에 배선되지 않았다. 이번에 두 곳을 연결:
+    - `apps/mobile/app/_layout.tsx`: (a) `Notifications.setNotificationHandler` 추가 — 포그라운드에서도 알림 배너/목록 표시(앱이 떠 있을 때 새 메시지 알림 묻힘 방지, 소리 on/배지 off). (b) `useEffect`에서 `registerNotificationTapHandler` 구독 — 탭 시 FCM 채팅 URL(`${WEB_URL}/moims/{id}/chat`)에서 `moimId`를 파싱(`moimIdFromChatUrl`)해 `router.push("/(tabs)/home/{id}?target=chat")` 이동(detail-push와 동일한 router.push 패턴, OD-1 안전; 형식 어긋나면 앱 열기만).
+    - `apps/mobile/app/(tabs)/home/[id].tsx`: `?target=chat` 쿼리가 있으면 모임 상세 대신 `/moims/{id}/chat` WebView를 직접 로드(`buildChatUrl` 사용). 그 외에는 기존대로 모임 상세(`urlForDetailRoute`) 호스팅.
+  - **iOS 시뮬레이터 검증(iPhone 16, dev build, owner-test 로그인)**: (a) 포그라운드 푸시 배너 표시 확인(`setNotificationHandler` 동작 증명). (b) 딥링크 `moyura:///home/{id}?target=chat` 진입 시 "모임 채팅" 화면 렌더 — 탭 핸들러가 생성하는 정확한 `router.push` 목적지 검증. (c) 디바이스 토큰 등록/해제 API + push jest 스위트(34건) green.
+  - **여전히 device-gated(미검증)**: 실기기 FCM 종단(end-to-end). iOS 시뮬레이터는 실 FCM 수신 불가 — APNs↔FCM 토큰 불일치(`getDevicePushTokenAsync`는 iOS에서 APNs 토큰을 반환하나 백엔드 `firebase-admin sendEachForMulticast`는 FCM 등록 토큰 필요 → **Android이 깨끗한 경로**; iOS는 `@react-native-firebase/messaging` 필요). 또한 `FIREBASE_CREDENTIALS`는 로컬 백엔드 `.env`에만 추가됨 — prod Render env에는 미추가라 prod 푸시는 자격증명 추가 전까지 no-op.
+  - **결론**: AC-5(실기기 FCM 종단 수신)가 미완료이므로 **status = in-progress 유지**. v0.3.0의 잔여 게이트 3개(아래 §8) 중 게이트 3(실기기 수신·탭)에 탭 핸들러 배선 + 시뮬레이터 표시·라우팅 검증이 더해졌고, 실기기 FCM 라운드트립만 남았다.
 - 2026-06-18 (v0.3.0): firebase-admin 백엔드 배선 + 인증·FCM 도달 라이브 검증 — status in-progress 유지.
   - `FIREBASE_CREDENTIALS` 배선 완료: `credentials/GoogleServiceAccount.json`(Firebase 서비스 계정, `project_id=moyura-498500`)을 `apps/backend/.env`의 `FIREBASE_CREDENTIALS` env에 단일 행 JSON 문자열로 주입(gitignore — 비밀 키 미커밋). `FcmSender`는 `JSON.parse(FIREBASE_CREDENTIALS)` → `admin.credential.cert()` 경로로 초기화.
   - firebase-admin 초기화 성공 확인: 백엔드 재시작 후 "FIREBASE_CREDENTIALS 미설정 no-op" 경고 소멸 + init-failure 경고 없음. no-op 경로 해제, 실 FCM 발송 활성화.
