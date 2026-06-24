@@ -34,6 +34,7 @@ function makeTxClient(tables: Tables, ids: { next: () => string }) {
             createdBy: string;
             startsAt?: Date | null;
             location?: string | null;
+            maxMembers?: number;
           };
         }) => {
           const created: Moim = {
@@ -41,6 +42,8 @@ function makeTxClient(tables: Tables, ids: { next: () => string }) {
             name: arg.data.name,
             startsAt: arg.data.startsAt ?? null,
             location: arg.data.location ?? null,
+            // SPEC-MOIM-012: maxMembers 미전달 시 DB @default(15)를 흉내낸다.
+            maxMembers: arg.data.maxMembers ?? 15,
             createdBy: arg.data.createdBy,
             createdAt: new Date('2026-06-13T00:00:00.000Z'),
           };
@@ -129,6 +132,17 @@ function makePrisma(seed?: { moims?: Moim[]; members?: MoimMember[] }): {
             .map((id) => tables.moim.get(id))
             .filter((m): m is Moim => m !== undefined),
         ),
+      ),
+      update: jest.fn(
+        (arg: { where: { id: string }; data: Partial<Moim> }) => {
+          const existing = tables.moim.get(arg.where.id);
+          if (!existing) {
+            return Promise.resolve(null);
+          }
+          const updated: Moim = { ...existing, ...arg.data };
+          tables.moim.set(updated.id, updated);
+          return Promise.resolve(updated);
+        },
       ),
       delete: jest.fn((arg: { where: { id: string } }) => {
         const existing = tables.moim.get(arg.where.id);
@@ -269,6 +283,7 @@ describe('MoimService', () => {
       name: '모임 A',
       startsAt: null,
       location: null,
+      maxMembers: 15,
       createdBy: 'sub-owner',
       createdAt: new Date('2026-06-13T00:00:00.000Z'),
     };
@@ -412,6 +427,7 @@ describe('MoimService', () => {
         name: '모임 A',
         startsAt: null,
         location: null,
+        maxMembers: 15,
         createdBy: 'sub-owner',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
       };
@@ -420,6 +436,7 @@ describe('MoimService', () => {
         name: '모임 B',
         startsAt: null,
         location: null,
+        maxMembers: 15,
         createdBy: 'sub-U',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
       };
@@ -428,6 +445,7 @@ describe('MoimService', () => {
         name: '모임 C',
         startsAt: null,
         location: null,
+        maxMembers: 15,
         createdBy: 'sub-other',
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
       };
@@ -716,6 +734,88 @@ describe('MoimService', () => {
       await expect(
         service.transferOwner('sub-owner', 'missing', 'sub-member'),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // SPEC-MOIM-012: createMoim maxMembers + updateMaxMembers
+  // ─────────────────────────────────────────────────────────────────
+  describe('createMoim — maxMembers (SPEC-MOIM-012 REQ-MOIM12-001)', () => {
+    it('maxMembers 미전달 시 DB @default(15)가 적용된다', async () => {
+      const { prisma } = makePrisma();
+      const service = new MoimService(prisma);
+
+      const moim = await service.createMoim('sub-U', '모임', '호스트');
+
+      expect(moim.maxMembers).toBe(15);
+    });
+
+    it('custom maxMembers를 전달하면 해당 값으로 생성된다', async () => {
+      const { prisma } = makePrisma();
+      const service = new MoimService(prisma);
+
+      const moim = await service.createMoim(
+        'sub-U',
+        '소규모 모임',
+        '호스트',
+        undefined,
+        undefined,
+        5,
+      );
+
+      expect(moim.maxMembers).toBe(5);
+    });
+  });
+
+  describe('updateMaxMembers (SPEC-MOIM-012 REQ-MOIM12-001)', () => {
+    it('owner가 정원을 수정하면 업데이트된 모임을 반환한다', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma, tables } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma);
+
+      const updated = await service.updateMaxMembers('sub-owner', 'moim-A', 30);
+
+      expect(updated.maxMembers).toBe(30);
+      expect(tables.moim.get('moim-A')?.maxMembers).toBe(30);
+    });
+
+    it('비-owner가 정원 수정을 시도하면 403(ForbiddenException)', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.updateMaxMembers('sub-member', 'moim-A', 20),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('존재하지 않는 모임이면 404', async () => {
+      const { prisma } = makePrisma();
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.updateMaxMembers('sub-U', 'missing', 10),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('현재 멤버 수 미만으로 낮춰도 오류 없이 허용된다(소급 퇴장 없음)', async () => {
+      // maxMembers 기본 15, 현재 멤버 2명 → 1로 낮춰도 성공
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma);
+
+      const updated = await service.updateMaxMembers('sub-owner', 'moim-A', 1);
+
+      expect(updated.maxMembers).toBe(1);
     });
   });
 });

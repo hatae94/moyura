@@ -19,18 +19,20 @@ export class MoimService {
   // moim.id에 의존하므로 인터랙티브 $transaction(tx) 콜백을 쓴다(배열 형태 불가). createdBy/userId는
   // 가드-검증된 sub만 받는다(mass-assignment 차단 — profile 패턴 동일).
   // SPEC-MOIM-004 REQ-MOIM4-002: optional startsAt(Date)/location 을 additive 로 받아 영속한다.
-  // 미전달이면 Prisma 가 nullable 컬럼을 null 로 저장한다(트랜잭션 구조·owner 멤버십 생성 불변).
+  // SPEC-MOIM-012 REQ-MOIM12-001: optional maxMembers(기본 15). 컨트롤러가 validate 후 전달한다.
   async createMoim(
     sub: string,
     name: string,
     nickname: string,
     startsAt?: Date,
     location?: string,
+    maxMembers?: number,
   ): Promise<Moim> {
     return this.prisma.$transaction(async (tx) => {
       // 1) 모임 생성 — id는 DB가 발급(@default(uuid)). startsAt/location 은 additive(미전달 시 null).
+      //    maxMembers 미전달 시 Prisma @default(15)가 적용된다.
       const moim = await tx.moim.create({
-        data: { name, createdBy: sub, startsAt, location },
+        data: { name, createdBy: sub, startsAt, location, maxMembers },
       });
       // 2) 생성자 owner 멤버십 — moim.id에 의존하므로 같은 트랜잭션 내 순차 생성.
       await tx.moimMember.create({
@@ -42,6 +44,21 @@ export class MoimService {
         },
       });
       return moim;
+    });
+  }
+
+  // @MX:NOTE: [AUTO] SPEC-MOIM-012 REQ-MOIM12-001: owner 전용 모임 정원 수정.
+  // assertOwner가 "모임 없음 → 404, 비-owner → 403"을 판정한다. maxMembers 검증은 컨트롤러가 담당.
+  // 현재 멤버 수 미만으로 낮춰도 소급 퇴장 없음 — 신규 가입(InviteService.accept)만 차단된다.
+  async updateMaxMembers(
+    sub: string,
+    moimId: string,
+    maxMembers: number,
+  ): Promise<Moim> {
+    await this.assertOwner(sub, moimId);
+    return this.prisma.moim.update({
+      where: { id: moimId },
+      data: { maxMembers },
     });
   }
 

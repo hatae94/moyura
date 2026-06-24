@@ -81,7 +81,7 @@ export interface paths {
         delete: operations["MoimController_remove"];
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["MoimController_updateMaxMembers"];
         trace?: never;
     };
     "/moims/{id}/members": {
@@ -371,6 +371,11 @@ export interface components {
              * @example 강남역 스타벅스
              */
             location?: string;
+            /**
+             * @description 모임 정원(optional, 기본 15). 1 이상의 정수.
+             * @example 20
+             */
+            maxMembers?: number;
         };
         MoimResponseDto: {
             /**
@@ -393,6 +398,11 @@ export interface components {
              * @example 강남역 스타벅스
              */
             location: string | null;
+            /**
+             * @description 모임 정원(기본 15). 현재 멤버 수가 이 값 이상이면 신규 가입이 409로 거부된다.
+             * @example 15
+             */
+            maxMembers: number;
             /**
              * @description 생성자 sub(= profile.id)
              * @example 00000000-0000-4000-8000-000000000001
@@ -425,6 +435,13 @@ export interface components {
              * @example 2026-06-13T00:00:00.000Z
              */
             joinedAt: string;
+        };
+        UpdateMaxMembersDto: {
+            /**
+             * @description 수정할 모임 정원(1 이상의 정수). 현재 멤버 수 미만으로 낮춰도 소급 퇴장 없음(신규 가입만 차단).
+             * @example 20
+             */
+            maxMembers: number;
         };
         TransferOwnerDto: {
             /**
@@ -932,6 +949,53 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 대상 모임의 owner가 아님 — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 존재하지 않는 모임 — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MoimController_updateMaxMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMaxMembersDto"];
+            };
+        };
+        responses: {
+            /** @description 모임 정원 수정(owner 전용) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoimResponseDto"];
+                };
             };
             /** @description 유효한 Supabase JWT 부재 — 401 */
             401: {

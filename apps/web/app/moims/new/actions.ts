@@ -62,6 +62,10 @@ export async function createMoimAction(
   const startsAt = toIsoOrUndefined(String(formData.get("startsAt") ?? ""));
   const location = String(formData.get("location") ?? "").trim() || undefined;
 
+  // optional 최대 인원 — 빈 값이면 미전송(백엔드 기본값 15 적용). 1 미만 무효 입력은 미전송으로 처리한다.
+  const maxMembersRaw = parseInt(String(formData.get("maxMembers") ?? ""), 10);
+  const maxMembers = !isNaN(maxMembersRaw) && maxMembersRaw >= 1 ? maxMembersRaw : undefined;
+
   const supabase = await createClient();
   const {
     data: { session },
@@ -78,7 +82,7 @@ export async function createMoimAction(
       baseUrl: API_BASE_URL,
       getToken: () => session.access_token,
     });
-    const body: CreateMoimRequest = { name, nickname, startsAt, location };
+    const body: CreateMoimRequest = { name, nickname, startsAt, location, maxMembers };
     const moim = await api.createMoim(body);
     createdId = moim.id;
   } catch (err) {

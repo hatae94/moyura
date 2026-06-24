@@ -15,6 +15,7 @@ const MOIM: Moim = {
   name: '모임 A',
   startsAt: null,
   location: null,
+  maxMembers: 15,
   createdBy: 'sub-U',
   createdAt: new Date('2026-06-13T00:00:00.000Z'),
 };
@@ -25,6 +26,7 @@ const MOIM_WITH_EVENT: Moim = {
   name: '이벤트 모임',
   startsAt: new Date('2026-07-01T10:00:00.000Z'),
   location: '강남역 스타벅스',
+  maxMembers: 15,
   createdBy: 'sub-U',
   createdAt: new Date('2026-06-13T00:00:00.000Z'),
 };
@@ -73,12 +75,14 @@ describe('MoimController', () => {
         '호스트',
         undefined,
         undefined,
+        undefined,
       );
       expect(res).toEqual({
         id: 'moim-A',
         name: '모임 A',
         startsAt: null,
         location: null,
+        maxMembers: 15,
         createdBy: 'sub-U',
         createdAt: '2026-06-13T00:00:00.000Z',
       });
@@ -103,12 +107,14 @@ describe('MoimController', () => {
         '호스트',
         new Date('2026-07-01T10:00:00.000Z'),
         '강남역 스타벅스',
+        undefined,
       );
       expect(res).toEqual({
         id: 'moim-E',
         name: '이벤트 모임',
         startsAt: '2026-07-01T10:00:00.000Z',
         location: '강남역 스타벅스',
+        maxMembers: 15,
         createdBy: 'sub-U',
         createdAt: '2026-06-13T00:00:00.000Z',
       });
@@ -145,6 +151,7 @@ describe('MoimController', () => {
         'sub-U',
         '모임 A',
         '호스트',
+        undefined,
         undefined,
         undefined,
       );
@@ -197,6 +204,7 @@ describe('MoimController', () => {
           name: '모임 A',
           startsAt: null,
           location: null,
+          maxMembers: 15,
           createdBy: 'sub-U',
           createdAt: '2026-06-13T00:00:00.000Z',
         },

@@ -41,8 +41,12 @@ model Moim {
   startsAt  DateTime?    @map("starts_at")
   location  String?
   // 생성자 sub(= profile.id). owner 멤버십은 MoimMember(role=owner)에 별도 기록된다(REQ-MOIM-004).
-  createdBy String       @map("created_by")
-  createdAt DateTime     @default(now()) @map("created_at")
+  createdBy  String       @map("created_by")
+  // SPEC-MOIM-012 REQ-MOIM12-001: 모임 정원(기본 15, 최소 1). 신규 가입 수락(InviteService.accept)이
+  // 현재 멤버 수 >= maxMembers 이면 409로 거른다(기존 멤버 재수락은 cap 검사 제외 — 멱등 선검사가 먼저).
+  // owner는 PATCH /moims/:id 로 cap을 수정할 수 있다(현재 멤버 수 미만으로 낮춰도 소급 퇴장 없음).
+  maxMembers Int          @default(15) @map("max_members")
+  createdAt  DateTime     @default(now()) @map("created_at")
   members   MoimMember[]
   // SPEC-MOIM-002 X-3: 초대 역참조(additive). moim 테이블 자체는 무변경 — moim_invite만 신규 CREATE.
   invites   MoimInvite[]

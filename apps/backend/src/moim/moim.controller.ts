@@ -6,11 +6,13 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNoContentResponse,
@@ -27,6 +29,7 @@ import { CreateMoimDto } from './dto/create-moim.dto';
 import { MemberResponseDto } from './dto/member-response.dto';
 import { MoimResponseDto } from './dto/moim-response.dto';
 import { TransferOwnerDto } from './dto/transfer-owner.dto';
+import { UpdateMaxMembersDto } from './dto/update-max-members.dto';
 import { MoimService } from './moim.service';
 
 // @MX:NOTE: [AUTO] 모임 HTTP 표면(REQ-MOIM-001~008). 6개 라우트 모두 per-route @UseGuards(SupabaseAuthGuard)로
@@ -58,12 +61,15 @@ export class MoimController {
     // 부재/빈 값은 undefined → service 가 null 로 저장한다. location 은 trim 후 빈 값이면 undefined.
     const startsAt = parseOptionalStartsAt(body?.startsAt);
     const location = optionalTrimmed(body?.location);
+    // SPEC-MOIM-012 REQ-MOIM12-001: optional 정원. 전달 시 1 이상의 정수만 허용(미달 시 400).
+    const maxMembers = parseOptionalMaxMembers(body?.maxMembers);
     const moim = await this.moimService.createMoim(
       user.sub,
       name,
       nickname,
       startsAt,
       location,
+      maxMembers,
     );
     return toMoimDto(moim);
   }
@@ -160,6 +166,28 @@ export class MoimController {
     await this.moimService.kickMember(user.sub, moimId, userId);
   }
 
+  // PATCH /moims/:id — 모임 정원 수정(owner 전용, SPEC-MOIM-012 REQ-MOIM12-001). 200.
+  // 비-owner 403, 없는 모임 404, maxMembers 1 미만 400.
+  @Patch(':id')
+  @ApiOkResponse({
+    description: '모임 정원 수정(owner 전용)',
+    type: MoimResponseDto,
+  })
+  @ApiBody({ type: UpdateMaxMembersDto })
+  @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
+  @ApiForbiddenResponse({ description: '대상 모임의 owner가 아님 — 403' })
+  @ApiNotFoundResponse({ description: '존재하지 않는 모임 — 404' })
+  async updateMaxMembers(
+    @CurrentUser() user: VerifiedUser,
+    @Param('id') id: string,
+    @Body() body: UpdateMaxMembersDto,
+  ): Promise<MoimResponseDto> {
+    // ValidationPipe 부재 보완: maxMembers 1 이상 정수 검증.
+    const maxMembers = requireValidMaxMembers(body?.maxMembers);
+    const moim = await this.moimService.updateMaxMembers(user.sub, id, maxMembers);
+    return toMoimDto(moim);
+  }
+
   // POST /moims/:moimId/owner — 소유권 이양(owner 전용). 204.
   // 비-owner 403, self-transfer 400, 빈 userId 400, 대상 없음 404, 모임 없음 404.
   @Post(':moimId/owner')
@@ -207,6 +235,26 @@ function optionalTrimmed(value: unknown): string | undefined {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
+// SPEC-MOIM-012 REQ-MOIM12-001: optional maxMembers 파싱. 미전달 → undefined(DB 기본값 15).
+// 전달 시 1 이상의 정수만 허용(미달 시 400). 비정수/음수/0 모두 400.
+function parseOptionalMaxMembers(value: unknown): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (!Number.isInteger(value) || (value as number) < 1) {
+    throw new BadRequestException('maxMembers는 1 이상의 정수여야 합니다');
+  }
+  return value as number;
+}
+
+// SPEC-MOIM-012: PATCH /moims/:id maxMembers 필수 검증. 부재/비정수/0 이하 → 400.
+function requireValidMaxMembers(value: unknown): number {
+  if (!Number.isInteger(value) || (value as number) < 1) {
+    throw new BadRequestException('maxMembers는 1 이상의 정수여야 합니다');
+  }
+  return value as number;
+}
+
 // Moim 엔티티 → 공개 DTO(createdAt/startsAt ISO-8601 직렬화, location null 허용).
 function toMoimDto(moim: Moim): MoimResponseDto {
   return {
@@ -215,6 +263,8 @@ function toMoimDto(moim: Moim): MoimResponseDto {
     // SPEC-MOIM-004 REQ-MOIM4-003: 일정/장소 정직 직렬화(미정이면 null — 허위 값 금지).
     startsAt: moim.startsAt ? moim.startsAt.toISOString() : null,
     location: moim.location ?? null,
+    // SPEC-MOIM-012 REQ-MOIM12-001: 정원 직렬화.
+    maxMembers: moim.maxMembers,
     createdBy: moim.createdBy,
     createdAt: moim.createdAt.toISOString(),
   };
