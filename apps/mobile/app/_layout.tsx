@@ -43,7 +43,8 @@ export default function RootLayout(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <Stack screenOptions={{ headerShown: false }}>
+        {/* animation:"none" — 페이지 전환 슬라이드(iOS slide-from-right)를 제거한다(요청). */}
+        <Stack screenOptions={{ headerShown: false, animation: "none" }}>
           {/* 진입 분기(index) + (auth)/(tabs) 그룹은 파일 기반으로 자동 등록된다. */}
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />

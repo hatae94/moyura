@@ -9,5 +9,6 @@
 import { Stack } from "expo-router";
 
 export default function HomeStackLayout(): React.JSX.Element {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  // animation:"none" — list→detail 전환 슬라이드 제거(루트 Stack 과 일관).
+  return <Stack screenOptions={{ headerShown: false, animation: "none" }} />;
 }

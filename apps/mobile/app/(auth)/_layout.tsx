@@ -14,5 +14,6 @@ export default function AuthLayout(): React.JSX.Element {
   if (isSignedIn) {
     return <Redirect href={`/${ROUTE_SIGNED_IN}` as never} />;
   }
-  return <Stack screenOptions={{ headerShown: false }} />;
+  // animation:"none" — 페이지 전환 슬라이드 제거(루트 Stack 과 일관).
+  return <Stack screenOptions={{ headerShown: false, animation: "none" }} />;
 }
