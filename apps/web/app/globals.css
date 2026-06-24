@@ -12,6 +12,24 @@
   }
 }
 
+/* 풀 뷰포트 고정 높이(앱 셸 권위) — 모바일 웹 주소창/툴바 show-hide 추적용 small viewport 단위.
+   모바일 브라우저에서 % / 100vh / lvh 는 "툴바 접힘" 상태의 정적 large viewport 로 해석되어, 인-플로
+   하단 탭바가 보이는 영역 밖으로 밀려 잘리는 고전적 100vh 문제를 만든다. svh(small viewport height)는
+   "툴바 펼침" 상태의 최소 높이라 어떤 크롬 상태에서도 잘림/하단 여백/리플로 잔여 없이 정확히 맞는다.
+   내부 스크롤(overflow-y-auto) 구조라 dvh 의 툴바 전환 리플로 jank 도 불필요 — svh 가 정답(web.dev/Ahmad Shadeed).
+   Tailwind 의 h-svh 는 height:100svh 만 내보내므로 svh 미지원 구형 브라우저용 vh 폴백을 직접 둔다.
+   [중요] "height:100vh; height:100svh;" 식 중복 선언 폴백은 빌드 시 Lightning CSS 미니파이어가
+   동일 프로퍼티를 중복 제거하며 vh 줄을 떨어뜨려(svh 만 남음) 폴백이 사라진다. 그래서 @supports 로
+   감싼다: 기본은 100vh(구형 = 기존 % 체인과 동등, 회귀 없음), svh 지원 시에만 @supports 블록이 100svh
+   로 덮어쓴다 — @supports 블록은 미니파이어가 보존하므로 폴백이 빌드 후에도 유지된다.
+   네이티브 WebView 셸에서도 안전: 브라우저 크롬이 없어 svh == 전체 WebView 높이(탭바는 별도 CSS 규칙으로 숨김). */
+@utility h-svh-fixed {
+  height: 100vh; /* 폴백: svh 미지원 구형 브라우저(기존 % 체인과 동등) */
+  @supports (height: 100svh) {
+    height: 100svh; /* small viewport height — 지원 브라우저에서 이 값이 적용된다 */
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
