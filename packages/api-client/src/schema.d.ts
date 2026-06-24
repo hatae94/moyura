@@ -276,6 +276,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/moims/{id}/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExpenseController_list"];
+        put?: never;
+        post: operations["ExpenseController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/expenses/{expenseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["ExpenseController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["ExpenseController_update"];
+        trace?: never;
+    };
+    "/moims/{id}/settlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SettlementController_create"];
+        delete: operations["SettlementController_removeByFields"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/settlements/{settlementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["SettlementController_removeById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices": {
         parameters: {
             query?: never;
@@ -404,6 +468,11 @@ export interface components {
              */
             maxMembers: number;
             /**
+             * @description 모임 예산(KRW 정수 또는 null). null = 예산 미설정.
+             * @example null
+             */
+            budget: number | null;
+            /**
              * @description 생성자 sub(= profile.id)
              * @example 00000000-0000-4000-8000-000000000001
              */
@@ -441,7 +510,12 @@ export interface components {
              * @description 수정할 모임 정원(1 이상의 정수). 현재 멤버 수 미만으로 낮춰도 소급 퇴장 없음(신규 가입만 차단).
              * @example 20
              */
-            maxMembers: number;
+            maxMembers?: number;
+            /**
+             * @description 모임 예산(KRW 정수 ≥0). null 전달 시 예산 해제. 미전달 시 불변.
+             * @example 100000
+             */
+            budget?: number | null;
         };
         TransferOwnerDto: {
             /**
@@ -697,6 +771,172 @@ export interface components {
              * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
              */
             optionId: string;
+        };
+        CreateExpenseDto: {
+            /**
+             * @description 지출 금액(KRW 정수, ≥1)
+             * @example 30000
+             */
+            amount: number;
+            /**
+             * @description 카테고리 프리셋(식비/교통/숙박/입장/준비물/기타)
+             * @example 식비
+             */
+            category: string;
+            /**
+             * @description 결제자 sub(그 모임의 멤버 sub)
+             * @example 00000000-0000-4000-8000-000000000001
+             */
+            payerUserId: string;
+            /**
+             * @description 메모(선택)
+             * @example 점심 식사
+             */
+            memo?: string;
+            /**
+             * @description 분배 방식: equal(N빵 기본) / custom(멤버별 금액) / ratio(멤버별 비율)
+             * @example equal
+             */
+            splitMethod?: string;
+            /** @description 참가자 sub 배열(equal 시 — 생략하면 전 멤버) */
+            participantUserIds?: string[];
+            /** @description custom: [{userId, amount}] / ratio: [{userId, ratio}] */
+            shares?: string[];
+        };
+        ExpenseShareDto: {
+            /**
+             * @description 분담 멤버 sub
+             * @example user-sub-1
+             */
+            userId: string;
+            /**
+             * @description 분담 금액(KRW 정수)
+             * @example 10000
+             */
+            shareAmount: number;
+        };
+        ExpenseDto: {
+            /** @description 경비 id(uuid) */
+            id: string;
+            /** @description 모임 id */
+            moimId: string;
+            /**
+             * @description 금액(KRW 정수)
+             * @example 30000
+             */
+            amount: number;
+            /**
+             * @description 카테고리 프리셋
+             * @example 식비
+             */
+            category: string;
+            /** @description 결제자 sub */
+            payerUserId: string;
+            /** @description 메모 */
+            memo: string | null;
+            /** @description 기록자 sub */
+            createdBy: string;
+            /** @description 생성 시각(ISO-8601) */
+            createdAt: string;
+            /** @description 수정 시각(ISO-8601) */
+            updatedAt: string;
+            /** @description 분담 행 목록 */
+            shares: components["schemas"]["ExpenseShareDto"][];
+        };
+        ExpenseSummaryDto: {
+            /**
+             * @description 총 지출(KRW 정수)
+             * @example 39000
+             */
+            total: number;
+            /**
+             * @description 1인당(총지출÷멤버수, KRW 정수)
+             * @example 13000
+             */
+            perPerson: number;
+            /** @description 예산(KRW 정수 또는 null) */
+            budget: number | null;
+            /** @description 남은 예산(budget-total 또는 null) */
+            remaining: number | null;
+        };
+        SettlementTransactionDto: {
+            /** @description 보내는 멤버 sub */
+            from: string;
+            /** @description 받는 멤버 sub */
+            to: string;
+            /**
+             * @description 정산 금액(KRW 정수)
+             * @example 4000
+             */
+            amount: number;
+            /**
+             * @description 정산 완료 여부(마커 존재하면 true)
+             * @example false
+             */
+            settled: boolean;
+        };
+        ExpenseSettlementDto: {
+            /** @description 멤버별 balance(양수=받을 돈, 음수=낼 돈) */
+            balances: string[];
+            /** @description 최소 거래 목록 */
+            transactions: components["schemas"]["SettlementTransactionDto"][];
+        };
+        ExpenseListResponseDto: {
+            /** @description 경비 목록 */
+            expenses: components["schemas"]["ExpenseDto"][];
+            /** @description 요약(총지출/1인당/예산/남은예산) */
+            summary: components["schemas"]["ExpenseSummaryDto"];
+            /** @description 정산(balances + 최소 거래 목록) */
+            settlement: components["schemas"]["ExpenseSettlementDto"];
+        };
+        UpdateExpenseDto: {
+            /**
+             * @description 지출 금액(KRW 정수, ≥1)
+             * @example 30000
+             */
+            amount?: number;
+            /**
+             * @description 카테고리 프리셋(식비/교통/숙박/입장/준비물/기타)
+             * @example 식비
+             */
+            category?: string;
+            /** @description 결제자 sub(그 모임의 멤버 sub) */
+            payerUserId?: string;
+            /** @description 메모(선택) */
+            memo?: string;
+            /** @description 분배 방식: equal / custom / ratio */
+            splitMethod?: string;
+            /** @description 참가자 sub 배열(equal 시) */
+            participantUserIds?: string[];
+            /** @description custom: [{userId, amount}] / ratio: [{userId, ratio}] */
+            shares?: string[];
+        };
+        CreateSettlementDto: {
+            /** @description 보내는 멤버 sub */
+            fromUserId: string;
+            /** @description 받는 멤버 sub */
+            toUserId: string;
+            /**
+             * @description 정산 금액(KRW 정수)
+             * @example 4000
+             */
+            amount: number;
+        };
+        SettlementResponseDto: {
+            /** @description Settlement 마커 id */
+            id: string;
+            /** @description 모임 id */
+            moimId: string;
+            /** @description 보내는 멤버 sub */
+            fromUserId: string;
+            /** @description 받는 멤버 sub */
+            toUserId: string;
+            /** @description 정산 금액 */
+            amount: number;
+            /** @description 토글한 owner sub */
+            settledBy: string;
+            /** @description 정산 완료 시각(ISO-8601) */
+            settledAt: string;
         };
         RegisterDeviceDto: {
             /**
@@ -988,7 +1228,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 모임 정원 수정(owner 전용) */
+            /** @description 모임 설정 수정(owner 전용) — maxMembers/budget 부분 갱신 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1689,6 +1929,317 @@ export interface operations {
                 content?: never;
             };
             /** @description 해당 모임에 속하지 않는(또는 없는) pollId — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpenseController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 경비 목록 + 요약 + 정산(settled 포함) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseListResponseDto"];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpenseController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExpenseDto"];
+            };
+        };
+        responses: {
+            /** @description 경비 생성(Expense+ExpenseShare) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDto"];
+                };
+            };
+            /** @description 금액/카테고리/결제자/분배 검증 실패 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpenseController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                expenseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 경비 삭제(ExpenseShare cascade) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 타-모임 또는 미존재 expenseId — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpenseController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                expenseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExpenseDto"];
+            };
+        };
+        responses: {
+            /** @description 경비 수정(ExpenseShare 재 materialize) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDto"];
+                };
+            };
+            /** @description 검증 실패 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 타-모임 또는 미존재 expenseId — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SettlementController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSettlementDto"];
+            };
+        };
+        responses: {
+            /** @description 정산 완료 마커 생성(멱등) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementResponseDto"];
+                };
+            };
+            /** @description 현재 거래 집합에 존재하지 않는 거래 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SettlementController_removeByFields: {
+        parameters: {
+            query: {
+                fromUserId: string;
+                toUserId: string;
+                amount: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSettlementDto"];
+            };
+        };
+        responses: {
+            /** @description 정산 완료 마커 삭제(완료 해제) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SettlementController_removeById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                settlementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 정산 완료 마커 삭제(id 기준) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 타-모임 또는 미존재 settlementId — 404 */
             404: {
                 headers: {
                     [name: string]: unknown;

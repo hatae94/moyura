@@ -54,8 +54,65 @@ model Moim {
   messages  ChatMessage[]
   // SPEC-MOIM-005 REQ-MOIM5-001: 투표 역참조(additive). moim 테이블 자체는 무변경 — poll만 신규 CREATE.
   polls     Poll[]
+  // SPEC-MOIM-EXPENSE-001 REQ-EXP-001: 경비 역참조(additive). moim 테이블 자체는 budget 컬럼 추가 외 무변경.
+  expenses    Expense[]
+  settlements Settlement[]
+  // SPEC-MOIM-EXPENSE-001 REQ-EXP-001: 선택적 모임 예산(KRW 정수, nullable). 미설정=null(남은예산 카드 미표시).
+  budget      Int?         @map("budget")
 
   @@map("moim")
+}
+
+// SPEC-MOIM-EXPENSE-001 REQ-EXP-001: 경비 헤더(지출 1건). 분담은 ExpenseShare 로 분리 materialize.
+// amount=KRW 정수(≥1), category=프리셋(컨트롤러 검증), payerUserId=결제자 sub, createdBy=기록자 sub.
+// updatedAt: @updatedAt — PATCH 수정 시각 자동 기록(DeviceToken 선례). @@index([moimId]) 모임별 목록 커버.
+model Expense {
+  id            String         @id @default(uuid())
+  moimId        String         @map("moim_id")
+  amount        Int
+  category      String
+  payerUserId   String         @map("payer_user_id")
+  memo          String?
+  createdBy     String         @map("created_by")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  moim          Moim           @relation(fields: [moimId], references: [id], onDelete: Cascade)
+  shares        ExpenseShare[]
+
+  @@index([moimId])
+  @@map("expense")
+}
+
+// SPEC-MOIM-EXPENSE-001 REQ-EXP-001: 경비 분담 행(경비당 멤버당 1행).
+// 복합 PK @@id([expenseId, userId]) — MoimMember/PollVote 복합 PK 선례. shareAmount=분담 금액(KRW 정수, ≥0).
+// 비율 분배도 생성 시 금액으로 환산해 여기 저장한다(비율 컬럼 없음 — 정산 코드는 항상 금액만 읽음).
+model ExpenseShare {
+  expenseId   String   @map("expense_id")
+  userId      String   @map("user_id")
+  shareAmount Int      @map("share_amount")
+  createdAt   DateTime @default(now()) @map("created_at")
+  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@id([expenseId, userId])
+  @@index([userId])
+  @@map("expense_share")
+}
+
+// SPEC-MOIM-EXPENSE-001 REQ-EXP-001: 정산 완료 마커 영속(정보성 스냅샷).
+// surrogate id PK — 같은 (from,to,amount) 거래가 경비 변동으로 사라졌다 재출현해도 stale 마커와 구별 가능.
+// 마커는 삭제되지 않고 stale 로 남는다(안전 기본값 — 자동 송금/취소 없음). @@index([moimId]) 모임별 마커 조회 커버.
+model Settlement {
+  id          String   @id @default(uuid())
+  moimId      String   @map("moim_id")
+  fromUserId  String   @map("from_user_id")
+  toUserId    String   @map("to_user_id")
+  amount      Int
+  settledBy   String   @map("settled_by")
+  settledAt   DateTime @default(now()) @map("settled_at")
+  moim        Moim     @relation(fields: [moimId], references: [id], onDelete: Cascade)
+
+  @@index([moimId])
+  @@map("settlement")
 }
 
 // SPEC-MOIM-002 초대 링크(REQ-INV-001~006). 모임당 다중 초대 + 만료(기본 7일/상한 30일) + 선택적 max_uses + revoke.
