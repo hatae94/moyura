@@ -16,6 +16,7 @@ const MOIM: Moim = {
   startsAt: null,
   location: null,
   maxMembers: 15,
+  budget: null,
   createdBy: 'sub-U',
   createdAt: new Date('2026-06-13T00:00:00.000Z'),
 };
@@ -27,6 +28,7 @@ const MOIM_WITH_EVENT: Moim = {
   startsAt: new Date('2026-07-01T10:00:00.000Z'),
   location: '강남역 스타벅스',
   maxMembers: 15,
+  budget: null,
   createdBy: 'sub-U',
   createdAt: new Date('2026-06-13T00:00:00.000Z'),
 };
@@ -83,6 +85,7 @@ describe('MoimController', () => {
         startsAt: null,
         location: null,
         maxMembers: 15,
+        budget: null,
         createdBy: 'sub-U',
         createdAt: '2026-06-13T00:00:00.000Z',
       });
@@ -115,6 +118,7 @@ describe('MoimController', () => {
         startsAt: '2026-07-01T10:00:00.000Z',
         location: '강남역 스타벅스',
         maxMembers: 15,
+        budget: null,
         createdBy: 'sub-U',
         createdAt: '2026-06-13T00:00:00.000Z',
       });
@@ -205,6 +209,7 @@ describe('MoimController', () => {
           startsAt: null,
           location: null,
           maxMembers: 15,
+          budget: null,
           createdBy: 'sub-U',
           createdAt: '2026-06-13T00:00:00.000Z',
         },

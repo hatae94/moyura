@@ -286,7 +286,7 @@
         },
         "responses": {
           "200": {
-            "description": "모임 정원 수정(owner 전용)",
+            "description": "모임 설정 수정(owner 전용) — maxMembers/budget 부분 갱신",
             "content": {
               "application/json": {
                 "schema": {
@@ -1063,6 +1063,372 @@
         ]
       }
     },
+    "/moims/{id}/expenses": {
+      "post": {
+        "operationId": "ExpenseController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExpenseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "경비 생성(Expense+ExpenseShare)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "금액/카테고리/결제자/분배 검증 실패 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "expenses"
+        ]
+      },
+      "get": {
+        "operationId": "ExpenseController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "경비 목록 + 요약 + 정산(settled 포함)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseListResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "멤버 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "expenses"
+        ]
+      }
+    },
+    "/moims/{id}/expenses/{expenseId}": {
+      "patch": {
+        "operationId": "ExpenseController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expenseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExpenseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "경비 수정(ExpenseShare 재 materialize)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "검증 실패 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          },
+          "404": {
+            "description": "타-모임 또는 미존재 expenseId — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "expenses"
+        ]
+      },
+      "delete": {
+        "operationId": "ExpenseController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expenseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "경비 삭제(ExpenseShare cascade)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          },
+          "404": {
+            "description": "타-모임 또는 미존재 expenseId — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "expenses"
+        ]
+      }
+    },
+    "/moims/{id}/settlements": {
+      "post": {
+        "operationId": "SettlementController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSettlementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "정산 완료 마커 생성(멱등)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettlementResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "현재 거래 집합에 존재하지 않는 거래 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "settlements"
+        ]
+      },
+      "delete": {
+        "operationId": "SettlementController_removeByFields",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromUserId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "toUserId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "amount",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSettlementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "정산 완료 마커 삭제(완료 해제)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "settlements"
+        ]
+      }
+    },
+    "/moims/{id}/settlements/{settlementId}": {
+      "delete": {
+        "operationId": "SettlementController_removeById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "settlementId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "정산 완료 마커 삭제(id 기준)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          },
+          "404": {
+            "description": "타-모임 또는 미존재 settlementId — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "settlements"
+        ]
+      }
+    },
     "/devices": {
       "post": {
         "operationId": "DeviceTokenController_register",
@@ -1274,6 +1640,12 @@
             "description": "모임 정원(기본 15). 현재 멤버 수가 이 값 이상이면 신규 가입이 409로 거부된다.",
             "example": 15
           },
+          "budget": {
+            "type": "number",
+            "description": "모임 예산(KRW 정수 또는 null). null = 예산 미설정.",
+            "nullable": true,
+            "example": null
+          },
           "createdBy": {
             "type": "string",
             "description": "생성자 sub(= profile.id)",
@@ -1291,6 +1663,7 @@
           "startsAt",
           "location",
           "maxMembers",
+          "budget",
           "createdBy",
           "createdAt"
         ]
@@ -1333,11 +1706,14 @@
             "type": "number",
             "description": "수정할 모임 정원(1 이상의 정수). 현재 멤버 수 미만으로 낮춰도 소급 퇴장 없음(신규 가입만 차단).",
             "example": 20
+          },
+          "budget": {
+            "type": "number",
+            "description": "모임 예산(KRW 정수 ≥0). null 전달 시 예산 해제. 미전달 시 불변.",
+            "example": 100000,
+            "nullable": true
           }
-        },
-        "required": [
-          "maxMembers"
-        ]
+        }
       },
       "TransferOwnerDto": {
         "type": "object",
@@ -1731,6 +2107,359 @@
         },
         "required": [
           "optionId"
+        ]
+      },
+      "CreateExpenseDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "지출 금액(KRW 정수, ≥1)",
+            "example": 30000
+          },
+          "category": {
+            "type": "string",
+            "description": "카테고리 프리셋(식비/교통/숙박/입장/준비물/기타)",
+            "example": "식비"
+          },
+          "payerUserId": {
+            "type": "string",
+            "description": "결제자 sub(그 모임의 멤버 sub)",
+            "example": "00000000-0000-4000-8000-000000000001"
+          },
+          "memo": {
+            "type": "string",
+            "description": "메모(선택)",
+            "example": "점심 식사"
+          },
+          "splitMethod": {
+            "type": "string",
+            "description": "분배 방식: equal(N빵 기본) / custom(멤버별 금액) / ratio(멤버별 비율)",
+            "example": "equal"
+          },
+          "participantUserIds": {
+            "description": "참가자 sub 배열(equal 시 — 생략하면 전 멤버)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "shares": {
+            "description": "custom: [{userId, amount}] / ratio: [{userId, ratio}]",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "amount",
+          "category",
+          "payerUserId"
+        ]
+      },
+      "ExpenseShareDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "분담 멤버 sub",
+            "example": "user-sub-1"
+          },
+          "shareAmount": {
+            "type": "number",
+            "description": "분담 금액(KRW 정수)",
+            "example": 10000
+          }
+        },
+        "required": [
+          "userId",
+          "shareAmount"
+        ]
+      },
+      "ExpenseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "경비 id(uuid)"
+          },
+          "moimId": {
+            "type": "string",
+            "description": "모임 id"
+          },
+          "amount": {
+            "type": "number",
+            "description": "금액(KRW 정수)",
+            "example": 30000
+          },
+          "category": {
+            "type": "string",
+            "description": "카테고리 프리셋",
+            "example": "식비"
+          },
+          "payerUserId": {
+            "type": "string",
+            "description": "결제자 sub"
+          },
+          "memo": {
+            "type": "string",
+            "description": "메모",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "기록자 sub"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "생성 시각(ISO-8601)"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "수정 시각(ISO-8601)"
+          },
+          "shares": {
+            "description": "분담 행 목록",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExpenseShareDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "moimId",
+          "amount",
+          "category",
+          "payerUserId",
+          "memo",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "shares"
+        ]
+      },
+      "ExpenseSummaryDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "총 지출(KRW 정수)",
+            "example": 39000
+          },
+          "perPerson": {
+            "type": "number",
+            "description": "1인당(총지출÷멤버수, KRW 정수)",
+            "example": 13000
+          },
+          "budget": {
+            "type": "number",
+            "description": "예산(KRW 정수 또는 null)",
+            "nullable": true
+          },
+          "remaining": {
+            "type": "number",
+            "description": "남은 예산(budget-total 또는 null)",
+            "nullable": true
+          }
+        },
+        "required": [
+          "total",
+          "perPerson",
+          "budget",
+          "remaining"
+        ]
+      },
+      "SettlementTransactionDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "보내는 멤버 sub"
+          },
+          "to": {
+            "type": "string",
+            "description": "받는 멤버 sub"
+          },
+          "amount": {
+            "type": "number",
+            "description": "정산 금액(KRW 정수)",
+            "example": 4000
+          },
+          "settled": {
+            "type": "boolean",
+            "description": "정산 완료 여부(마커 존재하면 true)",
+            "example": false
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "amount",
+          "settled"
+        ]
+      },
+      "ExpenseSettlementDto": {
+        "type": "object",
+        "properties": {
+          "balances": {
+            "description": "멤버별 balance(양수=받을 돈, 음수=낼 돈)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "transactions": {
+            "description": "최소 거래 목록",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SettlementTransactionDto"
+            }
+          }
+        },
+        "required": [
+          "balances",
+          "transactions"
+        ]
+      },
+      "ExpenseListResponseDto": {
+        "type": "object",
+        "properties": {
+          "expenses": {
+            "description": "경비 목록",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExpenseDto"
+            }
+          },
+          "summary": {
+            "description": "요약(총지출/1인당/예산/남은예산)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseSummaryDto"
+              }
+            ]
+          },
+          "settlement": {
+            "description": "정산(balances + 최소 거래 목록)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseSettlementDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "expenses",
+          "summary",
+          "settlement"
+        ]
+      },
+      "UpdateExpenseDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "지출 금액(KRW 정수, ≥1)",
+            "example": 30000
+          },
+          "category": {
+            "type": "string",
+            "description": "카테고리 프리셋(식비/교통/숙박/입장/준비물/기타)",
+            "example": "식비"
+          },
+          "payerUserId": {
+            "type": "string",
+            "description": "결제자 sub(그 모임의 멤버 sub)"
+          },
+          "memo": {
+            "type": "string",
+            "description": "메모(선택)"
+          },
+          "splitMethod": {
+            "type": "string",
+            "description": "분배 방식: equal / custom / ratio"
+          },
+          "participantUserIds": {
+            "description": "참가자 sub 배열(equal 시)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "shares": {
+            "description": "custom: [{userId, amount}] / ratio: [{userId, ratio}]",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreateSettlementDto": {
+        "type": "object",
+        "properties": {
+          "fromUserId": {
+            "type": "string",
+            "description": "보내는 멤버 sub"
+          },
+          "toUserId": {
+            "type": "string",
+            "description": "받는 멤버 sub"
+          },
+          "amount": {
+            "type": "number",
+            "description": "정산 금액(KRW 정수)",
+            "example": 4000
+          }
+        },
+        "required": [
+          "fromUserId",
+          "toUserId",
+          "amount"
+        ]
+      },
+      "SettlementResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Settlement 마커 id"
+          },
+          "moimId": {
+            "type": "string",
+            "description": "모임 id"
+          },
+          "fromUserId": {
+            "type": "string",
+            "description": "보내는 멤버 sub"
+          },
+          "toUserId": {
+            "type": "string",
+            "description": "받는 멤버 sub"
+          },
+          "amount": {
+            "type": "number",
+            "description": "정산 금액"
+          },
+          "settledBy": {
+            "type": "string",
+            "description": "토글한 owner sub"
+          },
+          "settledAt": {
+            "type": "string",
+            "description": "정산 완료 시각(ISO-8601)"
+          }
+        },
+        "required": [
+          "id",
+          "moimId",
+          "fromUserId",
+          "toUserId",
+          "amount",
+          "settledBy",
+          "settledAt"
         ]
       },
       "RegisterDeviceDto": {

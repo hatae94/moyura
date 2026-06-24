@@ -14,7 +14,7 @@
 // 약화하지 않는다), 양쪽 모두 notFound() 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, ChevronRight, MapPin, MessageCircle } from "lucide-react";
+import { Calendar, ChevronRight, MapPin, MessageCircle, Receipt } from "lucide-react";
 
 import { createApiClient } from "@moyura/api-client";
 
@@ -125,6 +125,20 @@ export default async function MoimDetailPage({
             <span className="text-lg font-bold">채팅 입장</span>
           </span>
           <ChevronRight size={22} />
+        </Link>
+
+        {/* 경비 관리 — 채팅 입장 카드와 동일 스타일로 미러한다(/moims/:id/expenses). */}
+        <Link
+          href={`/moims/${moim.id}/expenses`}
+          className="flex w-full items-center justify-between rounded-2xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-secondary"
+        >
+          <span className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+              <Receipt size={22} className="text-primary" />
+            </span>
+            <span className="text-lg font-bold text-foreground">경비</span>
+          </span>
+          <ChevronRight size={22} className="text-muted-foreground" />
         </Link>
 
         {/* SPEC-MOIM-011: owner 전용 초대 링크 발급(비-owner 면 null 렌더). 모바일 WebView 안에서도 동작. */}

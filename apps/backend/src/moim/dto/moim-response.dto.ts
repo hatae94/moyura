@@ -37,6 +37,15 @@ export class MoimResponseDto {
   })
   maxMembers!: number;
 
+  // SPEC-MOIM-EXPENSE-001 REQ-EXP-010: 선택적 모임 예산(KRW 정수 또는 null). 미설정 모임은 null.
+  @ApiProperty({
+    description: '모임 예산(KRW 정수 또는 null). null = 예산 미설정.',
+    type: Number,
+    nullable: true,
+    example: null,
+  })
+  budget!: number | null;
+
   @ApiProperty({
     description: '생성자 sub(= profile.id)',
     example: '00000000-0000-4000-8000-000000000001',

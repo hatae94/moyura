@@ -47,7 +47,7 @@ export class MoimService {
     });
   }
 
-  // @MX:NOTE: [AUTO] SPEC-MOIM-012 REQ-MOIM12-001: owner 전용 모임 정원 수정.
+  // @MX:NOTE: [AUTO] SPEC-MOIM-012 REQ-MOIM12-001: owner 전용 모임 정원 수정(레거시 단일 인자 버전 — 하위 호환 유지).
   // assertOwner가 "모임 없음 → 404, 비-owner → 403"을 판정한다. maxMembers 검증은 컨트롤러가 담당.
   // 현재 멤버 수 미만으로 낮춰도 소급 퇴장 없음 — 신규 가입(InviteService.accept)만 차단된다.
   async updateMaxMembers(
@@ -55,10 +55,25 @@ export class MoimService {
     moimId: string,
     maxMembers: number,
   ): Promise<Moim> {
+    return this.updateMoimSettings(sub, moimId, maxMembers, undefined);
+  }
+
+  // @MX:NOTE: [AUTO] SPEC-MOIM-EXPENSE-001 REQ-EXP-010: maxMembers/budget 부분 갱신 메서드(owner 전용).
+  // 두 필드 모두 optional — 전달된 필드만 update data 에 포함한다(undefined 제외). budget=null 은 예산 해제.
+  // assertOwner 단일 출처 유지(전용 setBudget 메서드 미신설 — SPEC §5 예산 노트 확정).
+  async updateMoimSettings(
+    sub: string,
+    moimId: string,
+    maxMembers: number | undefined,
+    budget: number | null | undefined,
+  ): Promise<Moim> {
     await this.assertOwner(sub, moimId);
+    const data: { maxMembers?: number; budget?: number | null } = {};
+    if (maxMembers !== undefined) data.maxMembers = maxMembers;
+    if (budget !== undefined) data.budget = budget;
     return this.prisma.moim.update({
       where: { id: moimId },
-      data: { maxMembers },
+      data,
     });
   }
 

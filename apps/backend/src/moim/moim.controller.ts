@@ -166,11 +166,12 @@ export class MoimController {
     await this.moimService.kickMember(user.sub, moimId, userId);
   }
 
-  // PATCH /moims/:id — 모임 정원 수정(owner 전용, SPEC-MOIM-012 REQ-MOIM12-001). 200.
-  // 비-owner 403, 없는 모임 404, maxMembers 1 미만 400.
+  // PATCH /moims/:id — 모임 설정 수정(owner 전용, SPEC-MOIM-012 + SPEC-MOIM-EXPENSE-001 REQ-EXP-010). 200.
+  // maxMembers/budget 모두 optional 부분 갱신. 비-owner 403, 없는 모임 404.
+  // maxMembers 1 미만 400, budget 음수/비정수 400(null=해제 허용).
   @Patch(':id')
   @ApiOkResponse({
-    description: '모임 정원 수정(owner 전용)',
+    description: '모임 설정 수정(owner 전용) — maxMembers/budget 부분 갱신',
     type: MoimResponseDto,
   })
   @ApiBody({ type: UpdateMaxMembersDto })
@@ -182,9 +183,13 @@ export class MoimController {
     @Param('id') id: string,
     @Body() body: UpdateMaxMembersDto,
   ): Promise<MoimResponseDto> {
-    // ValidationPipe 부재 보완: maxMembers 1 이상 정수 검증.
-    const maxMembers = requireValidMaxMembers(body?.maxMembers);
-    const moim = await this.moimService.updateMaxMembers(user.sub, id, maxMembers);
+    // ValidationPipe 부재 보완: maxMembers/budget 각각 검증(미전달 undefined 허용).
+    const maxMembers =
+      body?.maxMembers !== undefined
+        ? requireValidMaxMembers(body.maxMembers)
+        : undefined;
+    const budget = parseOptionalBudget(body?.budget);
+    const moim = await this.moimService.updateMoimSettings(user.sub, id, maxMembers, budget);
     return toMoimDto(moim);
   }
 
@@ -255,7 +260,22 @@ function requireValidMaxMembers(value: unknown): number {
   return value as number;
 }
 
-// Moim 엔티티 → 공개 DTO(createdAt/startsAt ISO-8601 직렬화, location null 허용).
+// SPEC-MOIM-EXPENSE-001 REQ-EXP-010: optional budget 파싱. 미전달 → undefined(budget 불변).
+// null → null(예산 해제). 전달 시 0 이상의 정수여야 한다(음수/비정수 → 400).
+function parseOptionalBudget(value: unknown): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null; // 명시적 해제
+  }
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new BadRequestException('budget 은 0 이상의 정수 또는 null 이어야 합니다');
+  }
+  return value as number;
+}
+
+// Moim 엔티티 → 공개 DTO(createdAt/startsAt ISO-8601 직렬화, location/budget null 허용).
 function toMoimDto(moim: Moim): MoimResponseDto {
   return {
     id: moim.id,
@@ -265,6 +285,8 @@ function toMoimDto(moim: Moim): MoimResponseDto {
     location: moim.location ?? null,
     // SPEC-MOIM-012 REQ-MOIM12-001: 정원 직렬화.
     maxMembers: moim.maxMembers,
+    // SPEC-MOIM-EXPENSE-001 REQ-EXP-010: 예산(미설정 null).
+    budget: (moim as Moim & { budget?: number | null }).budget ?? null,
     createdBy: moim.createdBy,
     createdAt: moim.createdAt.toISOString(),
   };

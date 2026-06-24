@@ -44,6 +44,7 @@ function makeTxClient(tables: Tables, ids: { next: () => string }) {
             location: arg.data.location ?? null,
             // SPEC-MOIM-012: maxMembers 미전달 시 DB @default(15)를 흉내낸다.
             maxMembers: arg.data.maxMembers ?? 15,
+            budget: null,
             createdBy: arg.data.createdBy,
             createdAt: new Date('2026-06-13T00:00:00.000Z'),
           };
@@ -284,6 +285,7 @@ describe('MoimService', () => {
       startsAt: null,
       location: null,
       maxMembers: 15,
+      budget: null,
       createdBy: 'sub-owner',
       createdAt: new Date('2026-06-13T00:00:00.000Z'),
     };
@@ -816,6 +818,62 @@ describe('MoimService', () => {
       const updated = await service.updateMaxMembers('sub-owner', 'moim-A', 1);
 
       expect(updated.maxMembers).toBe(1);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // SPEC-MOIM-EXPENSE-001 REQ-EXP-010: updateMoimSettings — budget
+  // ─────────────────────────────────────────────────────────────────
+  describe('updateMoimSettings — budget(SPEC-MOIM-EXPENSE-001 REQ-EXP-010)', () => {
+    it('owner 가 budget 을 설정하면 저장된 값이 반환된다', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma, tables } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma);
+
+      const updated = await service.updateMoimSettings('sub-owner', 'moim-A', undefined, 100000);
+
+      expect(updated.budget).toBe(100000);
+      expect((tables.moim.get('moim-A') as Moim & { budget?: number | null })?.budget).toBe(100000);
+    });
+
+    it('budget=null 로 설정하면 예산이 해제된다', async () => {
+      const { moim, owner, member } = seededMoim();
+      // 미리 budget 을 가진 모임으로 초기화.
+      const moimWithBudget = { ...moim, budget: 50000 };
+      const { prisma } = makePrisma({
+        moims: [moimWithBudget],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma);
+
+      const updated = await service.updateMoimSettings('sub-owner', 'moim-A', undefined, null);
+
+      expect(updated.budget).toBeNull();
+    });
+
+    it('비-owner 가 budget 설정을 시도하면 403(ForbiddenException)', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.updateMoimSettings('sub-member', 'moim-A', undefined, 100000),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('존재하지 않는 모임이면 404(NotFoundException)', async () => {
+      const { prisma } = makePrisma();
+      const service = new MoimService(prisma);
+
+      await expect(
+        service.updateMoimSettings('sub-owner', 'missing', undefined, 100000),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });
