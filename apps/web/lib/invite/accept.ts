@@ -12,9 +12,10 @@ export interface AcceptResult {
 }
 
 // 수락 실패 분류(사용자 메시지 결정용). 토큰 내용은 노출하지 않는다(R-A9 정신).
+// 409(정원 초과·사용 횟수 초과)는 서버 메시지(serverMessage)를 함께 노출한다 — UI 가 모달로 표시.
 export type AcceptOutcome =
   | { kind: "ok"; moimId: string }
-  | { kind: "error"; status: number; message: string };
+  | { kind: "error"; status: number; message: string; serverMessage?: string };
 
 // 백엔드 고정 코드 → 한국어 사용자 메시지(미지 404 / 만료·폐기 410 / 초과 409 / 입력 400 / 그 외).
 function messageForStatus(status: number): string {
@@ -60,10 +61,17 @@ export async function submitAccept(
     return { kind: "ok", moimId: body.moimId };
   } catch (err) {
     if (err instanceof ApiError) {
+      // 409(정원 초과·사용 횟수 초과): NestJS 응답 body { statusCode, message, error } 에서
+      // message 를 추출해 serverMessage 로 전달한다 — UI 가 모달에 서버 메시지를 표시.
+      const serverMessage =
+        err.status === 409
+          ? (err.body as { message?: string } | null)?.message ?? undefined
+          : undefined;
       return {
         kind: "error",
         status: err.status,
         message: messageForStatus(err.status),
+        serverMessage,
       };
     }
     return { kind: "error", status: 0, message: messageForStatus(0) };

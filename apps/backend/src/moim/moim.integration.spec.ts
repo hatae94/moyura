@@ -54,6 +54,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
       name: `모임 ${moimId}`,
       startsAt: event.startsAt ?? null,
       location: event.location ?? null,
+      maxMembers: 15,
       createdBy: ownerSub,
       createdAt: new Date('2026-06-13T00:00:00.000Z'),
     });
@@ -93,6 +94,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
           cb({
             moim: {
               // SPEC-MOIM-004: data 에 optional startsAt/location 을 포함한다.
+              // SPEC-MOIM-012: data 에 optional maxMembers 를 포함한다.
               create: jest.fn(
                 (arg: {
                   data: {
@@ -100,6 +102,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
                     createdBy: string;
                     startsAt?: Date | null;
                     location?: string | null;
+                    maxMembers?: number;
                   };
                 }) => {
                   seq += 1;
@@ -108,6 +111,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
                     name: arg.data.name,
                     startsAt: arg.data.startsAt ?? null,
                     location: arg.data.location ?? null,
+                    maxMembers: arg.data.maxMembers ?? 15,
                     createdBy: arg.data.createdBy,
                     createdAt: new Date('2026-06-13T00:00:00.000Z'),
                   };

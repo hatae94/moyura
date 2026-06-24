@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 import { ApiError, createApiClient } from "@moyura/api-client";
 
 import { API_BASE_URL } from "@/lib/env";
-import { kickMember, transferOwner } from "@/lib/moim/members";
+import { kickMember, transferOwner, updateMaxMembers } from "@/lib/moim/members";
 import { createClient } from "@/lib/supabase/server";
 
 /** 강퇴/위임 공통 결과 상태 — ok 또는 일반화 오류. */
@@ -18,6 +18,7 @@ export type MemberActionState = { ok?: boolean; error?: string } | undefined;
 
 const KICK_GENERIC_ERROR = "강퇴하지 못했습니다. 다시 시도해 주세요.";
 const TRANSFER_GENERIC_ERROR = "위임하지 못했습니다. 다시 시도해 주세요.";
+const MAX_MEMBERS_GENERIC_ERROR = "정원을 변경하지 못했습니다. 다시 시도해 주세요.";
 
 /** 쿠키 세션을 읽어 access_token 을 돌려준다. 세션 부재면 /login 리다이렉트. */
 async function requireToken(): Promise<string> {
@@ -89,6 +90,37 @@ export async function transferOwnerAction(
   }
 
   // 성공: 상세를 재검증해 role 변경(방장↔멤버)이 멤버 목록과 owner 컨트롤에 반영되게 한다.
+  revalidatePath(`/home/${moimId}`);
+  return { ok: true };
+}
+
+/**
+ * 모임 최대 인원(정원)을 수정한다(PATCH /moims/:id). owner 전용.
+ * 실패(403 비-owner / 400 무효 값 / 404 / 네트워크) → 일반화 오류(토큰/상세 비노출).
+ */
+export async function updateMaxMembersAction(
+  moimId: string,
+  maxMembers: number,
+): Promise<MemberActionState> {
+  if (!moimId || maxMembers < 1) {
+    return { error: MAX_MEMBERS_GENERIC_ERROR };
+  }
+
+  const token = await requireToken();
+
+  try {
+    const api = createApiClient({
+      baseUrl: API_BASE_URL,
+      getToken: () => token,
+    });
+    await updateMaxMembers(api, moimId, maxMembers);
+  } catch (err) {
+    const status = err instanceof ApiError ? err.status : "unknown";
+    console.error(`updateMaxMembersAction: PATCH /moims 실패 (status ${status})`);
+    return { error: MAX_MEMBERS_GENERIC_ERROR };
+  }
+
+  // 성공: 상세를 재검증해 정원 변경이 반영되게 한다.
   revalidatePath(`/home/${moimId}`);
   return { ok: true };
 }

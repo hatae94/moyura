@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
-import type { MoimInvite, MoimMember } from '../generated/prisma/client';
+import type { Moim, MoimInvite, MoimMember } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { InviteService } from './invite.service';
@@ -17,6 +17,7 @@ import { InviteService } from './invite.service';
 interface Tables {
   invite: Map<string, MoimInvite>; // key: invite.id
   member: Map<string, MoimMember>; // key: `${moimId}:${userId}`
+  moim: Map<string, Moim>; // key: moim.id (SPEC-MOIM-012 cap 검사용)
 }
 
 const NOW = new Date('2026-06-14T00:00:00.000Z');
@@ -33,9 +34,24 @@ describe('InviteService', () => {
   let owners: Map<string, Set<string>>;
 
   function reset(): void {
-    tables = { invite: new Map(), member: new Map() };
+    tables = { invite: new Map(), member: new Map(), moim: new Map() };
     inviteSeq = 0;
     owners = new Map();
+  }
+
+  // SPEC-MOIM-012: 테스트에서 모임을 미리 시드한다. 기본 maxMembers=15.
+  function seedMoim(moimId: string, maxMembers = 15): Moim {
+    const moim: Moim = {
+      id: moimId,
+      name: '테스트 모임',
+      startsAt: null,
+      location: null,
+      maxMembers,
+      createdBy: 'owner-sub',
+      createdAt: NOW,
+    };
+    tables.moim.set(moimId, moim);
+    return moim;
   }
 
   function setOwner(moimId: string, sub: string): void {
@@ -182,9 +198,27 @@ describe('InviteService', () => {
       ),
     };
 
+    // SPEC-MOIM-012: accept()가 cap 검사를 위해 moim.findUnique와 moimMember.count를 호출한다.
+    const moim = {
+      findUnique: jest.fn((arg: { where: { id: string } }) =>
+        Promise.resolve(tables.moim.get(arg.where.id) ?? null),
+      ),
+    };
+
     return {
       moimInvite,
-      moimMember,
+      moimMember: {
+        ...moimMember,
+        // SPEC-MOIM-012: 현재 멤버 수 반환(accept cap 검사용).
+        count: jest.fn((arg: { where: { moimId: string } }) =>
+          Promise.resolve(
+            [...tables.member.values()].filter(
+              (m) => m.moimId === arg.where.moimId,
+            ).length,
+          ),
+        ),
+      },
+      moim,
       // 실제 DB 트랜잭션의 원자성을 흉내낸다: 콜백이 throw하면 tentative write(invite/member)를 롤백한다.
       // invite/member 맵의 스냅샷을 떠 두고, 예외 시 원복해 "예외 → 부분 쓰기 잔존 없음"을 단위에서 증명한다.
       $transaction: jest.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
@@ -629,6 +663,96 @@ describe('InviteService', () => {
       await expect(
         service.accept('guest-1', 'boom', '게스트1'),
       ).rejects.toThrow('DB connection lost');
+    });
+  });
+
+  // ── SPEC-MOIM-012: accept() 모임 정원 cap 검사 ──
+  describe('accept() 모임 정원 cap (SPEC-MOIM-012 REQ-MOIM12-001)', () => {
+    it('현재 멤버 수가 maxMembers 미만이면 정상 가입된다(under-cap)', async () => {
+      const { service } = makeService();
+      // 정원 3, 현재 멤버 2명 → guest-1 가입 가능
+      seedMoim('moim-A', 3);
+      seedInvite({ moimId: 'moim-A', token: 'cap-ok' });
+      tables.member.set(memberKey('moim-A', 'member-1'), {
+        moimId: 'moim-A',
+        userId: 'member-1',
+        nickname: 'm1',
+        role: 'member',
+        joinedAt: NOW,
+      });
+      tables.member.set(memberKey('moim-A', 'member-2'), {
+        moimId: 'moim-A',
+        userId: 'member-2',
+        nickname: 'm2',
+        role: 'owner',
+        joinedAt: NOW,
+      });
+
+      const result = await service.accept('guest-1', 'cap-ok', '게스트1');
+
+      expect(result.moimId).toBe('moim-A');
+      expect(tables.member.has(memberKey('moim-A', 'guest-1'))).toBe(true);
+    });
+
+    it('현재 멤버 수가 maxMembers 이상이면 409(정원 초과) + 멤버십 미생성', async () => {
+      const { service } = makeService();
+      // 정원 2, 현재 멤버 2명 → guest-1 가입 불가
+      seedMoim('moim-A', 2);
+      seedInvite({ moimId: 'moim-A', token: 'cap-full' });
+      tables.member.set(memberKey('moim-A', 'member-1'), {
+        moimId: 'moim-A',
+        userId: 'member-1',
+        nickname: 'm1',
+        role: 'member',
+        joinedAt: NOW,
+      });
+      tables.member.set(memberKey('moim-A', 'member-2'), {
+        moimId: 'moim-A',
+        userId: 'member-2',
+        nickname: 'm2',
+        role: 'owner',
+        joinedAt: NOW,
+      });
+
+      await expect(
+        service.accept('guest-1', 'cap-full', '게스트1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      // 멤버십이 생성되지 않는다.
+      expect(tables.member.has(memberKey('moim-A', 'guest-1'))).toBe(false);
+    });
+
+    it('이미 멤버인 사용자는 정원이 가득 찼어도 재수락 시 200(멱등 — cap 체크 제외)', async () => {
+      const { service } = makeService();
+      // 정원 1, 현재 멤버 1명(= guest-1 자신)이 이미 멤버
+      seedMoim('moim-A', 1);
+      const invite = seedInvite({ moimId: 'moim-A', token: 'cap-existing' });
+      // guest-1을 이미 멤버로 시드
+      tables.member.set(memberKey('moim-A', 'guest-1'), {
+        moimId: 'moim-A',
+        userId: 'guest-1',
+        nickname: '게스트1',
+        role: 'member',
+        joinedAt: NOW,
+      });
+
+      // 이미 멤버이므로 멱등 early return → cap 검사 안 함 → 200
+      const result = await service.accept('guest-1', 'cap-existing', '게스트1');
+
+      expect(result.moimId).toBe('moim-A');
+      // usedCount 불변, 멤버십 추가 없음
+      expect(tables.invite.get(invite.id)?.usedCount).toBe(0);
+      expect(tables.member.size).toBe(1);
+    });
+
+    it('모임이 없는 경우(invite.moimId로 moim 조회 null) 정원 초과 없이 가입 진행', async () => {
+      const { service } = makeService();
+      // 모임을 moim 맵에 시드하지 않음 → findUnique null → cap 검사 생략
+      seedInvite({ moimId: 'moim-B', token: 'no-moim' });
+
+      // moim이 없어도 가입 진행된다(DB 무결성은 FK가 보장, 서비스 레이어에서는 cap skip)
+      const result = await service.accept('guest-1', 'no-moim', '게스트1');
+
+      expect(result.moimId).toBe('moim-B');
     });
   });
 });

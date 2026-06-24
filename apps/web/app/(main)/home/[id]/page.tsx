@@ -12,9 +12,9 @@
 //
 // 비멤버/미존재 안전 처리(REQ-MOIM3-005): 백엔드가 비멤버 403·미존재 404 를 반환하며(인가 단일 출처,
 // 약화하지 않는다), 양쪽 모두 notFound() 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, ChevronRight, MapPin, MessageCircle, Users } from "lucide-react";
+import { Calendar, ChevronRight, MapPin, MessageCircle } from "lucide-react";
 
 import { createApiClient } from "@moyura/api-client";
 
@@ -50,16 +50,22 @@ export default async function MoimDetailPage({
     getToken: () => session.access_token,
   });
 
-  // 상세 + 멤버 병렬 조회. 비멤버 403·미존재 404 는 모임 콘텐츠 노출 없이 notFound() 로 안전 처리한다.
+  // 상세 + 멤버 병렬 조회. 비멤버 403 는 로그인 상태로 리다이렉트, 미존재 404 는 notFound() 로 처리한다.
   let moim: MoimDetail;
   let members: MoimMember[];
   try {
     [moim, members] = await Promise.all([getMoim(api, id), getMoimMembers(api, id)]);
   } catch (err) {
     const status = moimErrorStatus(err);
-    // 403(비멤버)·404(미존재) → notFound(). 백엔드 인가를 약화시키지 않고 안전 결과로 처리(REQ-MOIM3-005).
-    if (status === 403 || status === 404) {
+    if (status === 404) {
+      // 모임이 존재하지 않음 → 404 페이지(콘텐츠/토큰 비노출).
       notFound();
+    }
+    if (status === 403) {
+      // 비멤버(강퇴·탈퇴 후 실시간 신호 미수신 등) → 로그인 상태에 따라 분기한다.
+      // 실계정 세션(is_anonymous !== true) → 메인(/home), 익명·미로그인 → 로그인(/login).
+      const isRealAccount = session.user?.is_anonymous !== true;
+      redirect(isRealAccount ? "/home" : "/login");
     }
     // 그 외 오류도 상세 진입을 차단한다(fail-closed — 토큰/오류 상세 비노출).
     notFound();
@@ -124,17 +130,15 @@ export default async function MoimDetailPage({
         {/* SPEC-MOIM-011: owner 전용 초대 링크 발급(비-owner 면 null 렌더). 모바일 WebView 안에서도 동작. */}
         <InviteButton moimId={moim.id} isOwner={isOwner} />
 
-        {/* 멤버 목록(nickname + role). owner 에겐 강퇴·방장 위임 컨트롤 포함(SPEC-MOIM-012). */}
+        {/* 멤버 목록(nickname + role). owner 에겐 강퇴·방장 위임·정원 수정 컨트롤 포함(SPEC-MOIM-012). */}
         <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            <Users size={16} />
-            <span>멤버 {members.length}명</span>
-          </div>
           <MembersSection
             moimId={moim.id}
             members={members}
             isOwner={isOwner}
             currentUserId={session.user.id}
+            accessToken={session.access_token}
+            maxMembers={moim.maxMembers}
           />
         </section>
 

@@ -261,6 +261,58 @@
         "tags": [
           "moims"
         ]
+      },
+      "patch": {
+        "operationId": "MoimController_updateMaxMembers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMaxMembersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "모임 정원 수정(owner 전용)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoimResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "대상 모임의 owner가 아님 — 403"
+          },
+          "404": {
+            "description": "존재하지 않는 모임 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
       }
     },
     "/moims/{id}/members": {
@@ -1180,6 +1232,11 @@
             "type": "string",
             "description": "이벤트 장소(자유 텍스트, optional).",
             "example": "강남역 스타벅스"
+          },
+          "maxMembers": {
+            "type": "number",
+            "description": "모임 정원(optional, 기본 15). 1 이상의 정수.",
+            "example": 20
           }
         },
         "required": [
@@ -1212,6 +1269,11 @@
             "nullable": true,
             "example": "강남역 스타벅스"
           },
+          "maxMembers": {
+            "type": "number",
+            "description": "모임 정원(기본 15). 현재 멤버 수가 이 값 이상이면 신규 가입이 409로 거부된다.",
+            "example": 15
+          },
           "createdBy": {
             "type": "string",
             "description": "생성자 sub(= profile.id)",
@@ -1228,6 +1290,7 @@
           "name",
           "startsAt",
           "location",
+          "maxMembers",
           "createdBy",
           "createdAt"
         ]
@@ -1261,6 +1324,19 @@
           "nickname",
           "role",
           "joinedAt"
+        ]
+      },
+      "UpdateMaxMembersDto": {
+        "type": "object",
+        "properties": {
+          "maxMembers": {
+            "type": "number",
+            "description": "수정할 모임 정원(1 이상의 정수). 현재 멤버 수 미만으로 낮춰도 소급 퇴장 없음(신규 가입만 차단).",
+            "example": 20
+          }
+        },
+        "required": [
+          "maxMembers"
         ]
       },
       "TransferOwnerDto": {

@@ -135,6 +135,20 @@ export class InviteService {
       throw new ConflictException('초대 사용 횟수를 초과했습니다');
     }
 
+    // SPEC-MOIM-012 REQ-MOIM12-001: 신규 가입에 한해 모임 정원 초과 여부를 선검사한다.
+    // 기존 멤버 재수락은 위의 멱등 early return 이 먼저 처리하므로 여기까지 오지 않는다.
+    const moim = await this.prisma.moim.findUnique({
+      where: { id: invite.moimId },
+    });
+    if (moim !== null) {
+      const currentCount = await this.prisma.moimMember.count({
+        where: { moimId: invite.moimId },
+      });
+      if (currentCount >= moim.maxMembers) {
+        throw new ConflictException('모임 정원이 가득 찼습니다');
+      }
+    }
+
     // 멤버십 create + usedCount 조건부 원자 증가를 한 트랜잭션으로 묶는다.
     return this.prisma.$transaction(async (tx) => {
       try {

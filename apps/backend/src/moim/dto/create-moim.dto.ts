@@ -33,4 +33,12 @@ export class CreateMoimDto {
     example: '강남역 스타벅스',
   })
   location?: string;
+
+  // SPEC-MOIM-012 REQ-MOIM12-001: 모임 정원(optional, 기본 15). 1 이상의 정수여야 한다(미달 시 400).
+  @ApiProperty({
+    description: '모임 정원(optional, 기본 15). 1 이상의 정수.',
+    required: false,
+    example: 20,
+  })
+  maxMembers?: number;
 }

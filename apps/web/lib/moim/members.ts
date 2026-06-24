@@ -35,3 +35,20 @@ export async function transferOwner(
     body: JSON.stringify({ userId }),
   });
 }
+
+/**
+ * 모임 최대 인원(정원)을 수정한다(PATCH /moims/:moimId). owner 전용.
+ * - 비-owner 호출 → 403. maxMembers < 1 또는 현재 멤버 수보다 작은 값 → 400. 모임 미존재 → 404.
+ * - 성공 시 업데이트된 MoimResponseDto 를 반환한다(사용하지 않으므로 void).
+ */
+export async function updateMaxMembers(
+  api: ApiClient,
+  moimId: string,
+  maxMembers: number,
+): Promise<void> {
+  const path = `/moims/${encodeURIComponent(moimId)}`;
+  await api.request(path as never, "patch", {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ maxMembers }),
+  });
+}

@@ -10,7 +10,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Calendar, MapPin } from "lucide-react";
+import { Calendar, MapPin, Users } from "lucide-react";
 
 import {
   createMoimAction,
@@ -105,6 +105,25 @@ export function CreateMoimForm() {
               name="location"
               type="text"
               placeholder="예: 강남역 스타벅스"
+              className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-card-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+
+          {/* 최대 인원(optional, number) */}
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="moim-max-members"
+              className="flex items-center gap-1.5 text-sm font-semibold text-foreground"
+            >
+              <Users size={15} className="text-primary" />
+              최대 인원 <span className="text-xs font-normal text-muted-foreground">(선택)</span>
+            </label>
+            <input
+              id="moim-max-members"
+              name="maxMembers"
+              type="number"
+              min={1}
+              placeholder="기본 15명"
               className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-card-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>

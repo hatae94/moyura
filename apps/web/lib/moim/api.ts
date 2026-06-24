@@ -15,6 +15,8 @@ export interface MoimDetail {
   location: string | null;
   createdBy: string;
   createdAt: string;
+  // 최대 인원 정원(기본 15). 백엔드 MoimResponseDto 에 포함된다.
+  maxMembers: number;
 }
 
 // 멤버 목록 항목(MemberResponseDto) — nickname + role(owner/member) 표시에 쓴다.

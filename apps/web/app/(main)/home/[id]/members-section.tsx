@@ -1,15 +1,21 @@
 // 멤버 목록 섹션 (Client Component, SPEC-MOIM-012).
 //
 // page.tsx 의 서버 렌더 멤버 목록을 대체한다. 기존 RoleBadge + MemberRow 와 동일 시각을 유지하면서
-// owner 전용 컨트롤(강퇴·방장 위임)과 confirm 다이얼로그(backdrop 비활성)를 추가한다.
+// owner 전용 컨트롤(강퇴·방장 위임·정원 수정)과 confirm 다이얼로그(backdrop 비활성)를 추가한다.
 // invite-invalid-handler.tsx 의 alertdialog 스타일(fixed inset-0 z-50 bg-black/50, 확인만 닫음)을 재사용.
+//
+// 실시간: useMemberChannel 로 'member_change' 이벤트를 구독한다.
+//   - DELETE + userId === currentUserId → 자신이 강퇴됨 → router.replace('/home')
+//   - 그 외(INSERT/UPDATE/DELETE 타인) → router.refresh()(멤버 목록·isOwner 재계산)
 "use client";
 
-import { useTransition, useState } from "react";
-import { Crown, User, UserMinus } from "lucide-react";
+import { useCallback, useTransition, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Crown, Pencil, User, UserMinus, Users } from "lucide-react";
 
 import { type MoimMember } from "@/lib/moim/api";
-import { kickMemberAction, transferOwnerAction } from "./member-actions";
+import { useMemberChannel } from "@/lib/moim/useMemberChannel";
+import { kickMemberAction, transferOwnerAction, updateMaxMembersAction } from "./member-actions";
 
 // ─────────────────────────────────────────────
 // 역할 배지 (page.tsx 의 RoleBadge 와 동일)
@@ -112,27 +118,60 @@ interface MembersSectionProps {
   members: MoimMember[];
   isOwner: boolean;
   currentUserId: string;
+  /** realtime 구독 인가 토큰(없으면 구독하지 않음) */
+  accessToken: string;
+  /** 모임 최대 인원 정원 */
+  maxMembers: number;
 }
 
 // @MX:ANCHOR: [AUTO] MembersSection — 멤버 목록 + owner 컨트롤의 단일 진입점(page.tsx, 추후 모바일 공유 가능성)
-// @MX:REASON: isOwner + currentUserId 조합으로 컨트롤 노출 여부를 결정하는 인가 로직 포함
+// @MX:REASON: isOwner + currentUserId 조합으로 컨트롤 노출 여부를 결정하는 인가 로직 포함 + 실시간 멤버 변경 구독
 export function MembersSection({
   moimId,
   members,
   isOwner,
   currentUserId,
+  accessToken,
+  maxMembers,
 }: MembersSectionProps) {
+  const router = useRouter();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // 다이얼로그 닫기 — 오류도 함께 초기화
+  // 정원 편집 상태 — null이면 표시 모드, string이면 편집 모드(입력값)
+  const [editingMax, setEditingMax] = useState<string | null>(null);
+  const [maxMembersError, setMaxMembersError] = useState<string | null>(null);
+  const [isSavingMax, startMaxTransition] = useTransition();
+
+  // ─────────────────────────────────────────────
+  // 실시간 멤버 변경 구독
+  // ─────────────────────────────────────────────
+  // @MX:WARN: [AUTO] onEvent — 자기강퇴(DELETE+self) → router.replace, 그 외 → router.refresh 분기
+  // @MX:REASON: router.replace 는 히스토리를 교체하므로 잘못 호출하면 네비게이션 스택이 깨짐. userId 일치 조건이 핵심.
+  const onEvent = useCallback(
+    (e: { op: string; userId: string }) => {
+      if (e.op === "DELETE" && e.userId === currentUserId) {
+        // 자신이 강퇴됨 → 메인 화면으로 이동(히스토리 교체 — "뒤로 가기"로 강퇴된 모임에 재진입 방지)
+        router.replace("/home");
+      } else {
+        // 참여(INSERT)·방장위임(UPDATE)·타인강퇴(DELETE) → 서버 재조회로 목록 갱신
+        router.refresh();
+      }
+    },
+    [currentUserId, router],
+  );
+
+  useMemberChannel(moimId, accessToken, onEvent);
+
+  // ─────────────────────────────────────────────
+  // kick/transfer 다이얼로그 핸들러
+  // ─────────────────────────────────────────────
   function closeDialog() {
     setDialog(null);
     setActionError(null);
   }
 
-  // 확인 버튼 핸들러 — Server Action 호출(useTransition 으로 pending 관리)
   function handleConfirm() {
     if (!dialog) return;
 
@@ -156,8 +195,105 @@ export function MembersSection({
     });
   }
 
+  // ─────────────────────────────────────────────
+  // 정원 편집 핸들러
+  // ─────────────────────────────────────────────
+  function startEditMax() {
+    setEditingMax(String(maxMembers));
+    setMaxMembersError(null);
+  }
+
+  function cancelEditMax() {
+    setEditingMax(null);
+    setMaxMembersError(null);
+  }
+
+  function saveEditMax() {
+    const value = parseInt(editingMax ?? "", 10);
+    if (!editingMax || isNaN(value) || value < 1) {
+      setMaxMembersError("1명 이상으로 입력해 주세요.");
+      return;
+    }
+    startMaxTransition(async () => {
+      const result = await updateMaxMembersAction(moimId, value);
+      if (result?.error) {
+        setMaxMembersError(result.error);
+        return;
+      }
+      setEditingMax(null);
+      setMaxMembersError(null);
+    });
+  }
+
   return (
     <>
+      {/* 헤더: 멤버 수 / 최대 M명 + owner 용 정원 수정 컨트롤 */}
+      <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+        <Users size={16} />
+        <span>멤버 {members.length}명</span>
+        {/* 정원 표시 */}
+        {editingMax === null ? (
+          <>
+            <span className="text-muted-foreground font-normal">/ 최대 {maxMembers}명</span>
+            {isOwner ? (
+              <button
+                type="button"
+                aria-label="정원 수정"
+                title="정원 수정"
+                onClick={startEditMax}
+                className="ml-1 flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Pencil size={12} />
+                정원 수정
+              </button>
+            ) : null}
+          </>
+        ) : (
+          /* 정원 인라인 편집 모드 */
+          <span className="ml-1 flex items-center gap-1.5">
+            <span className="text-muted-foreground font-normal">/ 최대</span>
+            <input
+              type="number"
+              min={1}
+              value={editingMax}
+              onChange={(e) => setEditingMax(e.target.value)}
+              className="w-16 rounded-lg border border-border bg-card px-2 py-0.5 text-sm text-card-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
+              aria-label="최대 인원 수"
+              disabled={isSavingMax}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveEditMax();
+                if (e.key === "Escape") cancelEditMax();
+              }}
+            />
+            <span className="text-muted-foreground font-normal">명</span>
+            <button
+              type="button"
+              disabled={isSavingMax}
+              onClick={saveEditMax}
+              className="rounded-lg bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {isSavingMax ? "저장 중…" : "저장"}
+            </button>
+            <button
+              type="button"
+              disabled={isSavingMax}
+              onClick={cancelEditMax}
+              className="rounded-lg border border-border px-2 py-0.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            >
+              취소
+            </button>
+          </span>
+        )}
+      </div>
+
+      {/* 정원 편집 오류 */}
+      {maxMembersError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {maxMembersError}
+        </p>
+      ) : null}
+
+      {/* 멤버 목록 */}
       {members.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {members.map((member) => {
