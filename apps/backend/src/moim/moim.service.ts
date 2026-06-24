@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -133,6 +134,68 @@ export class MoimService {
       where: { id: moimId },
       data: { location },
     });
+  }
+
+  // 멤버 강제 퇴장(owner 전용). 대상 멤버십 삭제만 수행 — 투표/채팅 데이터 불변.
+  // 비-owner 403, 대상 없음 404, 대상이 owner이면 403(스스로 포함).
+  async kickMember(
+    sub: string,
+    moimId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    // 호출자 owner 인가 — 모임 없음(404), 비-owner(403)을 assertOwner가 일괄 판정한다.
+    await this.assertOwner(sub, moimId);
+    const target = await this.prisma.moimMember.findUnique({
+      where: { moimId_userId: { moimId, userId: targetUserId } },
+    });
+    if (!target) {
+      // 대상이 이 모임의 멤버가 아님 → 404.
+      throw new NotFoundException();
+    }
+    if (target.role === ROLE_OWNER) {
+      // owner는 강제 퇴장 불가 — 소유권 이양 또는 모임 삭제를 써야 한다.
+      throw new ForbiddenException();
+    }
+    await this.prisma.moimMember.delete({
+      where: { moimId_userId: { moimId, userId: targetUserId } },
+    });
+  }
+
+  // 소유권 이양(owner 전용). 단일 트랜잭션: 현 owner → member, 대상 → owner. createdBy 불변.
+  // 비-owner 403, self-transfer 400, 빈 userId 400, 대상 없음 404, 모임 없음 404.
+  async transferOwner(
+    sub: string,
+    moimId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    // 호출자 owner 인가 — 모임 없음(404), 비-owner(403)을 assertOwner가 일괄 판정한다.
+    await this.assertOwner(sub, moimId);
+    // targetUserId 비어 있음 검사(ValidationPipe 부재 보완, C-1 패턴).
+    if (typeof targetUserId !== 'string' || targetUserId.trim().length === 0) {
+      throw new BadRequestException('userId은(는) 비어 있을 수 없습니다');
+    }
+    if (targetUserId === sub) {
+      // 자기 자신에게 이양은 무의미 → 400.
+      throw new BadRequestException('이미 owner입니다');
+    }
+    const target = await this.prisma.moimMember.findUnique({
+      where: { moimId_userId: { moimId, userId: targetUserId } },
+    });
+    if (!target) {
+      // 대상이 이 모임의 멤버가 아님 → 404.
+      throw new NotFoundException();
+    }
+    // 단일 트랜잭션: 현 owner role → 'member', 대상 role → 'owner'. createdBy 불변.
+    await this.prisma.$transaction([
+      this.prisma.moimMember.update({
+        where: { moimId_userId: { moimId, userId: sub } },
+        data: { role: 'member' },
+      }),
+      this.prisma.moimMember.update({
+        where: { moimId_userId: { moimId, userId: targetUserId } },
+        data: { role: ROLE_OWNER },
+      }),
+    ]);
   }
 
   // 모임 삭제(REQ-MOIM-003 / AC-7). owner 전용 — 비-owner 403/없는 모임 404는 assertOwner가 판정한다.

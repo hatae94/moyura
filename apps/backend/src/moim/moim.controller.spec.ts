@@ -38,6 +38,8 @@ function makeService(): {
     listMembers: jest.Mock;
     deleteMoim: jest.Mock;
     leave: jest.Mock;
+    kickMember: jest.Mock;
+    transferOwner: jest.Mock;
   };
 } {
   const mocks = {
@@ -47,6 +49,8 @@ function makeService(): {
     listMembers: jest.fn().mockResolvedValue([]),
     deleteMoim: jest.fn().mockResolvedValue(undefined),
     leave: jest.fn().mockResolvedValue(undefined),
+    kickMember: jest.fn().mockResolvedValue(undefined),
+    transferOwner: jest.fn().mockResolvedValue(undefined),
   };
   return { service: mocks as unknown as MoimService, mocks };
 }
@@ -262,6 +266,54 @@ describe('MoimController', () => {
 
       expect(mocks.leave).toHaveBeenCalledWith('sub-U', 'moim-A');
       expect(res).toBeUndefined();
+    });
+  });
+
+  describe('DELETE /moims/:moimId/members/:userId (kick)', () => {
+    it('검증된 sub + moimId + targetUserId로 kickMember를 호출한다(204, 본문 없음)', async () => {
+      const { service, mocks } = makeService();
+      const controller = new MoimController(service);
+
+      const res = await controller.kick(USER, 'moim-A', 'sub-target');
+
+      expect(mocks.kickMember).toHaveBeenCalledWith(
+        'sub-U',
+        'moim-A',
+        'sub-target',
+      );
+      expect(res).toBeUndefined();
+    });
+  });
+
+  describe('POST /moims/:moimId/owner (transferOwner)', () => {
+    it('검증된 sub + moimId + body.userId로 transferOwner를 호출한다(204, 본문 없음)', async () => {
+      const { service, mocks } = makeService();
+      const controller = new MoimController(service);
+
+      const res = await controller.transferOwner(USER, 'moim-A', {
+        userId: 'sub-target',
+      });
+
+      expect(mocks.transferOwner).toHaveBeenCalledWith(
+        'sub-U',
+        'moim-A',
+        'sub-target',
+      );
+      expect(res).toBeUndefined();
+    });
+
+    it('body.userId 가 누락(undefined)이면 서비스에 빈 문자열을 전달한다(서비스가 400 처리)', async () => {
+      const { service, mocks } = makeService();
+      const controller = new MoimController(service);
+
+      await controller.transferOwner(
+        USER,
+        'moim-A',
+        {} as { userId: string },
+      );
+
+      // 컨트롤러는 body?.userId ?? '' 를 그대로 전달 — 400 판정은 서비스 책임.
+      expect(mocks.transferOwner).toHaveBeenCalledWith('sub-U', 'moim-A', '');
     });
   });
 });

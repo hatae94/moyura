@@ -347,6 +347,98 @@
         ]
       }
     },
+    "/moims/{moimId}/members/{userId}": {
+      "delete": {
+        "operationId": "MoimController_kick",
+        "parameters": [
+          {
+            "name": "moimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "멤버 강제 퇴장(owner 전용)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "비-owner 또는 대상이 owner — 403"
+          },
+          "404": {
+            "description": "모임 없음 또는 대상 멤버십 없음 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
+      }
+    },
+    "/moims/{moimId}/owner": {
+      "post": {
+        "operationId": "MoimController_transferOwner",
+        "parameters": [
+          {
+            "name": "moimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOwnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "소유권 이양(owner → 대상 멤버)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "비-owner — 403"
+          },
+          "404": {
+            "description": "모임 없음 또는 대상 멤버십 없음 — 404"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moims"
+        ]
+      }
+    },
     "/moims/{moimId}/invites": {
       "post": {
         "operationId": "MoimInviteController_create",
@@ -1169,6 +1261,19 @@
           "nickname",
           "role",
           "joinedAt"
+        ]
+      },
+      "TransferOwnerDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "소유권을 이양받을 대상 멤버 userId(비어 있을 수 없음)",
+            "example": "00000000-0000-4000-8000-000000000002"
+          }
+        },
+        "required": [
+          "userId"
         ]
       },
       "CreateInviteDto": {

@@ -14,15 +14,7 @@
 // 약화하지 않는다), 양쪽 모두 notFound() 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import {
-  Calendar,
-  ChevronRight,
-  Crown,
-  MapPin,
-  MessageCircle,
-  User,
-  Users,
-} from "lucide-react";
+import { Calendar, ChevronRight, MapPin, MessageCircle, Users } from "lucide-react";
 
 import { createApiClient } from "@moyura/api-client";
 
@@ -39,37 +31,8 @@ import {
 import { type PollWithResults, listPolls } from "@/lib/moim/polls";
 import { PollsSection } from "./polls-section";
 import { InviteButton } from "./invite-button";
+import { MembersSection } from "./members-section";
 
-/** 멤버 역할 배지(owner/member). owner 는 강조, 그 외는 muted. */
-function RoleBadge({ role }: { role: string }) {
-  const isOwner = role === "owner";
-  return (
-    <span
-      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-        isOwner ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-      }`}
-    >
-      {isOwner ? <Crown size={12} /> : <User size={12} />}
-      {isOwner ? "방장" : "멤버"}
-    </span>
-  );
-}
-
-/** 멤버 행 — 아바타 이니셜 + nickname + role 배지. */
-function MemberRow({ member }: { member: MoimMember }) {
-  const initial = member.nickname.charAt(0).toUpperCase() || "?";
-  return (
-    <li className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-bold text-secondary-foreground">
-        {initial}
-      </span>
-      <span className="min-w-0 flex-1 truncate font-medium text-card-foreground">
-        {member.nickname}
-      </span>
-      <RoleBadge role={member.role} />
-    </li>
-  );
-}
 
 export default async function MoimDetailPage({
   params,
@@ -118,9 +81,10 @@ export default async function MoimDetailPage({
     day: "numeric",
   });
 
-  // SPEC-MOIM-011: 모임 생성자(owner)만 초대 링크를 발급할 수 있다(createdBy = 가드-검증 sub).
-  // 비-owner 에겐 InviteButton 이 아무것도 렌더하지 않는다(백엔드 assertOwner 403 이 최종 출처).
-  const isOwner = moim.createdBy === session.user.id;
+  // SPEC-MOIM-011/012: role 기반 isOwner 판정(createdBy 기반 대체).
+  // 방장 위임(SPEC-MOIM-012) 후 MoimMember.role 이 변경되지만 Moim.createdBy 는 불변이므로
+  // createdBy 기반 판정은 위임 후 새 owner 를 방장으로 인식하지 못한다. role="owner" 로 판정한다.
+  const isOwner = members.some((m) => m.userId === session.user.id && m.role === "owner");
 
   return (
     <div className="flex flex-1 flex-col bg-background">
@@ -160,23 +124,18 @@ export default async function MoimDetailPage({
         {/* SPEC-MOIM-011: owner 전용 초대 링크 발급(비-owner 면 null 렌더). 모바일 WebView 안에서도 동작. */}
         <InviteButton moimId={moim.id} isOwner={isOwner} />
 
-        {/* 멤버 목록(nickname + role). 멤버 0명이면 빈 멤버 안내(엣지 케이스). */}
+        {/* 멤버 목록(nickname + role). owner 에겐 강퇴·방장 위임 컨트롤 포함(SPEC-MOIM-012). */}
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
             <Users size={16} />
             <span>멤버 {members.length}명</span>
           </div>
-          {members.length > 0 ? (
-            <ul className="flex flex-col gap-2">
-              {members.map((member) => (
-                <MemberRow key={member.userId} member={member} />
-              ))}
-            </ul>
-          ) : (
-            <p className="rounded-xl border border-border bg-card p-4 text-center text-sm text-muted-foreground">
-              아직 멤버가 없어요
-            </p>
-          )}
+          <MembersSection
+            moimId={moim.id}
+            members={members}
+            isOwner={isOwner}
+            currentUserId={session.user.id}
+          />
         </section>
 
         {/* SPEC-MOIM-006/007: 투표 섹션(Client 섬). 투표 목록·득표 막대·내 표 강조·단일/다중 투표·마감·생성 폼.
