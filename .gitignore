@@ -28,6 +28,11 @@ dist/
 *.egg-info/
 *.egg
 
+# Mobile build artifacts (Android/iOS binaries — may embed google-services / signing config)
+*.apk
+*.aab
+*.ipa
+
 # ===========================================
 # Python Cache & Bytecode
 # ===========================================
@@ -186,6 +191,7 @@ secret-*.*
 .moai/status_line.sh
 .moai/memory/
 .moai/worktrees/
+.moai/cache/
 
 # ===========================================
 # Evolution Telemetry (local-only usage data)
