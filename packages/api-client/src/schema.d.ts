@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/invites/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["InvitePublicController_checkValidity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/invites/{token}/accept": {
         parameters: {
             query?: never;
@@ -431,6 +447,13 @@ export interface components {
              * @example 2026-06-14T00:00:00.000Z
              */
             createdAt: string;
+        };
+        InviteValidityDto: {
+            /**
+             * @description 초대가 속한 모임 id
+             * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
+             */
+            moimId: string;
         };
         AcceptInviteDto: {
             /**
@@ -1105,6 +1128,42 @@ export interface operations {
             };
             /** @description 존재하지 않는 모임/초대 — 404 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    InvitePublicController_checkValidity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 유효한 초대 — moimId 반환 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteValidityDto"];
+                };
+            };
+            /** @description 미지 토큰 — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 만료·폐기 토큰 — 410 */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };

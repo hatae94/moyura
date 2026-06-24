@@ -23,6 +23,7 @@ import {
   serializeNoneMessage,
   serializeClearedMessage,
   serializeGoogleSignInRequest,
+  serializeInviteInvalidMessage,
   verifyInboundMessage,
   BRIDGE_MESSAGE_TYPES,
   type TokenPayload,
@@ -86,6 +87,24 @@ export function requestNativeGoogleSignIn(): boolean {
     return false; // 데스크톱 브라우저 — 네이티브 경로 없음(기존 웹 OAuth 흐름 유지).
   }
   postToNative(bridge, serializeGoogleSignInRequest(getExpectedNonce()));
+  return true;
+}
+
+/**
+ * 초대 수락 페이지 로드 시 초대가 무효(미지/만료/폐기)로 판정되면, 네이티브 셸에 invite:invalid 를 전달한다
+ * (SPEC-MOIM-011 후속). 셸 안에서는 네이티브가 Alert + 라우팅을 수행하므로 호출부(InviteInvalidHandler)는
+ * 자체 UI/네비게이션을 하지 않는다. 일반 브라우저(데스크톱)에서는 브리지가 없어 false 를 반환하므로,
+ * 호출부가 웹 모달 + 웹 라우팅 폴백을 수행한다.
+ *
+ * @param loggedIn 실제 계정 세션 여부(true → 네이티브 Alert→(tabs)/home, false → (auth)/login)
+ * @returns 셸이라 네이티브로 전달했으면 true(호출부는 웹 UI 생략), 데스크톱이면 false.
+ */
+export function notifyInviteInvalid(loggedIn: boolean): boolean {
+  const bridge = getNativeBridge();
+  if (!bridge) {
+    return false; // 데스크톱 브라우저 — 네이티브 경로 없음(호출부가 웹 모달 폴백).
+  }
+  postToNative(bridge, serializeInviteInvalidMessage(loggedIn, getExpectedNonce()));
   return true;
 }
 

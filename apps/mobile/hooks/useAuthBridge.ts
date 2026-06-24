@@ -92,6 +92,12 @@ export interface UseAuthBridgeArgs {
    * push 한다(router.push — 네이티브 back 으로 list 복귀). getCurrentUrl 와 함께 주어질 때만 동작한다.
    */
   onDetailPush?: (route: AppRoute, id: string) => void;
+  /**
+   * (SPEC-MOIM-011 후속, optional) 웹 초대 수락 페이지가 로드 시 초대 무효를 invite:invalid 로 통지하면
+   * 호출(nonce 인증 통과분만). loggedIn(실제 계정 세션 여부)에 따라 호출부가 Alert→(tabs)/home 또는
+   * (auth)/login 으로 분기한다.
+   */
+  onInviteInvalid?: (loggedIn: boolean) => void;
 }
 
 /** useAuthBridge 리턴. */
@@ -152,6 +158,7 @@ export function useAuthBridge({
   getCurrentUrl,
   onCrossRouteDispatch,
   onDetailPush,
+  onInviteInvalid,
 }: UseAuthBridgeArgs): UseAuthBridgeResult {
   // R-T7: 진행 중인 주입의 재시도 타이머·시도 횟수·ack 여부를 추적한다.
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -295,11 +302,15 @@ export function useAuthBridge({
           // 외부 브라우저 OAuth 네비게이션 없이 인앱 네이티브 로그인을 띄운다(결정적 경로 — 인터셉트 비의존).
           nativeGoogleSignInRef.current();
           break;
+        case "invite-invalid":
+          // SPEC-MOIM-011 후속: 무효 초대(nonce 인증 통과) → 호출부가 Alert→(tabs)/home 또는 (auth)/login 분기.
+          onInviteInvalid?.(action.loggedIn);
+          break;
         case "ignore":
           break;
       }
     },
-    [clearRetryTimer, onHandshakeResolved, nonce, onAuthSignal],
+    [clearRetryTimer, onHandshakeResolved, nonce, onAuthSignal, onInviteInvalid],
   );
 
   // R-T2/R-T7: 콜드스타트 토큰 주입 — origin allowlist 선통과 후 bounded 재시도로 주입.

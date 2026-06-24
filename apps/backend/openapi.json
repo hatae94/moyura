@@ -498,6 +498,42 @@
         ]
       }
     },
+    "/invites/{token}": {
+      "get": {
+        "operationId": "InvitePublicController_checkValidity",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "유효한 초대 — moimId 반환",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteValidityDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "미지 토큰 — 404"
+          },
+          "410": {
+            "description": "만료·폐기 토큰 — 410"
+          }
+        },
+        "tags": [
+          "invites"
+        ]
+      }
+    },
     "/invites/{token}/accept": {
       "post": {
         "operationId": "InviteAcceptController_accept",
@@ -1205,6 +1241,19 @@
           "usedCount",
           "revokedAt",
           "createdAt"
+        ]
+      },
+      "InviteValidityDto": {
+        "type": "object",
+        "properties": {
+          "moimId": {
+            "type": "string",
+            "description": "초대가 속한 모임 id",
+            "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          }
+        },
+        "required": [
+          "moimId"
         ]
       },
       "AcceptInviteDto": {

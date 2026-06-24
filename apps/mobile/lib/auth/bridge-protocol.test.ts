@@ -228,3 +228,69 @@ describe("auth:google-request 명령 (SPEC-MOBILE-004 — 네이티브 인앱 Go
     ).toEqual({ kind: "ignore" });
   });
 });
+
+// SPEC-MOIM-011 후속: 무효 초대 통지(invite:invalid) — loggedIn 불리언 페이로드, additive type.
+describe("invite:invalid 명령 (SPEC-MOIM-011 후속 — 무효 초대 네이티브 처리 트리거)", () => {
+  it("type 집합에 invite:invalid 가 포함된다", () => {
+    expect(BRIDGE_MESSAGE_TYPES.INVITE_INVALID).toBe("invite:invalid");
+    expect(Object.values(BRIDGE_MESSAGE_TYPES)).toContain("invite:invalid");
+  });
+
+  it("loggedIn 페이로드를 정확히 round-trip 한다 (true/false 모두)", () => {
+    for (const loggedIn of [true, false]) {
+      const msg: BridgeMessage = {
+        version: BRIDGE_VERSION,
+        type: BRIDGE_MESSAGE_TYPES.INVITE_INVALID,
+        nonce: NONCE,
+        payload: { loggedIn },
+      };
+      expect(parseBridgeMessage(serializeBridgeMessage(msg))).toEqual(msg);
+    }
+  });
+
+  it("payload.loggedIn 이 boolean 이 아니거나 누락이면 null 을 반환한다 (안전 무시)", () => {
+    const base = { version: BRIDGE_VERSION, type: BRIDGE_MESSAGE_TYPES.INVITE_INVALID, nonce: NONCE };
+    expect(parseBridgeMessage(JSON.stringify(base))).toBeNull(); // payload 누락
+    expect(parseBridgeMessage(JSON.stringify({ ...base, payload: {} }))).toBeNull();
+    expect(parseBridgeMessage(JSON.stringify({ ...base, payload: { loggedIn: "yes" } }))).toBeNull();
+  });
+
+  it("nonce 인증 통과 시 invite-invalid 액션을 loggedIn 그대로 반환한다", () => {
+    expect(
+      decideInboundAction(
+        {
+          version: BRIDGE_VERSION,
+          type: BRIDGE_MESSAGE_TYPES.INVITE_INVALID,
+          nonce: NONCE,
+          payload: { loggedIn: true },
+        },
+        NONCE,
+      ),
+    ).toEqual({ kind: "invite-invalid", loggedIn: true });
+    expect(
+      decideInboundAction(
+        {
+          version: BRIDGE_VERSION,
+          type: BRIDGE_MESSAGE_TYPES.INVITE_INVALID,
+          nonce: NONCE,
+          payload: { loggedIn: false },
+        },
+        NONCE,
+      ),
+    ).toEqual({ kind: "invite-invalid", loggedIn: false });
+  });
+
+  it("nonce 불일치(위조) 시 ignore 한다 — 네이티브 Alert/라우팅 미실행", () => {
+    expect(
+      decideInboundAction(
+        {
+          version: BRIDGE_VERSION,
+          type: BRIDGE_MESSAGE_TYPES.INVITE_INVALID,
+          nonce: "forged",
+          payload: { loggedIn: true },
+        },
+        NONCE,
+      ),
+    ).toEqual({ kind: "ignore" });
+  });
+});

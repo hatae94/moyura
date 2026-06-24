@@ -31,6 +31,8 @@ export const BRIDGE_MESSAGE_TYPES = {
   REVALIDATE: "resume:revalidate",
   /** web→native: 셸 안에서 Google 버튼 탭 시 네이티브 Google Sign-In 실행 요청(SPEC-MOBILE-004, 토큰 없음). */
   GOOGLE_SIGNIN_REQUEST: "auth:google-request",
+  /** web→native: 초대 수락 페이지 로드 시 초대 무효 판정 → 네이티브 Alert + 라우팅 요청(SPEC-MOIM-011 후속, payload.loggedIn). */
+  INVITE_INVALID: "invite:invalid",
 } as const;
 
 /** 토큰 페이로드 — access/refresh 만(PII 최소화 OD-4). */
@@ -171,4 +173,18 @@ export function serializeClearedMessage(nonce: string): string {
  */
 export function serializeGoogleSignInRequest(nonce: string): string {
   return JSON.stringify({ version: BRIDGE_VERSION, type: BRIDGE_MESSAGE_TYPES.GOOGLE_SIGNIN_REQUEST, nonce });
+}
+
+/**
+ * web→native invite:invalid 메시지를 직렬화한다(SPEC-MOIM-011 후속 — 초대 수락 페이지 로드 시 무효 판정).
+ * 토큰 없는 명령 신호로, payload.loggedIn(실제 계정 세션 여부)에 따라 네이티브가 Alert→(tabs)/home 또는
+ * (auth)/login 으로 분기한다. nonce 를 envelope 에 실어 네이티브가 인증한다(R-T8).
+ */
+export function serializeInviteInvalidMessage(loggedIn: boolean, nonce: string): string {
+  return JSON.stringify({
+    version: BRIDGE_VERSION,
+    type: BRIDGE_MESSAGE_TYPES.INVITE_INVALID,
+    nonce,
+    payload: { loggedIn },
+  });
 }
