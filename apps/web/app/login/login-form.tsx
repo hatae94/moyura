@@ -18,6 +18,8 @@ import {
 } from "@/lib/auth/actions";
 import { requestNativeGoogleSignIn } from "@/lib/native-bridge/bridge-client";
 
+import { InviteLinkEntry } from "./invite-link-entry";
+
 // 인라인 Google 아이콘(R-A3/R-F1: lucide 가 아닌 인라인 20×20 SVG 컴포넌트로 유지).
 function GoogleIcon() {
   return (
@@ -77,7 +79,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
               <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
                 <span className="text-3xl">🎉</span>
               </div>
-              <h1 className="text-3xl font-bold mb-3">Meetup</h1>
+              <h1 className="text-3xl font-bold mb-3">Meetup{process.env.NODE_ENV === 'development' ? ' [DEV]' : ''}</h1>
               <p className="text-gray-600">
                 간편하게 모임을 만들고
                 <br />
@@ -140,6 +142,12 @@ export function LoginForm({ initialError }: { initialError?: string }) {
                 <Mail size={20} />
                 이메일로 계속하기
               </button>
+            </div>
+
+            {/* 비가입 게스트 경로(SPEC-MOIM-011 후속): 받은 초대 링크로 계정 없이 바로 참여(익명 가입).
+                정상 로그인과 경쟁하지 않게 보조 링크로 두고, 탭하면 입력창이 펼쳐진다. */}
+            <div className="mt-6">
+              <InviteLinkEntry />
             </div>
 
             {/* 푸터: 약관/개인정보 비기능 underline 텍스트(R-A5, OD-4) */}
