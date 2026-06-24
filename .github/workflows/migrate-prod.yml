@@ -1,0 +1,57 @@
+# prod DB 스키마 자동 적용 — master 의 Prisma 마이그레이션 변경 시 `prisma migrate deploy` 를 실행한다.
+#
+# 배경: 백엔드는 Render(무료 플랜) 에 배포되며 preDeployCommand 자동화가 불가하여(DEPLOY.md C),
+#   스키마 적용을 수동으로 돌려야 하는 함정이 있었다(새 컬럼 누락 → moim CRUD 500). 이 워크플로우가 그 단계를 자동화한다.
+#   기존 ci.yml 은 검증 전용(마이그레이션 미실행)이므로 배포 관심사를 이 파일로 분리한다.
+#
+# 순서 주의: Render autoDeploy 와 동시에 트리거되지만, 이 잡(install + migrate deploy)이
+#   Render 빌드(install + nx build, 수 분)보다 먼저 끝나는 것이 일반적이라 "새 컬럼이 코드보다 먼저 적용"되는
+#   안전 순서를 대부분 만족한다. 엄격한 선행이 필요하면 workflow_dispatch 로 배포 전에 수동 실행한다.
+#
+# 시크릿: PROD_DIRECT_URL — Supabase session pooler(5432) 연결 문자열(마이그레이션 CLI 전용).
+#   migrate deploy 는 prisma.config.ts 의 datasource.url=env('DIRECT_URL') 만 사용한다(런타임 DATABASE_URL 불필요).
+name: Migrate Prod DB
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/backend/prisma/migrations/**"
+  workflow_dispatch: # 수동 실행(초기 적용 / 복구 / 엄격한 배포-선행용).
+
+# 마이그레이션은 중간 취소하지 않는다(부분 적용 방지). 동시 실행도 직렬화한다.
+concurrency:
+  group: migrate-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # prisma migrate deploy 는 작성된 마이그레이션을 적용만 한다(생성/리셋 없음 — prod 안전).
+      # working-directory 로 apps/backend 의 prisma.config.ts(schema/datasource 도출)를 사용한다(ci.yml 패턴 동일).
+      - name: Apply migrations to prod DB
+        run: pnpm exec prisma migrate deploy
+        working-directory: apps/backend
+        env:
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}

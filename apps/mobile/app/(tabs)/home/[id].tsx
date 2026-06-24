@@ -11,12 +11,19 @@ import { useLocalSearchParams } from "expo-router";
 
 import { WEB_URL } from "../../../lib/web-url";
 import { urlForDetailRoute } from "../../../lib/route-map-core";
+import { buildChatUrl } from "../../../lib/push/notification-core";
 import { BridgedWebView } from "../../../components/BridgedWebView";
 
 export default function HomeDetail(): React.JSX.Element {
   // expo-router 동적 세그먼트 [id] — 배열일 수 있어 단일 문자열로 정규화한다(방어적).
-  const params = useLocalSearchParams<{ id: string | string[] }>();
+  const params = useLocalSearchParams<{ id: string | string[]; target?: string | string[] }>();
   const id = Array.isArray(params.id) ? (params.id[0] ?? "") : (params.id ?? "");
-  const sourceUri = urlForDetailRoute("home", id, WEB_URL);
+  // SPEC-CHAT-002 R-PUSH-007: 알림 탭으로 진입한 경우(`?target=chat`) 모임 상세 대신 채팅(/moims/{id}/chat)
+  // WebView 를 직접 로드한다. 그 외에는 기존대로 모임 상세(${WEB_URL}/home/{id})를 호스팅한다.
+  const target = Array.isArray(params.target) ? params.target[0] : params.target;
+  const sourceUri =
+    target === "chat"
+      ? (buildChatUrl(id, WEB_URL) ?? urlForDetailRoute("home", id, WEB_URL))
+      : urlForDetailRoute("home", id, WEB_URL);
   return <BridgedWebView sourceUri={sourceUri} routeContext="(tabs)" />;
 }
