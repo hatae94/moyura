@@ -28,6 +28,12 @@ import type {
 } from "react-native-webview/lib/WebViewTypes";
 
 import { LoadingOverlay } from "./LoadingOverlay";
+import {
+  COVER_OPACITY_LOADING,
+  COVER_FADE_DURATION_MS,
+  coverOpacityOnLoadStart,
+  coverOpacityOnLoadEnd,
+} from "../lib/ui/webview-fade-core";
 
 export interface WebViewShellProps {
   /** WebView 가 로드할 source URL. 변경 시 WebView 가 새 URL 로 네비게이트한다(리마운트 아님). */
@@ -107,85 +113,101 @@ export const WebViewShell = forwardRef<WebView, WebViewShellProps>(function WebV
     injectedJavaScriptBeforeContentLoaded ?? ""
   }`;
 
-  // R-NF2(M2/T-003): 로드 완료 시 콘텐츠를 opacity 0→1 로 페이드인해 흰 깜빡임을 제거한다.
-  // 무조건적 Animated.View 래퍼(아래)라 WebView 를 리마운트하지 않는다(OD-1 비리마운트 보존 — SafeAreaView 와 동일 논리).
-  const opacity = useRef(new Animated.Value(0)).current;
+  // R-NF2(M2/T-003): 로드 완료 시 흰 깜빡임을 제거하는 페이드인.
+  //
+  // [회귀 수정 — main→login 바운스] 이전 구현은 WebView 자체를 opacity 0→1 로 페이드했는데, iOS WKWebView 는
+  // 자신의 레이어가 완전 투명(opacity 0)이면 비가시(occluded)로 판정해 페이지 JS/핸드셰이크를 서스펜드한다
+  // (document.visibilityState='hidden'). 그 결과 (tabs)/home 의 *새* WebView 가 opacity 0 으로 마운트되는 동안
+  // session:restore 핸드셰이크가 비가시 상태로 구동돼 결정적으로 session:none 으로 귀결 → isSignedIn=false
+  // → 메인 진입 직후 로그인 바운스. 그래서 *WebView 는 항상 opacity 1(가시/활성)로 두고*, 그 위에 덮인
+  // 불투명 커버(스켈레톤 배경)를 1→0 으로 페이드아웃해 동일한 페이드인을 구현한다(WebView 비서스펜드 — 불변식은
+  // webview-fade-core.ts 가 강제). 무조건적 Animated.View 커버라 WebView 를 리마운트하지 않는다(OD-1 보존).
+  const coverOpacity = useRef(new Animated.Value(COVER_OPACITY_LOADING)).current;
 
-  // 재로드(handleRetry) 시에도 다시 페이드인하도록 로드 시작에 opacity 를 0 으로 리셋한 뒤
-  // 호출부 onLoadStart 를 그대로 호출한다(기존 콜백 행위 보존).
+  // 재로드(handleRetry) 시에도 다시 페이드인하도록 로드 시작에 커버를 불투명(1)으로 리셋한 뒤
+  // 호출부 onLoadStart 를 그대로 호출한다(기존 콜백 행위 보존). WebView opacity 는 건드리지 않는다(항상 1).
   const handleLoadStart = useCallback((): void => {
-    opacity.setValue(0);
+    coverOpacity.setValue(coverOpacityOnLoadStart());
     onLoadStart?.();
-  }, [opacity, onLoadStart]);
+  }, [coverOpacity, onLoadStart]);
 
-  // 로드 종료 시 페이드인을 구동한 뒤 호출부 onLoadEnd(maybeInjectRestore 등)를 그대로 호출한다.
-  // opacity 는 네이티브 드라이버 지원(레이아웃 영향 없음) → useNativeDriver:true.
+  // 로드 종료 시 커버를 0 으로 페이드아웃해 아래 WebView 콘텐츠를 드러낸 뒤 호출부 onLoadEnd(maybeInjectRestore 등)를
+  // 그대로 호출한다. opacity 는 네이티브 드라이버 지원(레이아웃 영향 없음) → useNativeDriver:true.
   const handleLoadEnd = useCallback((): void => {
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 200,
+    Animated.timing(coverOpacity, {
+      toValue: coverOpacityOnLoadEnd(),
+      duration: COVER_FADE_DURATION_MS,
       useNativeDriver: true,
     }).start();
     onLoadEnd?.();
-  }, [opacity, onLoadEnd]);
+  }, [coverOpacity, onLoadEnd]);
 
   return (
     // safe-area 인셋 적용 래퍼(네이티브 SafeAreaView). edges 미지정 시 전 엣지가 기본값이다.
     // [OD-1] 무조건적 래퍼라 WebView 를 리마운트하지 않는다(쿠키/PKCE 컨텍스트 보존).
     <SafeAreaView style={styles.safeArea} edges={edges}>
-      {/* [OD-1] 무조건적 Animated.View 래퍼 — 페이드인 opacity 만 적용하고 WebView 를 리마운트하지 않는다. */}
-      <Animated.View style={[styles.fadeContainer, { opacity }]}>
-        <WebView
-          ref={ref}
-          // R-S2: 풀스크린 웹 호스트. sourceUri 변경 시 WebView 가 새 URL 로 네비게이트한다(R-O3 콜백 교체).
-          // key 는 일부러 두지 않는다 — 리마운트하면 WebView 쿠키/PKCE 컨텍스트가 초기화돼 OAuth 흐름이 깨진다(OD-1/OD-5).
-          source={{ uri: sourceUri }}
-          style={style ?? styles.webview}
-          // R-T9/C-2: WebView 를 신뢰 origin 에 잠근다(미지정 시 RN 기본 ["http://*","https://*"] — 위험).
-          originWhitelist={originWhitelist ? [...originWhitelist] : undefined}
-          // Android: 신뢰 origin 잠금을 우회하는 새 창(window.open) 차단(C-2 보강).
-          setSupportMultipleWindows={false}
-          // R-T8/OD-11: 컨텐츠 로드 전 per-session nonce 를 신뢰 origin 채널로 확립한다.
-          // SPEC-MOBILE-003 R-WB3/R-WB4: 셸 모드 마커(__MOYURA_NATIVE_SHELL__)를 항상 선행 주입한다.
-          injectedJavaScriptBeforeContentLoaded={beforeContentJs}
-          // R-O5: OAuth 왕복/앱 재시작을 가로질러 @supabase/ssr 세션 쿠키를 보존한다.
-          sharedCookiesEnabled // iOS
-          thirdPartyCookiesEnabled // Android
-          // ── R-NF1(M1): 호스트 perf 프롭(보안/쿠키/브리지 프롭과 무충돌 — additive only). ──
-          // Android: GPU 합성으로 스크롤 jank 해소(하드웨어 레이어).
-          androidLayerType="hardware"
-          // iOS: 네이티브 감속 곡선 일치(웹 기본 fast 대신 normal — 네이티브 스크롤 체감).
-          decelerationRate="normal"
-          // Android: 글로우/바운스 오버스크롤 제거(앱 같은 정적 느낌).
-          overScrollMode="never"
-          // 웹 캐시(localStorage/sessionStorage) 보장 — 웹 SPA 캐시 전략 동작 전제.
-          domStorageEnabled={true}
-          // Android 캐시 정책: LOAD_DEFAULT(표준 캐시 우선 + 최신성 유지). 인증/세션 화면이 많아
-          // LOAD_CACHE_ELSE_NETWORK(stale 위험)는 피한다(데이터 최신성 — strategy OD-1).
-          cacheMode="LOAD_DEFAULT"
-          // R-NF2(M2/T-002): startInLoadingState 가 있어야 renderLoading 이 동작한다(둘 다 설정).
-          // 로드 중 흰 화면 대신 브랜드색 스켈레톤을 RNWebView 가 자동 표시/숨김한다.
-          // [double-overlay 해소] 로딩 표시 책임을 여기로 일원화 — 호출부(BridgedWebView)의 형제
-          // LoadingOverlay 와 isLoading state 를 제거했다(중복 0). hasError 분기만 호출부에 남는다.
-          startInLoadingState={true}
-          renderLoading={() => <LoadingOverlay />}
-          // R-O1/R-T9: authorize 인터셉트 + WebView origin 잠금(비신뢰 in-WebView 로드 거부).
-          onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
-          // R-U1: 히스토리 추적.
-          onNavigationStateChange={onNavigationStateChange}
-          // R-T5/R-R3/R-N4: 웹→네이티브 브리지 메시지 수신(SPEC-MOBILE-002).
-          onMessage={onMessage}
-          // R-U3 + R-NF2(T-003): 로드 시작 시 페이드 리셋, 종료 시 페이드인 후 호출부 콜백 위임.
-          onLoadStart={handleLoadStart}
-          onLoadEnd={handleLoadEnd}
-          // R-U4: 로드 실패 → 복구 가능한 에러 상태.
-          onError={onError}
-          onHttpError={onHttpError}
-          // R-NF2(M2/T-005): iOS 콘텐츠 프로세스 종료 시 빈 화면 대신 현재 라우트를 reload 한다(호출부 위임).
-          // [device-gated 미검증] RN 0.85 / RNWebView 13.16 조합에서 이 콜백의 실제 발화 여부는
-          // 검증되지 않았다(GitHub react-native-webview#2559 회귀 보고). 미발화 시 onError 가 폴백 경로다.
-          onContentProcessDidTerminate={onContentProcessDidTerminate}
-        />
+      {/* [회귀 수정] WebView 는 래퍼 없이 항상 opacity 1(가시/활성)로 렌더한다 — opacity 0 래퍼는 WKWebView 를
+          서스펜드해 홈 진입 핸드셰이크가 session:none → 로그인 바운스를 유발했다(webview-fade-core.ts 참조). */}
+      <WebView
+        ref={ref}
+        // R-S2: 풀스크린 웹 호스트. sourceUri 변경 시 WebView 가 새 URL 로 네비게이트한다(R-O3 콜백 교체).
+        // key 는 일부러 두지 않는다 — 리마운트하면 WebView 쿠키/PKCE 컨텍스트가 초기화돼 OAuth 흐름이 깨진다(OD-1/OD-5).
+        source={{ uri: sourceUri }}
+        style={style ?? styles.webview}
+        // R-T9/C-2: WebView 를 신뢰 origin 에 잠근다(미지정 시 RN 기본 ["http://*","https://*"] — 위험).
+        originWhitelist={originWhitelist ? [...originWhitelist] : undefined}
+        // Android: 신뢰 origin 잠금을 우회하는 새 창(window.open) 차단(C-2 보강).
+        setSupportMultipleWindows={false}
+        // R-T8/OD-11: 컨텐츠 로드 전 per-session nonce 를 신뢰 origin 채널로 확립한다.
+        // SPEC-MOBILE-003 R-WB3/R-WB4: 셸 모드 마커(__MOYURA_NATIVE_SHELL__)를 항상 선행 주입한다.
+        injectedJavaScriptBeforeContentLoaded={beforeContentJs}
+        // R-O5: OAuth 왕복/앱 재시작을 가로질러 @supabase/ssr 세션 쿠키를 보존한다.
+        sharedCookiesEnabled // iOS
+        thirdPartyCookiesEnabled // Android
+        // ── R-NF1(M1): 호스트 perf 프롭(보안/쿠키/브리지 프롭과 무충돌 — additive only). ──
+        // Android: GPU 합성으로 스크롤 jank 해소(하드웨어 레이어).
+        androidLayerType="hardware"
+        // iOS: 네이티브 감속 곡선 일치(웹 기본 fast 대신 normal — 네이티브 스크롤 체감).
+        decelerationRate="normal"
+        // Android: 글로우/바운스 오버스크롤 제거(앱 같은 정적 느낌).
+        overScrollMode="never"
+        // 웹 캐시(localStorage/sessionStorage) 보장 — 웹 SPA 캐시 전략 동작 전제.
+        domStorageEnabled={true}
+        // Android 캐시 정책: LOAD_DEFAULT(표준 캐시 우선 + 최신성 유지). 인증/세션 화면이 많아
+        // LOAD_CACHE_ELSE_NETWORK(stale 위험)는 피한다(데이터 최신성 — strategy OD-1).
+        cacheMode="LOAD_DEFAULT"
+        // R-NF2(M2/T-002): startInLoadingState 가 있어야 renderLoading 이 동작한다(둘 다 설정).
+        // 로드 중 흰 화면 대신 브랜드색 스켈레톤을 RNWebView 가 자동 표시/숨김한다.
+        // [double-overlay 해소] 로딩 표시 책임을 여기로 일원화 — 호출부(BridgedWebView)의 형제
+        // LoadingOverlay 와 isLoading state 를 제거했다(중복 0). hasError 분기만 호출부에 남는다.
+        startInLoadingState={true}
+        renderLoading={() => <LoadingOverlay />}
+        // R-O1/R-T9: authorize 인터셉트 + WebView origin 잠금(비신뢰 in-WebView 로드 거부).
+        onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
+        // R-U1: 히스토리 추적.
+        onNavigationStateChange={onNavigationStateChange}
+        // R-T5/R-R3/R-N4: 웹→네이티브 브리지 메시지 수신(SPEC-MOBILE-002).
+        onMessage={onMessage}
+        // R-U3 + R-NF2(T-003): 로드 시작 시 커버 리셋(불투명), 종료 시 커버 페이드아웃 후 호출부 콜백 위임.
+        onLoadStart={handleLoadStart}
+        onLoadEnd={handleLoadEnd}
+        // R-U4: 로드 실패 → 복구 가능한 에러 상태.
+        onError={onError}
+        onHttpError={onHttpError}
+        // R-NF2(M2/T-005): iOS 콘텐츠 프로세스 종료 시 빈 화면 대신 현재 라우트를 reload 한다(호출부 위임).
+        // [device-gated 미검증] RN 0.85 / RNWebView 13.16 조합에서 이 콜백의 실제 발화 여부는
+        // 검증되지 않았다(GitHub react-native-webview#2559 회귀 보고). 미발화 시 onError 가 폴백 경로다.
+        onContentProcessDidTerminate={onContentProcessDidTerminate}
+      />
+      {/* R-NF2(M2/T-003): WebView 위에 덮인 불투명 커버. 로드 시작에는 1(콘텐츠 가림 — 흰 깜빡임 제거),
+          로드 완료 시 0 으로 페이드아웃해 콘텐츠를 드러낸다(콘텐츠 페이드인과 시각적 동일). pointerEvents="none"
+          이라 터치를 가로채지 않고, opacity 0 도달 후에도 WebView 가 항상 위에 보인다(커버는 시각만 담당).
+          핵심: 커버를 숨길 뿐 WebView 는 절대 숨기지 않으므로 WKWebView 가 서스펜드되지 않는다(바운스 회귀 차단). */}
+      <Animated.View
+        style={[styles.fadeCover, { opacity: coverOpacity }]}
+        pointerEvents="none"
+      >
+        <LoadingOverlay />
       </Animated.View>
     </SafeAreaView>
   );
@@ -197,9 +219,14 @@ const styles = StyleSheet.create({
     // 인셋(상태바/홈인디케이터) 영역 배경 — 웹 페이지 라이트 배경과 일치(BridgedWebView 컨테이너 #fff 와 동일).
     backgroundColor: "#fff",
   },
-  // 페이드인 래퍼 — 인셋 영역 안에서 flex 채운다(WebView 가 이 안에서 flex:1).
-  fadeContainer: {
-    flex: 1,
+  // 페이드 커버 — WebView 위에 덮이는 절대 위치 풀블리드. 로드 완료 시 opacity 1→0 으로 페이드아웃해
+  // 콘텐츠를 드러낸다(내부 LoadingOverlay 가 브랜드색 스켈레톤 배경 제공). WebView 자체는 항상 가시(opacity 1)다.
+  fadeCover: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   webview: {
     flex: 1,
