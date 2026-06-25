@@ -12,7 +12,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { createApiClient } from "@moyura/api-client";
@@ -120,6 +119,16 @@ export default function InviteEntryPage() {
     router.push(`/invite/${encodeURIComponent(state.token)}`);
   }
 
+  // 돌아가기: 직전 페이지로 되돌아간다(웹 히스토리 back). 절대 경로 `/` 링크는 RootEntry(app/page.tsx)의
+  // 세션 기반 redirect("/home"|"/login")로 떨어져 "이전 페이지"가 아니라 세션 분기 화면으로 간다 — 앱 셸에선
+  // 이 페이지가 항상 탐색/로그인 탭의 같은 WebView 안에서 in-place 로 열리므로(invite 는 네이티브 라우트가
+  // 아님), 절대 링크는 네이티브 탭(탐색)과 WebView 내용(홈)이 어긋나는 원인이 된다. router.back() 은 그
+  // WebView 자신의 히스토리를 한 칸 되돌려 진입했던 탭 페이지(/explore 또는 /login)로 복귀시킨다 — 네이티브
+  // 탭과 WebView URL 이 일치한다. 데스크톱 웹에서도 "돌아가기"의 올바른 의미다.
+  function handleBack() {
+    router.back();
+  }
+
   return (
     // 공개 standalone 페이지(login/invite-token 과 동일 계열) — root layout 의 min-h-dvh body 안에서 flex-1
     // 로 뷰포트를 채워 수직 중앙 정렬한다. 문서 스크롤 모델과 일치(고정 높이 % 의존 회피).
@@ -189,13 +198,15 @@ export default function InviteEntryPage() {
           링크로 참여하기
         </button>
 
-        {/* 뒤로(보조) — 정상 로그인/탐색과 경쟁하지 않는 보조 링크. */}
-        <Link
-          href="/"
+        {/* 뒤로(보조) — 진입했던 직전 페이지로 복귀(웹 히스토리 back). 절대 `/` 링크 금지(RootEntry
+            세션 redirect 로 네이티브 탭↔WebView 불일치 유발). */}
+        <button
+          type="button"
+          onClick={handleBack}
           className="text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           돌아가기
-        </Link>
+        </button>
       </div>
     </main>
   );

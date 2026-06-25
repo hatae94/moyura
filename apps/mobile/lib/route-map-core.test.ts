@@ -7,7 +7,13 @@
 //   - isCrossRoute: 교차 라우트 디스패치 판정(동일 라우트 query/hash 변경은 cross 아님).
 import { describe, it, expect } from "vitest";
 
-import { routeForUrl, urlForRoute, isCrossRoute, APP_ROUTES } from "./route-map-core";
+import {
+  routeForUrl,
+  urlForRoute,
+  isCrossRoute,
+  detailRouteForUrl,
+  APP_ROUTES,
+} from "./route-map-core";
 
 describe("routeForUrl (R-NC1: pathname → AppRoute 1:1 매핑)", () => {
   it("앱 라우트 4종을 정확히 매핑한다", () => {
@@ -128,5 +134,52 @@ describe("isCrossRoute (R-NC2/R-NC3: 교차 라우트 디스패치 판정)", () 
     expect(isCrossRoute("not a url", "also not a url")).toBe(false);
     expect(isCrossRoute("http://localhost:3000/home", "not a url")).toBe(false);
     expect(isCrossRoute("", "")).toBe(false);
+  });
+});
+
+// 초대 라우트 in-WebView 불변식 잠금 — 탐색/로그인 탭의 "돌아가기" 일치 수정의 전제(premise-lock).
+//
+// 배경(버그): 탐색 탭 → /invite → /invite/{token} 으로 들어간 뒤 웹 "돌아가기"를 누르면 네이티브 탭(탐색)과
+// WebView 내용(홈)이 어긋났다. 근본 원인은 웹 측 돌아가기 버튼이 절대 링크 `/`(RootEntry 세션 redirect →
+// /home)였던 것이고, 수정은 apps/web/app/invite/page.tsx 에서 router.back()(웹 히스토리 back)으로 바꾼 것이다.
+// 그 수정이 "탐색으로 복귀"하려면 /invite·/invite/{token} 가 네이티브 라우트로 디스패치되지 않고 진입한 탭의
+// 같은 WebView 안에서 in-place 로 열려(그 WebView 의 히스토리에 /explore 가 남아 있어야) 한다 — 즉 invite 경로는
+// routeForUrl/isCrossRoute/detailRouteForUrl 모두에서 비-디스패치(null/false)여야 한다. 만약 누군가 invite 를
+// 앱 라우트로 승격하면 in-WebView 히스토리 모델이 깨져 router.back() 이 더는 탐색으로 복귀하지 않는다 — 이 블록이
+// 그 회귀를 RED 로 잡는다. (웹 측 런타임 RED→GREEN 은 apps/web 에 테스트 하니스가 없어 도달 불가 — 이 순수
+// 불변식 잠금 + 시뮬레이터 수동 재현으로 대체한다.)
+describe("invite 라우트 in-WebView 불변식 (탐색/로그인 돌아가기 일치의 전제)", () => {
+  const WEB = "http://localhost:3000";
+
+  it("/invite 는 앱 라우트가 아니다 → routeForUrl null (디스패치 대상 아님, in-WebView 유지)", () => {
+    expect(routeForUrl(`${WEB}/invite`)).toBeNull();
+  });
+
+  it("/invite/{token} 도 앱 라우트가 아니다 → routeForUrl null", () => {
+    expect(routeForUrl(`${WEB}/invite/abc-123`)).toBeNull();
+  });
+
+  it("/invite/{token} 는 detail push 대상도 아니다 → detailRouteForUrl null (prefix 'invite' 는 앱 라우트 아님)", () => {
+    // 만약 'invite' 가 detail prefix 로 인식되면 onShouldStartLoadWithRequest 가 router.push 로 네이티브
+    // 화면을 띄워 in-WebView 히스토리(=/explore)가 사라진다 → 돌아가기가 탐색으로 못 돌아간다.
+    expect(detailRouteForUrl(`${WEB}/invite/abc-123`)).toBeNull();
+  });
+
+  it("탐색(/explore)에서 /invite·/invite/{token} 로의 로드는 cross-route 아님 → 탐색 탭 WebView 에서 in-place 로드", () => {
+    // false 라야 decideWebViewLoad 가 디스패치하지 않고 trusted-load(in-place) 로 떨어진다 — 탐색 탭의
+    // WebView 가 자신의 히스토리에 /explore 를 남긴 채 /invite 를 연다 → 웹 router.back() 이 /explore 로 복귀.
+    expect(isCrossRoute(`${WEB}/explore`, `${WEB}/invite`)).toBe(false);
+    expect(isCrossRoute(`${WEB}/invite`, `${WEB}/invite/abc-123`)).toBe(false);
+  });
+
+  it("로그인(/login)에서 /invite 로의 로드도 cross-route 아님 → 로그인 WebView 에서 in-place 로드", () => {
+    expect(isCrossRoute(`${WEB}/login`, `${WEB}/invite`)).toBe(false);
+  });
+
+  it("돌아가기 목적지(/)·루트는 앱 라우트가 아니다 → routeForUrl null (절대 `/` 링크가 위험한 이유: RootEntry 세션 redirect)", () => {
+    // `/` 는 디스패치 가능한 앱 라우트가 아니라 WebView 가 그대로 로드하고, 서버가 /home|/login 으로 redirect
+    // 한다 — 그래서 절대 `/` 링크는 네이티브 탭과 어긋난다(수정 전 버그). 그 대신 router.back() 을 써야 한다.
+    expect(routeForUrl(`${WEB}/`)).toBeNull();
+    expect(isCrossRoute(`${WEB}/explore`, `${WEB}/`)).toBe(false);
   });
 });
