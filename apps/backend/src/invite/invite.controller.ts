@@ -99,9 +99,9 @@ export class MoimInviteController {
 }
 
 // @MX:NOTE: [AUTO] 비인증 초대 유효성 확인 HTTP 표면(SPEC-MOIM-011). @UseGuards 없음 — 의도된 공개
-// 엔드포인트. 초대 토큰은 CSPRNG 256-bit base64url이라 열거 공격이 불가능하며, 응답은 유효/만료/폐기
-// 상태와 moimId만 노출한다(민감 필드 없음). 비인증 방문자가 링크 열람 직후 유효성을 확인할 수 있어야
-// 로그인 전 사전 검증 흐름(SPEC-MOIM-011)이 성립한다.
+// 엔드포인트. 초대 토큰은 CSPRNG 256-bit base64url이라 열거 공격이 불가능하며, 응답은 moimId + 초대
+// 미리보기용 모임 요약(name·memberCount·maxMembers)만 노출한다(token·usedCount 등 민감 필드 없음).
+// 비인증 방문자가 링크 열람 직후 모임 이름·인원을 확인할 수 있어야 로그인 전 사전 검증 흐름(SPEC-MOIM-011)이 성립한다.
 @ApiTags('invites')
 @Controller('invites/:token')
 export class InvitePublicController {
@@ -110,7 +110,7 @@ export class InvitePublicController {
   // GET /invites/:token — 초대 유효성 확인(공개, 비인증). 200 or 404/410.
   @Get()
   @ApiOkResponse({
-    description: '유효한 초대 — moimId 반환',
+    description: '유효한 초대 — moimId + 모임 요약(name·memberCount·maxMembers) 반환',
     type: InviteValidityDto,
   })
   @ApiNotFoundResponse({ description: '미지 토큰 — 404' })

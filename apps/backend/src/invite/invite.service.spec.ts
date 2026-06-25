@@ -255,15 +255,37 @@ describe('InviteService', () => {
     jest.useRealTimers();
   });
 
-  // ── T-007: checkValidity() — 읽기 전용 유효성 확인(SPEC-MOIM-011) ──
+  // ── T-007: checkValidity() — 읽기 전용 유효성 확인 + 초대 미리보기 요약(SPEC-MOIM-011) ──
   describe('checkValidity() (SPEC-MOIM-011)', () => {
-    it('유효 토큰이면 { moimId }를 반환한다', async () => {
+    it('유효 토큰이면 moimId + 모임 요약(name·memberCount·maxMembers)을 반환한다', async () => {
       const { service } = makeService();
+      // 모임(name='주말 모임', 정원 10) + 멤버 2명 시드 → memberCount=2 기대.
+      // seedMoim이 반환하는 객체는 tables.moim에 저장된 동일 참조라 name만 덮어쓰면 된다.
+      seedMoim('moim-A', 10).name = '주말 모임';
+      tables.member.set(memberKey('moim-A', 'm1'), {
+        moimId: 'moim-A',
+        userId: 'm1',
+        nickname: 'm1',
+        role: 'owner',
+        joinedAt: NOW,
+      });
+      tables.member.set(memberKey('moim-A', 'm2'), {
+        moimId: 'moim-A',
+        userId: 'm2',
+        nickname: 'm2',
+        role: 'member',
+        joinedAt: NOW,
+      });
       seedInvite({ moimId: 'moim-A', token: 'valid-token' });
 
       const result = await service.checkValidity('valid-token');
 
-      expect(result).toEqual({ moimId: 'moim-A' });
+      expect(result).toEqual({
+        moimId: 'moim-A',
+        name: '주말 모임',
+        memberCount: 2,
+        maxMembers: 10,
+      });
     });
 
     it('미지 토큰 → 404', async () => {
@@ -276,6 +298,7 @@ describe('InviteService', () => {
 
     it('폐기 토큰 → 410(폐기된 초대입니다)', async () => {
       const { service } = makeService();
+      seedMoim('moim-A');
       seedInvite({ moimId: 'moim-A', token: 'revoked', revokedAt: NOW });
 
       await expect(service.checkValidity('revoked')).rejects.toBeInstanceOf(
@@ -285,6 +308,7 @@ describe('InviteService', () => {
 
     it('만료 토큰 → 410(만료된 초대입니다)', async () => {
       const { service } = makeService();
+      seedMoim('moim-A');
       seedInvite({
         moimId: 'moim-A',
         token: 'expired',
@@ -298,6 +322,7 @@ describe('InviteService', () => {
 
     it('maxUses 소진 초대(usedCount >= maxUses)도 유효하다고 판정한다(checkValidity는 한도 검사 안 함)', async () => {
       const { service } = makeService();
+      seedMoim('moim-A', 15);
       seedInvite({
         moimId: 'moim-A',
         token: 'exhausted',
@@ -305,9 +330,24 @@ describe('InviteService', () => {
         usedCount: 2,
       });
 
-      // 한도 소진 상태여도 만료·폐기가 아니면 200(moimId 반환).
+      // 한도 소진 상태여도 만료·폐기가 아니면 200(요약 반환). 멤버 0명 → memberCount=0.
       const result = await service.checkValidity('exhausted');
-      expect(result).toEqual({ moimId: 'moim-A' });
+      expect(result).toEqual({
+        moimId: 'moim-A',
+        name: '테스트 모임',
+        memberCount: 0,
+        maxMembers: 15,
+      });
+    });
+
+    it('유효성 검사는 통과했으나 모임이 없으면 404(방어적 — 고아 초대 빈 응답 방지)', async () => {
+      const { service } = makeService();
+      // moim 맵에 시드하지 않음 → moim.findUnique null → 404.
+      seedInvite({ moimId: 'moim-A', token: 'orphan' });
+
+      await expect(service.checkValidity('orphan')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 

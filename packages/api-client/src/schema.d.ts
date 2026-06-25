@@ -584,6 +584,21 @@ export interface components {
              * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
              */
             moimId: string;
+            /**
+             * @description 모임 이름(초대 미리보기 표시용)
+             * @example 주말 등산 모임
+             */
+            name: string;
+            /**
+             * @description 현재 모임 멤버 수(초대 미리보기 표시용)
+             * @example 7
+             */
+            memberCount: number;
+            /**
+             * @description 모임 최대 정원
+             * @example 15
+             */
+            maxMembers: number;
         };
         AcceptInviteDto: {
             /**
@@ -1576,7 +1591,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 유효한 초대 — moimId 반환 */
+            /** @description 유효한 초대 — moimId + 모임 요약(name·memberCount·maxMembers) 반환 */
             200: {
                 headers: {
                     [name: string]: unknown;

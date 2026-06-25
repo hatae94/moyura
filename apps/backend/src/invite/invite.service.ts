@@ -198,7 +198,15 @@ export class InviteService {
   // 로드 시점에 이 계약에 의존한다(fan_in: InvitePublicController + 향후 웹 랜딩).
   // @MX:REASON: 읽기 전용이며 부작용 없음을 보장한다 — usedCount·멤버십은 절대 변경하지 않는다.
   // maxUses 초과는 유효하다고 판정한다(한도 소진은 수락 시점에만 검사 — AC 설계 의도).
-  async checkValidity(token: string): Promise<{ moimId: string }> {
+  // 응답에는 초대 미리보기용 모임 요약(name·memberCount·maxMembers)만 노출한다 — 토큰이 256-bit
+  // 비밀이라 열거가 불가능하므로 링크 수신자에게만 보이는 의도된 공개 정보다. token·usedCount·maxUses·
+  // expiresAt·createdBy 등 민감 필드는 절대 노출하지 않는다.
+  async checkValidity(token: string): Promise<{
+    moimId: string;
+    name: string;
+    memberCount: number;
+    maxMembers: number;
+  }> {
     const invite = await this.prisma.moimInvite.findUnique({
       where: { token },
     });
@@ -217,7 +225,26 @@ export class InviteService {
     }
     // maxUses/usedCount는 검사하지 않는다 — 한도 소진 초대도 "유효"이며,
     // 기존 멤버가 링크를 재열면 200을 받아야 한다. 초과 거부는 accept() 전용.
-    return { moimId: invite.moimId };
+
+    // 초대 미리보기용 모임 요약을 적재한다(요약 필드만 select — 민감 필드 미조회).
+    const moim = await this.prisma.moim.findUnique({
+      where: { id: invite.moimId },
+      select: { name: true, maxMembers: true },
+    });
+    // 유효한 초대인데 모임이 없는 경우는 정상 흐름에서 발생하지 않지만(FK 보장),
+    // 방어적으로 404 처리한다(고아 초대로 빈 응답을 내보내지 않는다).
+    if (!moim) {
+      throw new NotFoundException();
+    }
+    const memberCount = await this.prisma.moimMember.count({
+      where: { moimId: invite.moimId },
+    });
+    return {
+      moimId: invite.moimId,
+      name: moim.name,
+      memberCount,
+      maxMembers: moim.maxMembers,
+    };
   }
 
   // 만료 시각 해석: 미지정 시 now+7d, 지정 시 상한(now+30d) 검사(초과 400).

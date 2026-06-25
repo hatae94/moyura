@@ -657,7 +657,7 @@
         ],
         "responses": {
           "200": {
-            "description": "유효한 초대 — moimId 반환",
+            "description": "유효한 초대 — moimId + 모임 요약(name·memberCount·maxMembers) 반환",
             "content": {
               "application/json": {
                 "schema": {
@@ -1807,10 +1807,28 @@
             "type": "string",
             "description": "초대가 속한 모임 id",
             "example": "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+          },
+          "name": {
+            "type": "string",
+            "description": "모임 이름(초대 미리보기 표시용)",
+            "example": "주말 등산 모임"
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "현재 모임 멤버 수(초대 미리보기 표시용)",
+            "example": 7
+          },
+          "maxMembers": {
+            "type": "number",
+            "description": "모임 최대 정원",
+            "example": 15
           }
         },
         "required": [
-          "moimId"
+          "moimId",
+          "name",
+          "memberCount",
+          "maxMembers"
         ]
       },
       "AcceptInviteDto": {
