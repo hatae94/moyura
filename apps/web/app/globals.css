@@ -36,6 +36,31 @@
   padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }
 
+/* 긴 리스트 아이템 렌더 스킵 유틸(SPEC-WEBVIEW-NATIVE-FEEL-001 M5 / R-NF5).
+   content-visibility:auto 는 화면 밖 리스트 아이템의 레이아웃/페인트를 건너뛰어 스크롤 부드러움·INP 를
+   개선한다(web.dev content-visibility 사례). contain-intrinsic-size:auto <추정높이> 는 (1) 렌더 전
+   자리표시 크기를 주어 스크롤바 점프를 막고, (2) `auto` 키워드로 한 번 렌더된 아이템의 실제 높이를 기억해
+   재진입 시 스크롤 위치를 보존한다. 리스트별 아이템 높이가 달라 추정값을 분리한다(반복되는 "아이템"에만 적용,
+   컨테이너에는 적용하지 않는다 — 컨테이너에 걸면 자식 전체가 한 번에 스킵돼 의미가 없다). */
+
+/* 모임 카드(HomeTab MeetupCard) — p-4 + 제목 + 일정/장소/개설일 텍스트 라인 ≈ 120px. */
+@utility content-auto-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
+/* 투표 카드(PollCard <article>) — 질문 + 옵션 행 2~4개 + 푸터로 가변, 일반적 ≈ 240px. */
+@utility content-auto-poll {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
+
+/* 멤버 행(members-section <li>) — p-3 + 아바타 h-9(36px) 단일 행 ≈ 64px. */
+@utility content-auto-member {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

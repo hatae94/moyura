@@ -191,7 +191,8 @@ function PollCard({
   }
 
   return (
-    <article className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
+    // content-auto-poll: 화면 밖 투표 카드 렌더 스킵(긴 투표 목록 스크롤 — SPEC-WEBVIEW-NATIVE-FEEL-001 M5).
+    <article className="content-auto-poll flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <h3 className="flex min-w-0 items-start gap-2 font-bold text-card-foreground">
           <Vote size={18} className="mt-0.5 shrink-0 text-primary" />

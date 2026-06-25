@@ -46,7 +46,8 @@ function MeetupCard({ moim }: { moim: MoimResponse }) {
   return (
     <Link
       href={`/home/${moim.id}`}
-      className="flex gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
+      // content-auto-card: 화면 밖 카드 렌더 스킵(긴 모임 목록 스크롤 부드러움 — SPEC-WEBVIEW-NATIVE-FEEL-001 M5).
+      className="content-auto-card flex gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-center gap-2">

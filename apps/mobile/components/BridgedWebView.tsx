@@ -27,8 +27,16 @@ import { useAuth } from "../lib/auth/AuthContext";
 import { useAppLifecycle } from "../hooks/useAppLifecycle";
 import { useAuthBridge } from "../hooks/useAuthBridge";
 import { WebViewShell } from "./WebViewShell";
-import { LoadingOverlay } from "./LoadingOverlay";
 import { WebViewErrorOverlay } from "./WebViewErrorOverlay";
+
+/**
+ * R-NF2(M2/T-004): Expo splash 를 fade 옵션으로 해제하는 단일 헬퍼. 4곳(핸드셰이크 해결·타임아웃
+ * 폴백·onError·onHttpError)의 동일 `hideAsync` 호출을 한 곳으로 통합해 중복을 제거한다 — 발화 조건은
+ * 각 호출부 그대로 보존한다(의미 무변경). fade 동작은 _layout.tsx 의 setOptions({ fade:true })가 켠다.
+ */
+function hideSplash(): void {
+  void SplashScreen.hideAsync().catch(() => undefined);
+}
 
 // R-T9/C-2: WebView 를 신뢰 origin 에 잠그는 originWhitelist(WEB_URL origin literal 만 허용).
 const TRUSTED_ORIGIN = buildTargetOrigin(WEB_URL);
@@ -80,7 +88,8 @@ export function BridgedWebView({
 
   // WebView 가 로드할 URL. OAuth 복귀 시 웹 콜백 URL 로 교체(리마운트 아님 — OD-1).
   const [sourceUri, setSourceUri] = useState<string>(initialSourceUri);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // R-NF2(M2/T-002): 로딩 표시는 WebViewShell 의 startInLoadingState/renderLoading 이 단일 소유한다
+  // (이전 isLoading state + 형제 LoadingOverlay 제거 — double-overlay 해소). 에러 상태만 여기서 관리한다.
   const [hasError, setHasError] = useState<boolean>(false);
 
   // R-NC2: onShouldStartLoadWithRequest 가 currentUrl 을 읽을 수 있도록 navigation URL 을 추적한다.
@@ -106,7 +115,7 @@ export function BridgedWebView({
   // R-N4: 콜드스타트 핸드셰이크 해결(synced/none 수신) → 스플래시 해제 + 타임아웃 취소(App.tsx 보존).
   const resolveHandshake = useCallback((): void => {
     markHandshakeResolved();
-    void SplashScreen.hideAsync().catch(() => undefined);
+    hideSplash();
   }, [markHandshakeResolved]);
 
   // R-NC2/R-NC3: 교차 라우트 차단 시 네이티브 라우트로 디스패치(WebView 자체 이동 금지 → router.replace).
@@ -197,7 +206,7 @@ export function BridgedWebView({
       registerColdStartTokens(tokens); // resume 재검증 대상 등록.
       // R-N6: 결과(synced/none) 미수신 시 스플래시 강제 해제 폴백(무한 스플래시 금지).
       startHandshakeTimeout(() => {
-        void SplashScreen.hideAsync().catch(() => undefined);
+        hideSplash();
       });
       maybeInjectRestore();
     })();
@@ -216,10 +225,10 @@ export function BridgedWebView({
     [lifecycleOnNavigationStateChange],
   );
 
-  // R-U4 복구: 재시도 — 에러/로딩 상태 초기화 + 초기 URL 재로드.
+  // R-U4 복구: 재시도 — 에러 상태 초기화 + 초기 URL 재로드. 로딩 표시는 reload 시 WebViewShell 의
+  // startInLoadingState 가 재진입해 자동 처리한다(별도 isLoading 불필요 — double-overlay 해소 후).
   const handleRetry = useCallback(() => {
     setHasError(false);
-    setIsLoading(true);
     setSourceUri(initialSourceUri);
     webViewRef.current?.reload();
   }, [initialSourceUri]);
@@ -239,27 +248,24 @@ export function BridgedWebView({
         onNavigationStateChange={onNavigationStateChange}
         // R-T5/R-R3/R-N4: 웹→네이티브 메시지(session:synced/none/cleared) 수신.
         onMessage={onMessage}
-        onLoadStart={() => setIsLoading(true)}
+        // R-T2/R-N5: 로드 완료 시 콜드스타트 토큰 1회 주입(페이드인은 WebViewShell 내부가 담당).
         onLoadEnd={() => {
-          setIsLoading(false);
           maybeInjectRestore();
         }}
         onError={() => {
           setHasError(true);
-          setIsLoading(false);
-          void SplashScreen.hideAsync().catch(() => undefined);
+          hideSplash();
         }}
         onHttpError={() => {
           setHasError(true);
-          setIsLoading(false);
-          void SplashScreen.hideAsync().catch(() => undefined);
+          hideSplash();
         }}
+        // R-NF2(M2/T-005): iOS 콘텐츠 프로세스 종료 시 현재 라우트 reload 로 복구(빈 화면 방지).
+        // device-gated 미검증(RN 0.85/RNWebView 13.16 — GitHub #2559). 발화 시 reload, 미발화 시 onError 폴백.
+        onContentProcessDidTerminate={() => webViewRef.current?.reload()}
       />
 
-      {/* R-U3: 로딩 중 인디케이터 오버레이. */}
-      {isLoading && !hasError ? <LoadingOverlay /> : null}
-
-      {/* R-U4: 복구 가능한 에러/오프라인 UI(재시도 제공) — 빈 화면/크래시 금지. */}
+      {/* R-U4: 복구 가능한 에러/오프라인 UI(재시도 제공) — 빈 화면/크래시 금지. 로딩 표시는 WebViewShell 소유. */}
       {hasError ? <WebViewErrorOverlay webUrl={WEB_URL} onRetry={handleRetry} /> : null}
     </View>
   );

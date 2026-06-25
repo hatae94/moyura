@@ -27,6 +27,11 @@ import { registerNotificationTapHandler } from "../lib/push/notification-handler
 // (App.tsx 모듈 평가 시점 호출 보존). 실패해도 throw 하지 않게 흡수(스플래시 미지원/이미 숨김 등).
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
+// R-NF2(M2/T-004): splash→콘텐츠 핸드오프 갭을 줄이기 위해 hideAsync 가 페이드아웃되도록 설정한다.
+// (fade 는 iOS 전용 — Android 는 무시. duration 미지정 시 기본 400ms.) BridgedWebView 의 hideSplash()가
+// 호출하는 hideAsync 가 이 옵션을 따라 페이드한다. preventAutoHideAsync 유지(위)와 무충돌.
+SplashScreen.setOptions({ fade: true });
+
 // SPEC-MOBILE-004 R-MOB4-001: Google Sign-In SDK 를 부팅 시 1회 설정한다(signInWithGoogle 선행 조건).
 // 두 client ID 가 모두 설정된 경우에만 호출한다 — 미설정 시(이메일/비번 전용 환경) Google 로그인만
 // 비활성화되고 앱 부팅은 정상 진행된다(env 가 옵셔널인 이유). webClientId 는 signInWithIdToken 의

@@ -305,7 +305,8 @@ export function MembersSection({
             return (
               <li
                 key={member.userId}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+                // content-auto-member: 화면 밖 멤버 행 렌더 스킵(긴 멤버 목록 스크롤 — SPEC-WEBVIEW-NATIVE-FEEL-001 M5).
+                className="content-auto-member flex items-center gap-3 rounded-xl border border-border bg-card p-3"
               >
                 {/* 아바타 이니셜 */}
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-bold text-secondary-foreground">
