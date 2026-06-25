@@ -94,7 +94,10 @@ function CreateMeetupButton() {
 
 export function HomeTab({ displayName, avatarInitial, greeting, moims }: HomeTabProps) {
   return (
-    <div className="flex flex-1 flex-col bg-background">
+    // min-h-0: 셸(h-svh-fixed) → 콘텐츠 래퍼(min-h-0) → 이 페이지 루트(min-h-0)로 이어지는 체인을 완성한다.
+    // flex 자식 기본 min-height:auto 를 풀어야 아래 overflow-y-auto 영역이 높이를 부여받아 내부 스크롤된다
+    // (없으면 콘텐츠 길이만큼 자라 부모를 밀어내고 overflow-hidden 래퍼에 잘린다).
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       {/* 헤더: 인사말 + 표시 이름 + 아바타 이니셜. */}
       <header className="px-5 pb-5 pt-page">
         <div className="flex items-start justify-between">

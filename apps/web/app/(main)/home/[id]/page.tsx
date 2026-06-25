@@ -93,7 +93,8 @@ export default async function MoimDetailPage({
   const isOwner = members.some((m) => m.userId === session.user.id && m.role === "owner");
 
   return (
-    <div className="flex flex-1 flex-col bg-background">
+    // min-h-0: 셸(h-svh-fixed) → 콘텐츠 래퍼 → 이 페이지 루트로 이어지는 min-h-0 체인 완성(내부 overflow-y-auto 스크롤용).
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       {/* 헤더: 모임 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일. */}
       <header className="px-5 pb-5 pt-page">
         <h1 className="text-2xl font-extrabold text-foreground">{moim.name}</h1>

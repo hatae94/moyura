@@ -5,7 +5,8 @@
 // 그려 전환 즉시 피드백을 준다(globals.css 토큰: bg-background/bg-muted/bg-card/border-border/rounded-2xl).
 export default function MainLoading() {
   return (
-    <div className="flex flex-1 flex-col bg-background" aria-busy="true" aria-label="불러오는 중">
+    // min-h-0: 셸(h-svh-fixed) → 콘텐츠 래퍼 → 이 로딩 루트로 이어지는 min-h-0 체인 완성(스켈레톤 스크롤 영역 바운드).
+    <div className="flex min-h-0 flex-1 flex-col bg-background" aria-busy="true" aria-label="불러오는 중">
       {/* 헤더 자리표시자: 인사말 두 줄 + 아바타 원형(HomeTab 헤더 구조 미러). */}
       <header className="px-5 pb-5 pt-page">
         <div className="flex items-start justify-between">

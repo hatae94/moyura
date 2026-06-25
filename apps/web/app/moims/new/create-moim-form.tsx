@@ -24,7 +24,8 @@ export function CreateMoimForm() {
   >(createMoimAction, undefined);
 
   return (
-    <div className="flex flex-1 flex-col bg-background">
+    // min-h-0: moims 셸(h-svh-fixed) → 이 페이지 루트로 이어지는 min-h-0 체인 완성(아래 overflow-y-auto 스크롤용).
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       <header className="px-5 pb-5 pt-12">
         <h1 className="text-2xl font-extrabold text-foreground">새 모임 만들기</h1>
         <p className="mt-1 text-sm text-muted-foreground">

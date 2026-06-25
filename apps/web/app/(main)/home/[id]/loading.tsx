@@ -4,7 +4,8 @@
 // 상세 헤더(이름/일정/장소) + 액션 카드 2개(채팅/경비) + 멤버 자리표시자를 미러해 전환 즉시 피드백을 준다.
 export default function MoimDetailLoading() {
   return (
-    <div className="flex flex-1 flex-col bg-background" aria-busy="true" aria-label="불러오는 중">
+    // min-h-0: 셸(h-svh-fixed) → 콘텐츠 래퍼 → 이 로딩 루트로 이어지는 min-h-0 체인 완성(스켈레톤 스크롤 영역 바운드).
+    <div className="flex min-h-0 flex-1 flex-col bg-background" aria-busy="true" aria-label="불러오는 중">
       {/* 헤더: 모임 이름 + 일정/장소/개설일 라인 자리표시자. */}
       <header className="px-5 pb-5 pt-page">
         <div className="h-8 w-48 animate-pulse rounded bg-muted" />

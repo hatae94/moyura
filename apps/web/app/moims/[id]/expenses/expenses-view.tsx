@@ -533,7 +533,8 @@ export function ExpensesView({
   const maxPaid = Math.max(...Object.values(paidByUser), 1);
 
   return (
-    <div className="flex flex-1 flex-col bg-background">
+    // min-h-0: moims 셸(h-svh-fixed) → 이 페이지 루트로 이어지는 min-h-0 체인 완성(아래 overflow-y-auto 스크롤용).
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       {/* 헤더 */}
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
         <Link
