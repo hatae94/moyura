@@ -1,72 +1,19 @@
-import Image from "next/image";
-import { connection } from "next/server";
+// 루트 진입 라우터 (/) — 세션 유무로 앱(/home) 또는 로그인(/login)으로 보낸다.
+//
+// 앱 셸의 루트는 랜딩/스타터 페이지가 아니라 진입점이다. 모바일 앱 WebView 는 /login·/home 등 구체
+// 경로를 직접 로드하므로 / 를 거치지 않지만, 웹 루트 방문과 앱 내 "돌아가기"(예: /invite)가 이 경로로
+// 들어온다. 이름 온보딩 가드는 /home 의 requireNamedSession() 가 이어받는다(name 미보유 → /onboarding)
+// — 여기서 GET /me 를 중복 호출하지 않는다(책임 분리). getSession()(쿠키) 기반이라 항상 동적 렌더이므로
+// 기존 connection() 동적-강제(SPEC-MOBILE-002 R-T8 CSP nonce)도 불필요하다 — 리다이렉트라 스크립트 렌더 자체가 없다.
+import { redirect } from "next/navigation";
 
-// SPEC-MOBILE-002 R-T8 (N-1 수정): nonce 기반 CSP 가 동작하려면 페이지가 *동적 렌더링*이어야 한다.
-// Next 는 SSR 시 요청 헤더의 CSP nonce 를 자기 스크립트에 주입하는데, 정적(static) 페이지는 build
-// 시점에 생성되어 요청 헤더가 없어 nonce 가 주입되지 않는다 → prod 의 `'strict-dynamic'` CSP 아래에서
-// 부트스트랩/hydration 스크립트가 차단된다. connection() 으로 요청을 기다려 동적 렌더링을 강제한다.
-// (login/me/auth-callback 은 cookies()/searchParams 로 이미 동적이라 별도 조치 불필요.)
-export default async function Home() {
-  await connection();
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+import { createClient } from "@/lib/supabase/server";
+
+export default async function RootEntry() {
+  const supabase = await createClient();
+  // 쿠키 세션을 읽어 분기한다(신원의 권위 있는 검증은 다운스트림 가드/백엔드가 수행).
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  redirect(session ? "/home" : "/login");
 }
