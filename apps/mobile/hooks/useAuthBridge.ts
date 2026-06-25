@@ -262,9 +262,11 @@ export function useAuthBridge({
           void saveTokens(action.tokens);
           onHandshakeResolved();
           // SPEC-MOBILE-004 후속(Google 네이티브 로그인 main→login 바운스 수정): synced 신호로 (tabs)/home 이
-          // *새 WebView* 로 마운트되기 직전에, 로그인 WebView setSession 이 WKWebView store 에만 쓴 세션 쿠키를
-          // 공유 NSHTTPCookieStorage 로 선주입한다. 그래야 새 홈 WebView 의 첫 GET 이 쿠키를 싣는다(cross-WebView
-          // 격리 해소). 선주입은 idempotent·best-effort(no-op 흡수)이며, 실패해도 finally 로 synced 는 반드시 보고한다.
+          // *새 WebView* 로 마운트되기 직전에, 로그인 WebView setSession 이 WKHTTPCookieStore(defaultDataStore)에 쓴
+          // 세션 쿠키를, 새 홈 WebView 가 첫 GET 에 직접 읽는 바로 그 store(WKHTTPCookieStore, useWebKit=true)에
+          // 명시적으로 다시 커밋한다(+NSHTTP 미러). 그래야 새 홈 WebView 의 첫 GET 이 쿠키를 싣는다(cross-WebView
+          // 격리/전파 타이밍 해소 — cookie-seed.ts 근원 주석 참조). 선주입은 idempotent·best-effort(no-op 흡수)이며,
+          // 실패해도 finally 로 synced 는 반드시 보고한다.
           const syncedTokens = action.tokens;
           void seedSharedCookiesFromWebKit().finally(() => {
             // R-AS2/R-NC5: 갱신 토큰과 함께 synced 신호 보고 → AuthContext isSignedIn=true → 가드 전환.
