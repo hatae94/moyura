@@ -17,11 +17,8 @@ export default async function MoimsLayout({
   // 미충족 시 내부에서 redirect 하므로(throw) 통과 시에만 children 이 렌더링된다(REQ-WG1-001).
   await requireNamedSession();
 
-  // 풀스크린 앱 셸: (main) 레이아웃과 동일하게 h-svh-fixed(height:100svh, vh 폴백 — globals.css)로 높이를
-  // small viewport 에 고정한다. chat/expenses/new 페이지는 내부 overflow-y-auto 로 스크롤하는 풀스크린 라우트라,
-  // 고정 높이 조상이 있어야 내부 스크롤이 동작한다(없으면 body min-h-full 이 콘텐츠만큼 자라 문서 스크롤로 새고
-  // 내부 스크롤이 깨진다). flex-col 로 자식 페이지 루트(flex-1 min-h-0)가 이 높이를 채우게 한다.
-  // 위 주석대로 하단 탭바·셸 감지 스크립트는 두지 않는다(풀스크린 라우트). body 자체는 min-h-full 로 유지해
-  // 다른 라우트 그룹(중앙 정렬 login/onboarding/invite)의 성장 여지를 보존한다.
-  return <div className="flex h-svh-fixed flex-col">{children}</div>;
+  // 패스스루: moims 페이지는 body(min-h-dvh flex-col)의 자식으로 직접 문서 스크롤한다(expenses/new). 각 페이지
+  // 루트가 min-h-dvh 로 화면을 채우고 콘텐츠가 길면 자라 문서 스크롤된다. 채팅(chat)만 예외로 내부 스크롤 고정
+  // 레이아웃(h-dvh-fixed)을 자체적으로 유지한다 — 메시지 리스트+고정 입력바 UX 보존. 탭바는 두지 않는다(풀스크린).
+  return <>{children}</>;
 }

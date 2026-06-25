@@ -94,12 +94,11 @@ function CreateMeetupButton() {
 
 export function HomeTab({ displayName, avatarInitial, greeting, moims }: HomeTabProps) {
   return (
-    // min-h-0: 셸(h-svh-fixed) → 콘텐츠 래퍼(min-h-0) → 이 페이지 루트(min-h-0)로 이어지는 체인을 완성한다.
-    // flex 자식 기본 min-height:auto 를 풀어야 아래 overflow-y-auto 영역이 높이를 부여받아 내부 스크롤된다
-    // (없으면 콘텐츠 길이만큼 자라 부모를 밀어내고 overflow-hidden 래퍼에 잘린다).
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
-      {/* 헤더: 인사말 + 표시 이름 + 아바타 이니셜. */}
-      <header className="px-5 pb-5 pt-page">
+    // 문서 스크롤: flex-1 로 셸을 채우고(짧은 콘텐츠도 화면을 채움) 콘텐츠가 길면 흐름대로 자라 문서가 스크롤된다.
+    <div className="flex flex-1 flex-col bg-background">
+      {/* 헤더: 인사말 + 표시 이름 + 아바타 이니셜. sticky top-0 으로 문서 스크롤 중에도 상단에 고정.
+          z-30: 콘텐츠 위, 고정 탭바(z-40)·모달(z-50) 아래. bg-background 로 스크롤 시 뒤 콘텐츠 비침 방지. */}
+      <header className="sticky top-0 z-30 bg-background px-5 pb-5 pt-page">
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-1">
             <span className="text-sm text-muted-foreground">{greeting} 👋</span>
@@ -111,8 +110,9 @@ export function HomeTab({ displayName, avatarInitial, greeting, moims }: HomeTab
         </div>
       </header>
 
-      {/* 스크롤 영역: CTA → 카드 리스트 / 빈 상태. (status 필터 칩 제거 — 실 데이터 출처 없음, Exclusions.) */}
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6">
+      {/* 콘텐츠 영역: CTA → 카드 리스트 / 빈 상태. 문서 스크롤이라 overflow-y-auto 제거(흐름대로 자람).
+          flex-1 유지로 빈 상태가 화면을 채워 중앙 정렬을 유지한다. (status 필터 칩 제거 — Exclusions.) */}
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-6">
         <CreateMeetupButton />
 
         {moims.length > 0 ? (

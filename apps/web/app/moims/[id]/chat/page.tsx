@@ -277,7 +277,12 @@ export default function ChatPage({
   const canSend = input.trim().length > 0 && !pending;
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-background">
+    // [예외] 채팅만 문서 스크롤이 아닌 내부 스크롤 고정 레이아웃을 유지한다 — 메시지 리스트(아래 ul 의
+    // overflow-y-auto, bottomRef 자동 하단 스크롤) + 하단 고정 입력바 UX 가 문서 스크롤에서 깨지기 때문이다
+    // (입력 중 툴바 접힘/리플로, 입력바 위치 흔들림, 자동 스크롤 충돌). h-dvh-fixed(height:100dvh, vh 폴백 —
+    // globals.css)로 라이브 뷰포트에 고정하고, min-h-0 로 자식 ul 이 높이를 부여받아 내부 스크롤되게 한다.
+    // moims 그룹은 하단 탭바가 없으므로 탭바 회피 여백은 불필요. 네이티브 WebView 에서도 dvh==전체 높이로 안전.
+    <main className="flex h-dvh-fixed min-h-0 flex-col bg-background">
       <ChatHeader moimId={moimId} />
 
       {error ? (

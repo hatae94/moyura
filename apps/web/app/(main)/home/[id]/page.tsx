@@ -93,10 +93,11 @@ export default async function MoimDetailPage({
   const isOwner = members.some((m) => m.userId === session.user.id && m.role === "owner");
 
   return (
-    // min-h-0: 셸(h-svh-fixed) → 콘텐츠 래퍼 → 이 페이지 루트로 이어지는 min-h-0 체인 완성(내부 overflow-y-auto 스크롤용).
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
-      {/* 헤더: 모임 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일. */}
-      <header className="px-5 pb-5 pt-page">
+    // 문서 스크롤: flex-1 로 셸을 채우고 콘텐츠가 길면 흐름대로 자라 문서가 스크롤된다.
+    <div className="flex flex-1 flex-col bg-background">
+      {/* 헤더: 모임 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일.
+          sticky top-0 z-30 bg-background 로 문서 스크롤 중 상단 고정(탭바 z-40·모달 z-50 아래). */}
+      <header className="sticky top-0 z-30 bg-background px-5 pb-5 pt-page">
         <h1 className="text-2xl font-extrabold text-foreground">{moim.name}</h1>
         {/* 일정 — startsAt 있으면 포맷, 없으면 "일정 미정"(허위 값 금지). */}
         <div className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -113,7 +114,8 @@ export default async function MoimDetailPage({
         <p className="mt-1 text-xs text-muted-foreground/70">{createdDate} 개설</p>
       </header>
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6">
+      {/* 문서 스크롤: overflow-y-auto 제거(흐름대로 자람). flex-1 유지로 짧은 콘텐츠가 화면을 채운다. */}
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-6">
         {/* 채팅 입장 — 기본 액션(/moims/{id}/chat 으로 이동). */}
         <Link
           href={`/moims/${moim.id}/chat`}

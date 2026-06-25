@@ -12,22 +12,28 @@
   }
 }
 
-/* 풀 뷰포트 고정 높이(앱 셸 권위) — 모바일 웹 주소창/툴바 show-hide 추적용 small viewport 단위.
-   모바일 브라우저에서 % / 100vh / lvh 는 "툴바 접힘" 상태의 정적 large viewport 로 해석되어, 인-플로
-   하단 탭바가 보이는 영역 밖으로 밀려 잘리는 고전적 100vh 문제를 만든다. svh(small viewport height)는
-   "툴바 펼침" 상태의 최소 높이라 어떤 크롬 상태에서도 잘림/하단 여백/리플로 잔여 없이 정확히 맞는다.
-   내부 스크롤(overflow-y-auto) 구조라 dvh 의 툴바 전환 리플로 jank 도 불필요 — svh 가 정답(web.dev/Ahmad Shadeed).
-   Tailwind 의 h-svh 는 height:100svh 만 내보내므로 svh 미지원 구형 브라우저용 vh 폴백을 직접 둔다.
-   [중요] "height:100vh; height:100svh;" 식 중복 선언 폴백은 빌드 시 Lightning CSS 미니파이어가
-   동일 프로퍼티를 중복 제거하며 vh 줄을 떨어뜨려(svh 만 남음) 폴백이 사라진다. 그래서 @supports 로
-   감싼다: 기본은 100vh(구형 = 기존 % 체인과 동등, 회귀 없음), svh 지원 시에만 @supports 블록이 100svh
-   로 덮어쓴다 — @supports 블록은 미니파이어가 보존하므로 폴백이 빌드 후에도 유지된다.
-   네이티브 WebView 셸에서도 안전: 브라우저 크롬이 없어 svh == 전체 WebView 높이(탭바는 별도 CSS 규칙으로 숨김). */
-@utility h-svh-fixed {
-  height: 100vh; /* 폴백: svh 미지원 구형 브라우저(기존 % 체인과 동등) */
-  @supports (height: 100svh) {
-    height: 100svh; /* small viewport height — 지원 브라우저에서 이 값이 적용된다 */
+/* 채팅 전용 고정 높이(dynamic viewport) — 채팅만 문서 스크롤이 아닌 내부 스크롤 레이아웃을 유지한다.
+   메시지 리스트(overflow-y-auto, 자동 하단 스크롤) + 하단 고정 입력바 UX 는 문서 스크롤에서 깨지므로
+   (입력 중 툴바 접힘/리플로, 입력바 위치 흔들림), 채팅 루트는 dvh 로 라이브 뷰포트에 고정한다. dvh(=라이브
+   뷰포트)를 쓰는 이유: 채팅에서는 의도적으로 툴바 접힘 추적이 필요 없고(고정 화면), 키보드/툴바 변화에 맞춰
+   입력바가 항상 보이는 영역에 들어와야 하기 때문이다. 다른 화면은 문서 스크롤(min-h-dvh)을 쓴다.
+   [중요] "height:100vh; height:100dvh;" 중복 선언은 Lightning CSS 미니파이어가 vh 줄을 제거하므로,
+   @supports 로 감싸 폴백을 보존한다(기본 100vh = 구형 폴백, dvh 지원 시 @supports 가 덮어씀).
+   네이티브 WebView 에서도 안전: 크롬이 없어 dvh == 전체 WebView 높이. */
+@utility h-dvh-fixed {
+  height: 100vh; /* 폴백: dvh 미지원 구형 브라우저 */
+  @supports (height: 100dvh) {
+    height: 100dvh; /* dynamic viewport height — 지원 브라우저에서 적용(채팅 전용) */
   }
+}
+
+/* 하단 고정 탭바(BottomTabBar, position:fixed) 가 콘텐츠를 가리지 않도록 (main) 콘텐츠 영역 하단에 주는
+   여백 = 탭바 높이(약 4.5rem) + 안전영역(env(safe-area-inset-bottom), viewport-fit=cover 필요).
+   [중요] 네이티브 WebView 셸에서는 웹 탭바를 숨기므로(html[data-shell="native"]) 이 여백이 그대로면
+   앱 모든 (main) 페이지 하단에 빈 공간이 생긴다 → data-bottom-tab-spacer 를 단 요소에 한해 네이티브에서
+   여백을 0 으로 되돌린다(아래 규칙). 셀렉터 우위(html[attr] [attr] = 0,2,0)가 유틸 클래스(0,1,0)를 이긴다. */
+@utility pb-bottom-tab {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }
 
 :root {
@@ -100,4 +106,10 @@ body {
    data-shell 은 (main)/layout.tsx 의 인라인 스크립트가 콘텐츠 페인트 전 동기 세팅한다(flash 없음). */
 html[data-shell="native"] [data-bottom-tab-bar] {
   display: none;
+}
+
+/* 네이티브 셸에서는 위 규칙으로 탭바가 숨겨지므로, 탭바 회피용 하단 여백(pb-bottom-tab)도 0 으로 되돌린다
+   (그대로면 앱 (main) 페이지 하단에 탭바 없는 빈 공간이 생김). 셸 감지는 동일 인라인 스크립트가 담당. */
+html[data-shell="native"] [data-bottom-tab-spacer] {
+  padding-bottom: 0;
 }

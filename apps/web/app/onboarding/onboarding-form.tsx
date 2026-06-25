@@ -19,7 +19,8 @@ export function OnboardingForm({ prefillName }: { prefillName: string }) {
   >(submitNameAction, undefined);
 
   return (
-    <div className="size-full flex flex-col bg-white">
+    // 독립 풀스크린 페이지 — min-h-dvh w-full 로 라이브 뷰포트를 채운다(size-full → 불확정 높이 회피).
+    <div className="min-h-dvh w-full flex flex-col bg-white">
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">

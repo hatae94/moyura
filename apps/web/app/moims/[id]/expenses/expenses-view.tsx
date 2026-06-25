@@ -533,9 +533,10 @@ export function ExpensesView({
   const maxPaid = Math.max(...Object.values(paidByUser), 1);
 
   return (
-    // min-h-0: moims 셸(h-svh-fixed) → 이 페이지 루트로 이어지는 min-h-0 체인 완성(아래 overflow-y-auto 스크롤용).
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
-      {/* 헤더 */}
+    // 문서 스크롤: min-h-dvh 로 화면을 채우고(짧은 콘텐츠도 빈 공간 없음) 콘텐츠가 길면 흐름대로 자라 문서가
+    // 스크롤된다(→ 브라우저 크롬 접힘). moims 그룹은 하단 탭바가 없어 회피 여백이 필요 없다.
+    <div className="flex min-h-dvh flex-col bg-background">
+      {/* 헤더 — sticky top-0 로 문서 스크롤 중 상단 고정(기존 유지). */}
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
         <Link
           href={`/home/${moimId}`}
@@ -547,7 +548,8 @@ export function ExpensesView({
         <h1 className="text-lg font-bold text-foreground">경비 관리</h1>
       </header>
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-24 pt-4">
+      {/* 문서 스크롤: overflow-y-auto 제거(흐름대로 자람). flex-1 로 짧은 콘텐츠가 화면을 채운다. */}
+      <div className="flex flex-1 flex-col gap-4 px-4 pb-24 pt-4">
         {/* 요약 카드 */}
         <div className={`grid gap-3 ${summary.budget != null ? "grid-cols-3" : "grid-cols-2"}`}>
           <SummaryCard

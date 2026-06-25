@@ -31,6 +31,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // [중요] viewport-fit=cover: 콘텐츠를 안전영역(노치/홈 인디케이터)까지 확장해 env(safe-area-inset-*) 가
+  // 모바일 브라우저에서 0 이 아닌 실제 값을 반환하게 한다. 이게 없으면 하단 고정 탭바의 paddingBottom:
+  // env(safe-area-inset-bottom) 과 (main) 콘텐츠 하단 회피 여백이 모두 no-op(0) 이 된다.
+  viewportFit: "cover",
   // 브랜드 오렌지(globals.css --primary) — 모바일 브라우저 주소창/상태바 틴트를 브랜드와 일치.
   themeColor: "#ff6b35",
 };
@@ -43,15 +47,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      // 높이 권위: h-full(=height:100%) 은 모바일 웹에서 정적 large viewport 로 해석돼 인-플로 하단 탭바가
-      // 잘리는 100vh 문제를 일으킨다. h-svh-fixed(height:100svh, vh 폴백 — globals.css)로 문서 루트를 small
-      // viewport 에 고정해, 아래의 body(min-h-full=100% of svh)·(main) 셸까지 svh 로 일관 정렬한다(문서 스크롤/
-      // 하단 여백 없음). 네이티브 WebView 는 크롬이 없어 svh==전체 높이라 무해(탭바는 data-shell CSS 로 숨김).
-      className={`${geistSans.variable} ${geistMono.variable} h-svh-fixed antialiased`}
+      // 문서 스크롤 모델: html 에 고정 높이를 두지 않는다(콘텐츠 주도). 문서가 콘텐츠만큼 자라 스크롤되면
+      // 모바일 브라우저가 주소창/툴바를 접는다(사용자 의도). 하단 탭바는 흐름 밖 position:fixed 라 잘리지 않는다.
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
-      {/* body min-h-full 은 이제 svh 인 html 에 앵커되어 min-height:100% == svh 로 해석된다(셸보다 큰 높이를
-          강제하지 않음 — 셸 아래 빈 공간/문서 스크롤 방지). flex-col 로 자식(셸/풀스크린 페이지)을 세로 배치. */}
-      <body className="min-h-full flex flex-col">
+      {/* body min-h-dvh: 라이브 뷰포트(dvh) 만큼은 최소 채우고(짧은 콘텐츠도 빈 공간 없이 화면을 채움),
+          콘텐츠가 길면 그 이상 자라 문서가 스크롤된다(→ 브라우저 크롬 접힘). flex-col 로 자식을 세로 배치. */}
+      <body className="min-h-dvh flex flex-col">
         {/* SPEC-MOBILE-002: 네이티브 토큰 동기화 브리지(WebView 안에서만 동작, 일반 브라우저 no-op). */}
         <NativeBridgeProvider />
         {children}

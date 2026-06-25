@@ -71,7 +71,9 @@ export function LoginForm({ initialError }: { initialError?: string }) {
   // 소셜 랜딩 뷰(R-A1~R-A5).
   if (!showEmailForm) {
     return (
-      <div className="size-full flex flex-col grow bg-white">
+      // 독립 풀스크린 페이지(body min-h-dvh 의 직접 자식) — min-h-dvh w-full 로 라이브 뷰포트를 채운다
+      // (size-full 의 h-full=height:100% 는 min-height 만 가진 body 에 대해 불확정이라 채움 보장 안 됨).
+      <div className="min-h-dvh w-full flex flex-col grow bg-white">
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
           <div className="w-full max-w-md">
             {/* 헤더: 로고 배지 + 타이틀 + 서브타이틀(R-A2) */}
@@ -164,7 +166,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
   // 이메일 폼 뷰(R-B1~R-B5).
   return (
-    <div className="size-full flex flex-col bg-white">
+    // 독립 풀스크린 페이지 — min-h-dvh w-full 로 라이브 뷰포트를 채운다(size-full → 불확정 높이 회피).
+    <div className="min-h-dvh w-full flex flex-col bg-white">
       <div className="flex-1 flex flex-col px-6 py-8">
         {/* ← 뒤로: 소셜 랜딩으로 복귀(R-C2) */}
         <button

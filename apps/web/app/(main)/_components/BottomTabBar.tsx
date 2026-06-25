@@ -35,7 +35,14 @@ export function BottomTabBar({ notificationCount = 0 }: BottomTabBarProps) {
   return (
     <nav
       data-bottom-tab-bar
-      className="relative border-t border-border bg-card"
+      // 흐름 밖 position:fixed 로 뷰포트 하단에 핀 고정한다(스크롤 캔버스 위가 아니라 그 위에 떠 있음) —
+      // 문서가 스크롤돼 브라우저 크롬이 접혀도 탭바는 항상 보이는 영역 하단에 남고 절대 잘리지 않는다.
+      // z-40: 콘텐츠 위, 모달(z-50, 예: invite) 아래. inset-x-0 bottom-0 으로 전체 너비 하단 고정.
+      // paddingBottom env(safe-area-inset-bottom): 홈 인디케이터 영역 회피(viewport-fit=cover 로 실효).
+      // [확인] 조상(html/body/(main) 셸/Provider)에 transform/filter/backdrop-filter/will-change/contain
+      // 가 없어 containing block 이 만들어지지 않으므로 fixed 는 뷰포트 기준으로 정착한다.
+      // 네이티브 셸에서는 globals.css 의 html[data-shell="native"] [data-bottom-tab-bar]{display:none} 으로 숨김.
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="flex items-stretch">

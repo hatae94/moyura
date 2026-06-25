@@ -5,10 +5,10 @@
 // 그려 전환 즉시 피드백을 준다(globals.css 토큰: bg-background/bg-muted/bg-card/border-border/rounded-2xl).
 export default function MainLoading() {
   return (
-    // min-h-0: 셸(h-svh-fixed) → 콘텐츠 래퍼 → 이 로딩 루트로 이어지는 min-h-0 체인 완성(스켈레톤 스크롤 영역 바운드).
-    <div className="flex min-h-0 flex-1 flex-col bg-background" aria-busy="true" aria-label="불러오는 중">
-      {/* 헤더 자리표시자: 인사말 두 줄 + 아바타 원형(HomeTab 헤더 구조 미러). */}
-      <header className="px-5 pb-5 pt-page">
+    // 문서 스크롤: flex-1 로 셸을 채우고 콘텐츠가 길면 흐름대로 자란다(스켈레톤은 짧아 보통 화면 내).
+    <div className="flex flex-1 flex-col bg-background" aria-busy="true" aria-label="불러오는 중">
+      {/* 헤더 자리표시자: 인사말 두 줄 + 아바타 원형(HomeTab 헤더 구조 미러). sticky top-0 으로 상단 고정. */}
+      <header className="sticky top-0 z-30 bg-background px-5 pb-5 pt-page">
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-2">
             <div className="h-4 w-24 animate-pulse rounded bg-muted" />
@@ -18,8 +18,8 @@ export default function MainLoading() {
         </div>
       </header>
 
-      {/* 스크롤 영역: CTA 카드 + 리스트 카드 자리표시자. */}
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6">
+      {/* 콘텐츠 자리표시자: CTA 카드 + 리스트 카드. 문서 스크롤이라 overflow-y-auto 제거. */}
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-6">
         <div className="h-24 w-full animate-pulse rounded-2xl bg-muted" />
         <div className="flex flex-col gap-3">
           {[0, 1, 2].map((i) => (

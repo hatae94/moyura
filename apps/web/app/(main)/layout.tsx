@@ -38,11 +38,9 @@ export default async function MainLayout({
   await requireNamedSession();
 
   return (
-    // 앱 셸 높이 권위: min-h-full(min-height:100%) 대신 h-svh-fixed(height:100svh, vh 폴백 — globals.css)로
-    // small viewport 에 "정확히" 고정한다. 문서가 스크롤하지 않는 비-스크롤 컨테이너가 되어, 인-플로 하단 탭바가
-    // 주소창/툴바 상태와 무관하게 항상 보이는 영역 하단에 핀 고정된다(잘림/하단 여백/리플로 jank 없음).
-    // 스크롤은 내부 페이지의 overflow-y-auto 가 담당한다(아래 content wrapper 의 min-h-0 가 축소를 허용).
-    <div className="flex h-svh-fixed flex-1 flex-col bg-background">
+    // 문서 스크롤 셸: 고정 높이를 두지 않는다. flex-1 로 body(min-h-dvh)를 채워(짧은 콘텐츠도 화면을 채움),
+    // 콘텐츠가 길면 함께 자라 문서가 스크롤된다(→ 브라우저 크롬 접힘). 하단 탭바는 흐름 밖 position:fixed 다.
+    <div className="flex flex-1 flex-col bg-background">
       {/* R-WB3/R-WB4: 콘텐츠 페인트 전 셸 모드 판정(하이드레이션 flash 없이 탭바 숨김). */}
       <script
         // 인라인 부트스트랩 스크립트 — DOM 페인트 전에 동기 실행되어야 한다(R-WB4).
@@ -57,10 +55,13 @@ export default async function MainLayout({
           SecureStore 시딩 + (tabs) 마운트를 유발한다. server-action 로그인은 onAuthStateChange 를
           발생시키지 않으므로 이 mount 경로가 필요하다. 데스크톱은 no-op. */}
       <ShellSessionAnnouncer />
-      {/* min-h-0: flex 자식의 기본 min-height:auto 를 풀어 셸 높이(svh) 안에서 축소를 허용한다 —
-          이게 없으면 콘텐츠가 길 때 자식이 부모를 밀어내 내부 overflow-y-auto 가 스크롤되지 않는다.
-          overflow-hidden 은 유지(이 래퍼 자체는 스크롤하지 않고 내부 페이지가 스크롤). */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+      {/* 콘텐츠 영역: 문서 스크롤이므로 overflow-hidden/min-h-0 제거(콘텐츠가 흐름대로 자람). flex-1 로
+          짧은 콘텐츠도 화면을 채운다(빈 상태 중앙 정렬 유지). pb-bottom-tab: 하단 고정 탭바에 콘텐츠 끝이
+          가리지 않도록 탭바 높이+안전영역만큼 하단 여백(globals.css). data-bottom-tab-spacer: 네이티브 셸
+          (탭바 숨김)에서는 이 여백을 0 으로 되돌리는 CSS 규칙의 대상 표식(앱 하단 빈 공간 방지). */}
+      <div data-bottom-tab-spacer className="flex flex-1 flex-col pb-bottom-tab">
+        {children}
+      </div>
       {/* 셸 모드(네이티브 WebView)에서는 globals.css 규칙으로 숨겨진다 — 네이티브 탭바만 표시. */}
       <BottomTabBar notificationCount={2} />
     </div>

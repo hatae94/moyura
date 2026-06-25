@@ -175,7 +175,9 @@ export function InviteAcceptForm({
 
   return (
     <>
-      <main className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
+      {/* 독립 풀스크린 페이지(body min-h-dvh 의 직접 자식) — min-h-dvh 로 라이브 뷰포트를 채워 수직 중앙 정렬.
+          콘텐츠가 길면 흐름대로 자라 문서 스크롤된다(탭바 없는 공개 랜딩). */}
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-8">
         <div className="w-full max-w-sm">
           <h1 className="text-2xl font-bold mb-2 text-center">모임 초대</h1>
           <p className="text-gray-600 text-center mb-8">

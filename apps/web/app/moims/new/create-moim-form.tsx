@@ -24,16 +24,18 @@ export function CreateMoimForm() {
   >(createMoimAction, undefined);
 
   return (
-    // min-h-0: moims 셸(h-svh-fixed) → 이 페이지 루트로 이어지는 min-h-0 체인 완성(아래 overflow-y-auto 스크롤용).
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
-      <header className="px-5 pb-5 pt-12">
+    // 문서 스크롤: min-h-dvh 로 화면을 채우고 콘텐츠가 길면 흐름대로 자라 문서가 스크롤된다(탭바 없는 풀스크린).
+    <div className="flex min-h-dvh flex-col bg-background">
+      {/* sticky top-0 z-10 bg-background 로 문서 스크롤 중 헤더 상단 고정. */}
+      <header className="sticky top-0 z-10 bg-background px-5 pb-5 pt-12">
         <h1 className="text-2xl font-extrabold text-foreground">새 모임 만들기</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           모임 이름과 표시 이름을 입력하고, 일정·장소를 추가해 보세요.
         </p>
       </header>
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6">
+      {/* 문서 스크롤: overflow-y-auto 제거(흐름대로 자람). flex-1 로 짧은 폼이 화면을 채운다. */}
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-6">
         {/* 에러 박스(AC-4 Unwanted): 빈 값/백엔드 실패 시 일반화된 오류를 표시한다. */}
         {state?.error ? (
           <div
