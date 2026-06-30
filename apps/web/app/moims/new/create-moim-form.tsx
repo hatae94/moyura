@@ -26,27 +26,27 @@ export function CreateMoimForm() {
   return (
     // 문서 스크롤: min-h-dvh 로 화면을 채우고 콘텐츠가 길면 흐름대로 자라 문서가 스크롤된다(탭바 없는 풀스크린).
     <div className="flex min-h-dvh flex-col bg-background">
-      {/* sticky top-0 z-10 bg-background 로 문서 스크롤 중 헤더 상단 고정. */}
-      <header className="sticky top-0 z-10 bg-background px-5 pb-5 pt-12">
-        <h1 className="text-2xl font-extrabold text-foreground">새 모임 만들기</h1>
+      {/* sticky top-0 z-10 + 반투명 backdrop-blur 로 문서 스크롤 중 헤더 상단 고정(인스타틱 유리 헤더). */}
+      <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 px-5 pb-4 pt-page backdrop-blur-xl">
+        <h1 className="text-2xl font-extrabold tracking-tight text-foreground">새 모임 만들기</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           모임 이름과 표시 이름을 입력하고, 일정·장소를 추가해 보세요.
         </p>
       </header>
 
       {/* 문서 스크롤: overflow-y-auto 제거(흐름대로 자람). flex-1 로 짧은 폼이 화면을 채운다. */}
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-6">
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-6 pt-4">
         {/* 에러 박스(AC-4 Unwanted): 빈 값/백엔드 실패 시 일반화된 오류를 표시한다. */}
         {state?.error ? (
           <div
             role="alert"
-            className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            className="animate-fade-in-down rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           >
             {state.error}
           </div>
         ) : null}
 
-        <form action={action} className="flex flex-col gap-5">
+        <form action={action} className="animate-fade-in-up flex flex-col gap-5">
           {/* 모임 이름(필수) */}
           <div className="flex flex-col gap-2">
             <label htmlFor="moim-name" className="text-sm font-semibold text-foreground">
@@ -131,11 +131,11 @@ export function CreateMoimForm() {
             />
           </div>
 
-          {/* 제출(Meetup 오렌지 — bg-primary). pending 동안 비활성. */}
+          {/* 제출(브랜드 그라데이션). pending 동안 비활성. press scale 피드백. */}
           <button
             type="submit"
             disabled={pending}
-            className="mt-2 w-full rounded-2xl bg-primary py-3.5 text-base font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="bg-gradient-brand mt-2 w-full rounded-2xl py-3.5 text-base font-bold text-white shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
           >
             {pending ? "만드는 중..." : "모임 만들기"}
           </button>
