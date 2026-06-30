@@ -16,10 +16,10 @@ export function InviteLinkEntry() {
   return (
     <Link
       href="/invite"
-      className="block w-full text-center text-sm text-gray-600 transition-colors hover:text-gray-800"
+      className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
     >
       초대를 받으셨나요?{" "}
-      <span className="font-semibold text-blue-600">초대 링크로 참여</span>
+      <span className="font-bold text-gradient-brand">초대 링크로 참여</span>
     </Link>
   );
 }
