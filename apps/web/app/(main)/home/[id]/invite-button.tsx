@@ -64,13 +64,15 @@ export function InviteButton({
           type="button"
           disabled={pending}
           onClick={handleCreate}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/50 bg-primary/5 py-3 text-base font-bold text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+          className="bg-gradient-brand-soft flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/40 py-3.5 text-base font-bold transition-all hover:border-primary/60 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
         >
-          <UserPlus size={18} />
-          {pending ? "초대 링크 만드는 중..." : "초대하기"}
+          <UserPlus size={18} className="text-primary" />
+          <span className="text-gradient-brand">
+            {pending ? "초대 링크 만드는 중..." : "초대하기"}
+          </span>
         </button>
       ) : (
-        <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4">
+        <div className="animate-scale-in flex flex-col gap-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
           <span className="text-sm font-semibold text-card-foreground">초대 링크</span>
           <p className="break-all rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground">
             {link}
@@ -78,9 +80,9 @@ export function InviteButton({
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+            className="bg-gradient-brand flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold text-white shadow-md shadow-primary/20 transition-transform active:scale-[0.98]"
           >
-            {copied ? <Check size={16} /> : <Copy size={16} />}
+            {copied ? <Check size={16} className="animate-pop" /> : <Copy size={16} />}
             {copied ? "복사됨" : "링크 복사"}
           </button>
           <p className="text-xs text-muted-foreground">

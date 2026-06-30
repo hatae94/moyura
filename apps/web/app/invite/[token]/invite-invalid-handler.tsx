@@ -58,19 +58,16 @@ export function InviteInvalidHandler({ loggedIn }: { loggedIn: boolean }) {
         aria-modal="true"
         aria-labelledby="invite-invalid-title"
         // backdrop press 비활성: 오버레이에 닫기 핸들러를 두지 않는다(확인 버튼으로만 진행).
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       >
-        <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-          <p
-            id="invite-invalid-title"
-            className="text-center text-base font-semibold text-gray-900"
-          >
+        <div className="animate-scale-in mx-4 w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
+          <p id="invite-invalid-title" className="text-center text-base font-bold text-foreground">
             유효하지 않은 초대입니다.
           </p>
           <button
             type="button"
             onClick={() => router.replace(loggedIn ? ROUTE_MAIN : ROUTE_LOGIN)}
-            className="mt-5 w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+            className="bg-gradient-brand mt-5 w-full rounded-2xl py-3 text-sm font-bold text-white shadow-md shadow-primary/20 transition-transform active:scale-[0.98]"
           >
             확인
           </button>

@@ -133,15 +133,15 @@ export default function InviteEntryPage() {
     // 공개 standalone 페이지(login/invite-token 과 동일 계열) — root layout 의 min-h-dvh body 안에서 flex-1
     // 로 뷰포트를 채워 수직 중앙 정렬한다. 문서 스크롤 모델과 일치(고정 높이 % 의존 회피).
     <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-10">
-      <div className="flex w-full max-w-sm flex-col gap-5">
-        {/* 헤딩 + 안내 */}
-        <div className="flex flex-col gap-2 text-center">
-          <h1 className="text-2xl font-extrabold text-foreground">
-            초대 링크로 참여
-          </h1>
+      <div className="animate-fade-in-up flex w-full max-w-sm flex-col gap-5">
+        {/* 헤딩 + 안내 — 그라데이션 배지로 인스타틱하게. */}
+        <div className="flex flex-col items-center gap-2 text-center">
+          <div className="bg-gradient-brand-animated animate-scale-in mb-1 flex h-16 w-16 items-center justify-center rounded-[1.4rem] shadow-lg shadow-primary/20">
+            <span className="text-3xl">🔗</span>
+          </div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">초대 링크로 참여</h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            받은 초대 링크나 토큰을 붙여넣으면 어떤 모임인지 확인하고 바로 참여할 수
-            있어요.
+            받은 초대 링크나 토큰을 붙여넣으면 어떤 모임인지 확인하고 바로 참여할 수 있어요.
           </p>
         </div>
 
@@ -160,7 +160,7 @@ export default function InviteEntryPage() {
             placeholder="초대 링크 또는 토큰을 붙여넣어 주세요"
             aria-label="초대 링크"
             aria-invalid={state.kind === "invalid"}
-            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-2xl border border-border bg-card px-4 py-3.5 text-sm text-foreground outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
           {/* 검증 중 표시(미묘) */}
           {isChecking ? (
@@ -176,15 +176,18 @@ export default function InviteEntryPage() {
           ) : null}
         </div>
 
-        {/* 유효 미리보기 카드 — 어떤 모임에 참여하는지 이름·멤버 수로 안내(앱 시맨틱 토큰). */}
+        {/* 유효 미리보기 카드 — 어떤 모임에 참여하는지 그라데이션 아바타 + 이름·멤버 수로 안내. */}
         {state.kind === "valid" ? (
-          <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4 text-card-foreground">
-            <span className="text-base font-bold text-foreground">
-              {state.name}
+          <div className="animate-scale-in flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-brand text-lg font-extrabold text-white shadow-md shadow-primary/20">
+              {state.name.charAt(0).toUpperCase() || "M"}
             </span>
-            <span className="text-sm text-muted-foreground">
-              멤버 {state.memberCount} / {state.maxMembers}명
-            </span>
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-base font-bold text-foreground">{state.name}</span>
+              <span className="text-sm text-muted-foreground">
+                멤버 {state.memberCount} / {state.maxMembers}명
+              </span>
+            </div>
           </div>
         ) : null}
 
@@ -193,7 +196,7 @@ export default function InviteEntryPage() {
           type="button"
           onClick={handleJoin}
           disabled={!isValid}
-          className="w-full rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="bg-gradient-brand w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
         >
           링크로 참여하기
         </button>

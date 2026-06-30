@@ -136,19 +136,19 @@ function DeleteConfirmDialog({
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="expense-delete-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
     >
-      <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <p id="expense-delete-title" className="text-center text-base font-semibold text-gray-900">
+      <div className="animate-scale-in mx-4 w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
+        <p id="expense-delete-title" className="text-center text-base font-bold text-foreground">
           이 지출 항목을 삭제할까요?
         </p>
-        <p className="mt-2 text-center text-sm text-gray-500">삭제하면 되돌릴 수 없어요.</p>
+        <p className="mt-2 text-center text-sm text-muted-foreground">삭제하면 되돌릴 수 없어요.</p>
         <div className="mt-5 flex gap-3">
           <button
             type="button"
             disabled={isPending}
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            className="flex-1 rounded-2xl border border-border py-3 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98] disabled:opacity-50"
           >
             취소
           </button>
@@ -156,7 +156,7 @@ function DeleteConfirmDialog({
             type="button"
             disabled={isPending}
             onClick={onConfirm}
-            className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+            className="bg-destructive flex-1 rounded-2xl py-3 text-sm font-bold text-white shadow-md shadow-destructive/20 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
           >
             {isPending ? "삭제 중…" : "삭제"}
           </button>
@@ -259,20 +259,20 @@ function ExpenseSheet({ moimId, members, currentUserId, editing, onClose }: Shee
 
   return (
     <>
-      {/* 배경 오버레이 */}
+      {/* 배경 오버레이 — fade-in + blur 로 부드럽게 어두워진다. */}
       <div
-        className="fixed inset-0 z-40 bg-black/40"
+        className="animate-fade-in fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
-      {/* 시트 */}
+      {/* 시트 — 아래에서 슬라이드업(인스타 바텀시트 시그니처). */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label={editing ? "지출 수정" : "지출 등록"}
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-background shadow-2xl"
+        className="animate-slide-up fixed bottom-0 left-0 right-0 z-50 rounded-t-[1.75rem] bg-background shadow-2xl"
       >
-        <div className="mx-auto mb-2 mt-3 h-1 w-12 rounded-full bg-muted" aria-hidden="true" />
+        <div className="mx-auto mb-2 mt-3 h-1.5 w-12 rounded-full bg-muted" aria-hidden="true" />
         <div className="max-h-[80vh] overflow-y-auto px-5 pb-8 pt-4">
           <h2 className="mb-4 text-lg font-bold text-foreground">
             {editing ? "지출 수정" : "지출 등록"}
@@ -306,9 +306,9 @@ function ExpenseSheet({ moimId, members, currentUserId, editing, onClose }: Shee
                     type="button"
                     onClick={() => setCategory(cat)}
                     disabled={isPending}
-                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-all active:scale-95 disabled:opacity-50 ${
                       category === cat
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-gradient-brand text-white shadow-sm shadow-primary/20"
                         : "border border-border bg-card text-card-foreground hover:bg-secondary"
                     }`}
                   >
@@ -370,9 +370,9 @@ function ExpenseSheet({ moimId, members, currentUserId, editing, onClose }: Shee
                         setCustomInputs({});
                       }}
                       disabled={isPending}
-                      className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                      className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-all active:scale-95 disabled:opacity-50 ${
                         splitMethod === method
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-gradient-brand text-white shadow-sm shadow-primary/20"
                           : "border border-border bg-card text-card-foreground hover:bg-secondary"
                       }`}
                     >
@@ -429,7 +429,7 @@ function ExpenseSheet({ moimId, members, currentUserId, editing, onClose }: Shee
               <button
                 type="submit"
                 disabled={isPending}
-                className="flex-1 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                className="bg-gradient-brand flex-1 rounded-xl py-3 text-sm font-bold text-white shadow-md shadow-primary/20 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
               >
                 {isPending ? "저장 중…" : editing ? "수정 완료" : "등록"}
               </button>
@@ -592,9 +592,9 @@ export function ExpensesView({
                         <span className="font-medium text-card-foreground">{m.nickname}</span>
                         <span className="text-muted-foreground">{paid.toLocaleString()}원</span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                         <div
-                          className="h-full rounded-full bg-primary transition-all"
+                          className="bg-gradient-brand h-full rounded-full transition-[width] duration-500 ease-out"
                           style={{ width: `${pct}%` }}
                           aria-hidden="true"
                         />
@@ -744,7 +744,7 @@ export function ExpensesView({
           type="button"
           aria-label="지출 등록"
           onClick={() => openSheet()}
-          className="fixed bottom-6 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95"
+          className="bg-gradient-brand animate-scale-in fixed bottom-6 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-xl shadow-primary/30 transition-transform hover:scale-105 hover:rotate-90 active:scale-95"
         >
           <Plus size={26} />
         </button>

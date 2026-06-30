@@ -95,53 +95,73 @@ export default async function MoimDetailPage({
   return (
     // 문서 스크롤: flex-1 로 셸을 채우고 콘텐츠가 길면 흐름대로 자라 문서가 스크롤된다.
     <div className="flex flex-1 flex-col bg-background">
-      {/* 헤더: 모임 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일.
-          sticky top-0 z-30 bg-background 로 문서 스크롤 중 상단 고정(탭바 z-40·모달 z-50 아래). */}
-      <header className="sticky top-0 z-30 bg-background px-5 pb-5 pt-page">
-        <h1 className="text-2xl font-extrabold text-foreground">{moim.name}</h1>
-        {/* 일정 — startsAt 있으면 포맷, 없으면 "일정 미정"(허위 값 금지). */}
-        <div className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Calendar size={15} className="text-primary" />
-          <span>{formatMoimSchedule(moim.startsAt)}</span>
-        </div>
-        {/* 장소 — location 있을 때만 라인 렌더(없으면 생략). */}
-        {moim.location ? (
-          <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-            <MapPin size={15} className="text-primary" />
-            <span>{moim.location}</span>
+      {/* 헤더: 모임 그라데이션 아바타 + 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일.
+          sticky top-0 z-30 + 반투명 backdrop-blur 로 문서 스크롤 중 상단 고정(탭바 z-40·모달 z-50 아래). */}
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 px-5 pb-4 pt-page backdrop-blur-xl">
+        <div className="flex items-center gap-3.5">
+          {/* 모임 이니셜 그라데이션 아바타 — 홈 카드와 동일 시각 언어로 연속성. */}
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-brand text-2xl font-extrabold text-white shadow-md shadow-primary/20">
+            {moim.name.charAt(0).toUpperCase() || "M"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-extrabold tracking-tight text-foreground">
+              {moim.name}
+            </h1>
+            {/* 일정 — startsAt 있으면 포맷, 없으면 "일정 미정"(허위 값 금지). */}
+            <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Calendar size={14} className="shrink-0 text-primary" />
+              <span className="truncate">{formatMoimSchedule(moim.startsAt)}</span>
+            </div>
+            {/* 장소 — location 있을 때만 라인 렌더(없으면 생략). */}
+            {moim.location ? (
+              <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                <MapPin size={14} className="shrink-0 text-primary" />
+                <span className="truncate">{moim.location}</span>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-        <p className="mt-1 text-xs text-muted-foreground/70">{createdDate} 개설</p>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground/60">{createdDate} 개설</p>
       </header>
 
       {/* 문서 스크롤: overflow-y-auto 제거(흐름대로 자람). flex-1 유지로 짧은 콘텐츠가 화면을 채운다. */}
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-6">
-        {/* 채팅 입장 — 기본 액션(/moims/{id}/chat 으로 이동). */}
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-6 pt-4">
+        {/* 채팅 입장 — 기본 액션(/moims/{id}/chat 으로 이동). 그라데이션 강조 CTA. */}
         <Link
           href={`/moims/${moim.id}/chat`}
-          className="flex w-full items-center justify-between rounded-2xl bg-primary p-5 text-primary-foreground shadow-lg shadow-primary/20"
+          className="group animate-fade-in-up relative flex w-full items-center justify-between overflow-hidden rounded-3xl bg-gradient-brand p-5 text-white shadow-xl shadow-primary/25 transition-transform duration-200 active:scale-[0.98]"
         >
-          <span className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15 blur-xl"
+          />
+          <span className="relative flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
               <MessageCircle size={22} />
             </span>
-            <span className="text-lg font-bold">채팅 입장</span>
+            <span className="text-lg font-extrabold">채팅 입장</span>
           </span>
-          <ChevronRight size={22} />
+          <ChevronRight
+            size={22}
+            className="relative transition-transform duration-200 group-hover:translate-x-0.5"
+          />
         </Link>
 
-        {/* 경비 관리 — 채팅 입장 카드와 동일 스타일로 미러한다(/moims/:id/expenses). */}
+        {/* 경비 관리 — 보조 카드(아이콘만 그라데이션 틴트). hover lift + press scale. */}
         <Link
           href={`/moims/${moim.id}/expenses`}
-          className="flex w-full items-center justify-between rounded-2xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-secondary"
+          className="group animate-fade-in-up flex w-full items-center justify-between rounded-3xl border border-border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] [animation-delay:0.05s]"
         >
           <span className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <span className="bg-gradient-brand-soft flex h-11 w-11 items-center justify-center rounded-2xl">
               <Receipt size={22} className="text-primary" />
             </span>
             <span className="text-lg font-bold text-foreground">경비</span>
           </span>
-          <ChevronRight size={22} className="text-muted-foreground" />
+          <ChevronRight
+            size={22}
+            className="text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5"
+          />
         </Link>
 
         {/* SPEC-MOIM-011: owner 전용 초대 링크 발급(비-owner 면 null 렌더). 모바일 WebView 안에서도 동작. */}

@@ -73,16 +73,21 @@ export function LoginForm({ initialError }: { initialError?: string }) {
     return (
       // 독립 풀스크린 페이지(body min-h-dvh 의 직접 자식) — min-h-dvh w-full 로 라이브 뷰포트를 채운다
       // (size-full 의 h-full=height:100% 는 min-height 만 가진 body 에 대해 불확정이라 채움 보장 안 됨).
-      <div className="min-h-dvh w-full flex flex-col grow bg-white">
+      <div className="min-h-dvh w-full flex flex-col grow bg-background">
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
           <div className="w-full max-w-md">
-            {/* 헤더: 로고 배지 + 타이틀 + 서브타이틀(R-A2) */}
+            {/* 헤더: 그라데이션 로고 배지 + 워드마크 + 서브타이틀(R-A2) — 인스타 무드로 교체. */}
             <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
-                <span className="text-3xl">🎉</span>
+              <div className="bg-gradient-brand-animated animate-scale-in mx-auto inline-flex items-center justify-center w-20 h-20 rounded-[1.75rem] shadow-xl shadow-primary/25 mb-5">
+                <span className="text-4xl">🎉</span>
               </div>
-              <h1 className="text-3xl font-bold mb-3">Meetup{process.env.NODE_ENV === 'development' ? ' [DEV]' : ''}</h1>
-              <p className="text-gray-600">
+              <h1 className="animate-fade-in-up text-4xl font-extrabold mb-3 tracking-tight">
+                <span className="text-gradient-brand">moyura</span>
+                {process.env.NODE_ENV === "development" ? (
+                  <span className="text-muted-foreground"> [DEV]</span>
+                ) : null}
+              </h1>
+              <p className="animate-fade-in-up text-muted-foreground leading-relaxed [animation-delay:0.06s]">
                 간편하게 모임을 만들고
                 <br />
                 일정, 장소, 투표를 한곳에서
@@ -90,7 +95,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             </div>
 
             {/* 소셜 버튼 3종(R-A3) + "또는" 디바이더(R-A4) */}
-            <div className="flex flex-col gap-3 mt-8">
+            <div className="animate-fade-in-up flex flex-col gap-3 mt-9 [animation-delay:0.12s]">
               {/* Google: 인라인 GoogleIcon outline 버튼(OD-1 form + hidden provider).
                   SPEC-MOBILE-004: 네이티브 셸 안에서는 OAuth 제출을 막고 네이티브 Google Sign-In SDK 를
                   브리지로 직접 요청한다(외부 브라우저 이탈 없이 인앱 로그인). 데스크톱 브라우저는
@@ -104,7 +109,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
                       e.preventDefault();
                     }
                   }}
-                  className="w-full border border-gray-300 rounded-lg py-3 flex items-center justify-center gap-3 hover:bg-gray-50 transition-colors"
+                  className="w-full border border-border bg-card rounded-2xl py-3.5 flex items-center justify-center gap-3 font-semibold text-foreground shadow-sm transition-all hover:bg-muted active:scale-[0.98]"
                 >
                   <GoogleIcon />
                   Google로 계속하기
@@ -116,7 +121,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
                 <input type="hidden" name="provider" value="apple" />
                 <button
                   type="submit"
-                  className="w-full bg-black text-white rounded-lg py-3 flex items-center justify-center gap-3 hover:bg-gray-900 transition-colors"
+                  className="w-full bg-foreground text-background rounded-2xl py-3.5 flex items-center justify-center gap-3 font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
                 >
                   <Apple size={20} />
                   Apple로 계속하기
@@ -126,12 +131,10 @@ export function LoginForm({ initialError }: { initialError?: string }) {
               {/* "또는" 디바이더(R-A4): Apple 과 Email 사이 */}
               <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
+                  <div className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-2 bg-white text-gray-500 text-sm">
-                    또는
-                  </span>
+                  <span className="px-3 bg-background text-muted-foreground text-sm">또는</span>
                 </div>
               </div>
 
@@ -139,7 +142,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
               <button
                 type="button"
                 onClick={() => setShowEmailForm(true)}
-                className="w-full border border-gray-300 rounded-lg py-3 flex items-center justify-center gap-3 hover:bg-gray-50 transition-colors"
+                className="w-full border border-border bg-card rounded-2xl py-3.5 flex items-center justify-center gap-3 font-semibold text-foreground shadow-sm transition-all hover:bg-muted active:scale-[0.98]"
               >
                 <Mail size={20} />
                 이메일로 계속하기
@@ -148,15 +151,14 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
             {/* 비가입 게스트 경로(SPEC-MOIM-011 후속): 받은 초대 링크로 계정 없이 바로 참여(익명 가입).
                 정상 로그인과 경쟁하지 않게 보조 링크로 두고, 탭하면 입력창이 펼쳐진다. */}
-            <div className="mt-6">
+            <div className="animate-fade-in-up mt-6 [animation-delay:0.18s]">
               <InviteLinkEntry />
             </div>
 
             {/* 푸터: 약관/개인정보 비기능 underline 텍스트(R-A5, OD-4) */}
-            <p className="text-xs text-gray-500 text-center mt-8">
+            <p className="text-xs text-muted-foreground text-center mt-8">
               계속 진행하면 <span className="underline">이용약관</span> 및{" "}
-              <span className="underline">개인정보처리방침</span>에 동의하는
-              것으로 간주됩니다
+              <span className="underline">개인정보처리방침</span>에 동의하는 것으로 간주됩니다
             </p>
           </div>
         </div>
@@ -167,22 +169,22 @@ export function LoginForm({ initialError }: { initialError?: string }) {
   // 이메일 폼 뷰(R-B1~R-B5).
   return (
     // 독립 풀스크린 페이지 — min-h-dvh w-full 로 라이브 뷰포트를 채운다(size-full → 불확정 높이 회피).
-    <div className="min-h-dvh w-full flex flex-col bg-white">
-      <div className="flex-1 flex flex-col px-6 py-8">
+    <div className="min-h-dvh w-full flex flex-col bg-background">
+      <div className="animate-fade-in flex-1 flex flex-col px-6 py-8">
         {/* ← 뒤로: 소셜 랜딩으로 복귀(R-C2) */}
         <button
           type="button"
           onClick={() => setShowEmailForm(false)}
-          className="self-start text-gray-600 mb-8"
+          className="self-start flex items-center gap-1 text-sm font-medium text-muted-foreground mb-8 transition-colors hover:text-foreground"
         >
           ← 뒤로
         </button>
 
         {/* 동적 제목/서브타이틀(R-B2) */}
-        <h1 className="text-2xl font-bold mb-2">
+        <h1 className="text-3xl font-extrabold tracking-tight mb-2">
           {isSignUp ? "회원가입" : "로그인"}
         </h1>
-        <p className="text-gray-600 mb-8">
+        <p className="text-muted-foreground mb-8">
           {isSignUp ? "새로운 계정을 만들어주세요" : "이메일로 계속하기"}
         </p>
 
@@ -190,7 +192,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         {error ? (
           <div
             role="alert"
-            className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm mb-4"
+            className="animate-fade-in-down bg-destructive/10 text-destructive px-4 py-3 rounded-2xl text-sm mb-4"
           >
             {error}
           </div>
@@ -201,7 +203,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
               이 name 을 읽어 user_metadata + Profile.name 으로 영속한다(이메일·소셜 통합 이름 수집). */}
           {isSignUp ? (
             <div>
-              <label htmlFor="login-name" className="block text-sm font-medium mb-2">
+              <label htmlFor="login-name" className="block text-sm font-semibold mb-2">
                 이름
               </label>
               <input
@@ -209,13 +211,13 @@ export function LoginForm({ initialError }: { initialError?: string }) {
                 name="name"
                 type="text"
                 placeholder="홍길동"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3.5 border border-border bg-card rounded-2xl transition-shadow focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
               />
             </div>
           ) : null}
 
           <div>
-            <label htmlFor="login-email" className="block text-sm font-medium mb-2">
+            <label htmlFor="login-email" className="block text-sm font-semibold mb-2">
               이메일
             </label>
             <input
@@ -225,15 +227,12 @@ export function LoginForm({ initialError }: { initialError?: string }) {
               autoComplete="email"
               required
               placeholder="example@email.com"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3.5 border border-border bg-card rounded-2xl transition-shadow focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
             />
           </div>
 
           <div>
-            <label
-              htmlFor="login-password"
-              className="block text-sm font-medium mb-2"
-            >
+            <label htmlFor="login-password" className="block text-sm font-semibold mb-2">
               비밀번호
             </label>
             <input
@@ -243,7 +242,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
               autoComplete={isSignUp ? "new-password" : "current-password"}
               required
               placeholder="••••••••"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3.5 border border-border bg-card rounded-2xl transition-shadow focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
             />
           </div>
 
@@ -251,7 +250,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
           <button
             type="submit"
             disabled={pending}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors mt-4 disabled:opacity-50"
+            className="w-full bg-gradient-brand text-white py-3.5 rounded-2xl font-bold shadow-lg shadow-primary/25 transition-transform mt-4 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
           >
             {pending ? "처리 중..." : isSignUp ? "가입하기" : "로그인"}
           </button>
@@ -262,7 +261,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
           <button
             type="button"
             onClick={() => setIsSignUp((prev) => !prev)}
-            className="text-blue-600 text-sm"
+            className="text-sm font-semibold text-primary transition-opacity hover:opacity-80"
           >
             {isSignUp
               ? "이미 계정이 있으신가요? 로그인"

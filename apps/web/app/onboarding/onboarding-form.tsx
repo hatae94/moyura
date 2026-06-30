@@ -20,32 +20,31 @@ export function OnboardingForm({ prefillName }: { prefillName: string }) {
 
   return (
     // 독립 풀스크린 페이지 — min-h-dvh w-full 로 라이브 뷰포트를 채운다(size-full → 불확정 높이 회피).
-    <div className="min-h-dvh w-full flex flex-col bg-white">
+    <div className="min-h-dvh w-full flex flex-col bg-background">
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold mb-2">이름을 알려주세요</h1>
-            <p className="text-gray-600">
-              모임에서 표시될 이름을 입력해 주세요
-            </p>
+          <div className="animate-fade-in-up text-center mb-8">
+            {/* 환영 그라데이션 배지 — 첫 진입을 따뜻하게(scale-in 등장). */}
+            <div className="bg-gradient-brand-animated animate-scale-in mx-auto inline-flex items-center justify-center w-20 h-20 rounded-[1.75rem] shadow-xl shadow-primary/25 mb-5">
+              <span className="text-4xl">👋</span>
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight mb-2">이름을 알려주세요</h1>
+            <p className="text-muted-foreground">모임에서 표시될 이름을 입력해 주세요</p>
           </div>
 
           {/* 에러 박스(AC-8): 빈 값/백엔드 실패 시 일반화된 오류를 표시한다. */}
           {state?.error ? (
             <div
               role="alert"
-              className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm mb-4"
+              className="animate-fade-in-down bg-destructive/10 text-destructive px-4 py-3 rounded-2xl text-sm mb-4"
             >
               {state.error}
             </div>
           ) : null}
 
-          <form action={action} className="flex flex-col gap-4">
+          <form action={action} className="animate-fade-in-up flex flex-col gap-4 [animation-delay:0.08s]">
             <div>
-              <label
-                htmlFor="onboarding-name"
-                className="block text-sm font-medium mb-2"
-              >
+              <label htmlFor="onboarding-name" className="block text-sm font-semibold mb-2">
                 이름
               </label>
               <input
@@ -56,14 +55,14 @@ export function OnboardingForm({ prefillName }: { prefillName: string }) {
                 defaultValue={prefillName}
                 placeholder="홍길동"
                 autoComplete="name"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3.5 border border-border bg-card rounded-2xl transition-shadow focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
               />
             </div>
 
             <button
               type="submit"
               disabled={pending}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors mt-4 disabled:opacity-50"
+              className="w-full bg-gradient-brand text-white py-3.5 rounded-2xl font-bold shadow-lg shadow-primary/25 transition-transform mt-4 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
             >
               {pending ? "저장 중..." : "시작하기"}
             </button>

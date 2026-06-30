@@ -40,12 +40,13 @@ export function BottomTabBar({ notificationCount = 0 }: BottomTabBarProps) {
       // z-40: 콘텐츠 위, 모달(z-50, 예: invite) 아래. inset-x-0 bottom-0 으로 전체 너비 하단 고정.
       // paddingBottom env(safe-area-inset-bottom): 홈 인디케이터 영역 회피(viewport-fit=cover 로 실효).
       // [확인] 조상(html/body/(main) 셸/Provider)에 transform/filter/backdrop-filter/will-change/contain
-      // 가 없어 containing block 이 만들어지지 않으므로 fixed 는 뷰포트 기준으로 정착한다.
+      // 가 없어 containing block 이 만들어지지 않으므로 fixed 는 뷰포트 기준으로 정착한다. 자신의
+      // backdrop-blur 는 자신만 containing block 으로 만들 뿐 자식 fixed 가 없으므로 무해(반투명 유리 효과).
       // 네이티브 셸에서는 globals.css 의 html[data-shell="native"] [data-bottom-tab-bar]{display:none} 으로 숨김.
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/85 backdrop-blur-xl"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="flex items-stretch">
+      <div className="flex items-stretch px-1.5 pt-1.5">
         {TABS.map((tab) => {
           // 정확 일치 + 하위 경로 매칭(예: /home/[id] 에서도 home 탭 active 유지).
           const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
@@ -55,30 +56,43 @@ export function BottomTabBar({ notificationCount = 0 }: BottomTabBarProps) {
               key={tab.href}
               href={tab.href}
               aria-current={isActive ? "page" : undefined}
-              className="relative flex flex-1 flex-col items-center justify-center gap-1 py-3 transition-colors"
+              // 탭 press 피드백: 누르면 살짝 줄어들었다 spring 으로 복원(네이티브 탭 감각).
+              className="group relative flex flex-1 flex-col items-center justify-center gap-1 py-1.5 transition-transform duration-200 active:scale-90"
             >
               <div className="relative">
-                <Icon
-                  size={22}
-                  strokeWidth={isActive ? 2.5 : 1.8}
-                  className={isActive ? "text-primary" : "text-muted-foreground"}
-                />
+                {/* 활성 탭: 그라데이션 알약(인스타 시그니처) 안에 흰 아이콘. 비활성: 투명 배경 회색 아이콘.
+                    h/w·배경·그림자가 transition 으로 부드럽게 전환된다(spring easing). */}
+                <span
+                  className={`flex items-center justify-center rounded-2xl transition-all duration-300 ${
+                    isActive
+                      ? "h-9 w-14 bg-gradient-brand shadow-lg shadow-primary/30"
+                      : "h-9 w-14 bg-transparent"
+                  }`}
+                  style={{ transitionTimingFunction: "var(--ease-spring)" }}
+                >
+                  <Icon
+                    size={22}
+                    strokeWidth={isActive ? 2.4 : 1.9}
+                    className={`transition-colors duration-200 ${
+                      isActive
+                        ? "text-white"
+                        : "text-muted-foreground group-hover:text-foreground"
+                    }`}
+                  />
+                </span>
                 {tab.href === "/notifications" && notificationCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
+                  <span className="animate-pop absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-brand text-[9px] font-bold text-white ring-2 ring-card">
                     {notificationCount > 9 ? "9+" : notificationCount}
                   </span>
                 )}
               </div>
               <span
-                className={`text-[10px] font-semibold leading-none ${
-                  isActive ? "text-primary" : "text-muted-foreground"
+                className={`text-[10px] leading-none transition-colors duration-200 ${
+                  isActive ? "font-bold text-foreground" : "font-semibold text-muted-foreground"
                 }`}
               >
                 {tab.label}
               </span>
-              {isActive && (
-                <span className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary" />
-              )}
             </Link>
           );
         })}

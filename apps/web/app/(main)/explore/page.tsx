@@ -9,14 +9,18 @@ export default function ExplorePage() {
     // (main) 셸 안의 중앙 정렬 페이지 — flex-1 로 셸(min-h-dvh 체인)을 채워 수직 중앙 정렬. h-full 제거
     // (불확정 높이 % 의존 회피). 하단 회피 여백은 (main) 콘텐츠 래퍼(pb-bottom-tab)가 담당.
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
-      <div className="text-5xl">🔍</div>
-      <h2 className="text-xl font-extrabold text-foreground">탐색</h2>
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        받은 초대 링크로 모임에 참여할 수 있어요.
-      </p>
+      <div className="bg-gradient-brand-soft animate-scale-in flex h-24 w-24 items-center justify-center rounded-full text-5xl ring-1 ring-border">
+        🔍
+      </div>
+      <div className="animate-fade-in-up flex flex-col gap-2">
+        <h2 className="text-2xl font-extrabold text-foreground">탐색</h2>
+        <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+          받은 초대 링크로 모임에 참여할 수 있어요.
+        </p>
+      </div>
       <Link
         href="/invite"
-        className="w-full max-w-sm rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+        className="bg-gradient-brand animate-fade-in-up w-full max-w-sm rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] [animation-delay:0.08s]"
       >
         초대 링크로 참여
       </Link>
