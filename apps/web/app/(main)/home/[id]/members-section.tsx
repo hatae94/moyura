@@ -25,11 +25,17 @@ function RoleBadge({ role }: { role: string }) {
   return (
     <span
       className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-        isOwner ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+        isOwner ? "bg-gradient-brand-soft" : "bg-muted text-muted-foreground"
       }`}
     >
-      {isOwner ? <Crown size={12} /> : <User size={12} />}
-      {isOwner ? "방장" : "멤버"}
+      {isOwner ? (
+        <Crown size={12} className="text-primary" />
+      ) : (
+        <User size={12} />
+      )}
+      <span className={isOwner ? "text-gradient-brand" : ""}>
+        {isOwner ? "방장" : "멤버"}
+      </span>
     </span>
   );
 }
@@ -62,25 +68,25 @@ function ConfirmDialog({
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="member-confirm-title"
-      // backdrop 비활성: 오버레이에 닫기 핸들러 없음(확인/취소 버튼으로만 진행)
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      // backdrop 비활성: 오버레이에 닫기 핸들러 없음(확인/취소 버튼으로만 진행). fade-in 으로 부드럽게 등장.
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
     >
-      <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+      <div className="animate-scale-in mx-4 w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
         <p
           id="member-confirm-title"
-          className="text-center text-base font-semibold text-gray-900"
+          className="text-center text-base font-bold text-foreground"
         >
           {title}
         </p>
         {description ? (
-          <p className="mt-2 text-center text-sm text-gray-500">{description}</p>
+          <p className="mt-2 text-center text-sm text-muted-foreground">{description}</p>
         ) : null}
         <div className="mt-5 flex gap-3">
           <button
             type="button"
             disabled={isPending}
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            className="flex-1 rounded-2xl border border-border py-3 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98] disabled:opacity-50"
           >
             취소
           </button>
@@ -88,10 +94,8 @@ function ConfirmDialog({
             type="button"
             disabled={isPending}
             onClick={onConfirm}
-            className={`flex-1 rounded-xl py-3 text-sm font-bold text-white transition-colors disabled:opacity-50 ${
-              destructive
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-primary hover:bg-primary/90"
+            className={`flex-1 rounded-2xl py-3 text-sm font-bold text-white shadow-md transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 ${
+              destructive ? "bg-destructive shadow-destructive/20" : "bg-gradient-brand shadow-primary/20"
             }`}
           >
             {isPending ? "처리 중…" : confirmLabel}
@@ -306,10 +310,10 @@ export function MembersSection({
               <li
                 key={member.userId}
                 // content-auto-member: 화면 밖 멤버 행 렌더 스킵(긴 멤버 목록 스크롤 — SPEC-WEBVIEW-NATIVE-FEEL-001 M5).
-                className="content-auto-member flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+                className="content-auto-member flex items-center gap-3 rounded-2xl border border-border bg-card p-3 transition-colors hover:border-border"
               >
-                {/* 아바타 이니셜 */}
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-bold text-secondary-foreground">
+                {/* 아바타 이니셜 — 그라데이션(인스타 무드, 홈/상세 아바타와 일관). */}
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-sm font-bold text-white shadow-sm shadow-primary/20">
                   {initial}
                 </span>
                 {/* 닉네임 */}

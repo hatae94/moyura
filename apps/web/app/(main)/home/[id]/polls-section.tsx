@@ -86,18 +86,18 @@ function OptionRow({
       role={multiSelect ? "checkbox" : undefined}
       aria-checked={multiSelect ? isMine : undefined}
       aria-pressed={multiSelect ? undefined : isMine}
-      className={`relative w-full overflow-hidden rounded-xl border p-3 text-left transition-colors disabled:opacity-60 ${
-        closed ? "cursor-default" : ""
+      className={`relative w-full overflow-hidden rounded-2xl border p-3 text-left transition-all disabled:opacity-60 ${
+        closed ? "cursor-default" : "active:scale-[0.99]"
       } ${
         isMine
-          ? "border-primary bg-primary/5 ring-2 ring-primary/40"
+          ? "border-primary/60 bg-gradient-brand-soft ring-1 ring-primary/30"
           : "border-border bg-card hover:border-primary/40"
       }`}
     >
-      {/* 득표 막대(배경) — bg-muted 트랙 위에 bg-primary 채움(퍼센트 너비). */}
+      {/* 득표 막대(배경) — 그라데이션 채움(퍼센트 너비). width 트랜지션으로 투표 시 부드럽게 차오른다. */}
       <span
         aria-hidden
-        className="absolute inset-y-0 left-0 bg-primary/10"
+        className="bg-gradient-brand absolute inset-y-0 left-0 opacity-[0.13] transition-[width] duration-500 ease-out"
         style={{ width: `${percent}%` }}
       />
       <span className="relative flex items-center justify-between gap-2">
@@ -192,7 +192,7 @@ function PollCard({
 
   return (
     // content-auto-poll: 화면 밖 투표 카드 렌더 스킵(긴 투표 목록 스크롤 — SPEC-WEBVIEW-NATIVE-FEEL-001 M5).
-    <article className="content-auto-poll flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
+    <article className="content-auto-poll flex flex-col gap-3 rounded-3xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <h3 className="flex min-w-0 items-start gap-2 font-bold text-card-foreground">
           <Vote size={18} className="mt-0.5 shrink-0 text-primary" />
@@ -337,10 +337,10 @@ function CreatePollForm({ moimId }: { moimId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/50 bg-primary/5 py-3.5 text-base font-bold text-primary transition-colors hover:bg-primary/10"
+        className="bg-gradient-brand-soft flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/40 py-3.5 text-base font-bold transition-all hover:border-primary/60 active:scale-[0.98]"
       >
-        <Plus size={20} />
-        투표 만들기
+        <Plus size={20} className="text-primary" />
+        <span className="text-gradient-brand">투표 만들기</span>
       </button>
     );
   }
@@ -348,7 +348,7 @@ function CreatePollForm({ moimId }: { moimId: string }) {
   return (
     <form
       action={action}
-      className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4"
+      className="animate-scale-in flex flex-col gap-4 rounded-3xl border border-border bg-card p-4 shadow-sm"
     >
       {/* moimId 는 Server Action 이 읽도록 hidden 으로 동봉한다. */}
       <input type="hidden" name="moimId" value={moimId} />
@@ -408,9 +408,9 @@ function CreatePollForm({ moimId }: { moimId: string }) {
               type="button"
               onClick={() => setPollKind(opt.value)}
               aria-pressed={pollKind === opt.value}
-              className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
+              className={`rounded-lg py-2 text-sm font-semibold transition-all active:scale-95 ${
                 pollKind === opt.value
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-gradient-brand text-white shadow-sm shadow-primary/20"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -514,7 +514,7 @@ function CreatePollForm({ moimId }: { moimId: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="mt-1 w-full rounded-2xl bg-primary py-3 text-base font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 disabled:opacity-50"
+        className="bg-gradient-brand mt-1 w-full rounded-2xl py-3 text-base font-bold text-white shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
       >
         {pending ? "만드는 중..." : "투표 만들기"}
       </button>
