@@ -7,24 +7,21 @@ export default function ExpensesLoading() {
     <main className="flex min-h-dvh flex-col bg-background" aria-busy="true" aria-label="불러오는 중">
       {/* 헤더: 뒤로 버튼 + 타이틀 자리표시자. sticky top-0 으로 문서 스크롤 중 상단 고정. */}
       <header className="sticky top-0 z-10 flex items-center gap-2 bg-background px-3 pb-5 pt-page">
-        <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
-        <div className="h-6 w-24 animate-pulse rounded bg-muted" />
+        <div className="skeleton h-9 w-9 rounded-full" />
+        <div className="skeleton h-6 w-24 rounded-lg" />
       </header>
 
-      {/* 문서 스크롤: overflow-y-auto 제거. */}
+      {/* 문서 스크롤: overflow-y-auto 제거. 시머 스윕으로 로딩 감각. */}
       <div className="flex flex-1 flex-col gap-4 px-5 pb-6">
         {/* 요약 카드 자리표시자. */}
-        <div className="h-24 w-full animate-pulse rounded-2xl border border-border bg-card" />
+        <div className="skeleton h-24 w-full rounded-2xl" />
         {/* 카테고리 도넛 자리표시자. */}
-        <div className="h-40 w-full animate-pulse rounded-2xl border border-border bg-card" />
+        <div className="skeleton h-40 w-full rounded-2xl" />
 
         {/* 지출 내역 리스트 자리표시자. */}
         <div className="flex flex-col gap-3">
           {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-16 w-full animate-pulse rounded-2xl border border-border bg-card"
-            />
+            <div key={i} className="skeleton h-16 w-full rounded-2xl" />
           ))}
         </div>
       </div>
