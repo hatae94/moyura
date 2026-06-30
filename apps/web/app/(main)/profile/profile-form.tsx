@@ -20,7 +20,7 @@ export function ProfileForm({ initialName }: { initialName: string }) {
       {state?.error ? (
         <div
           role="alert"
-          className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm"
+          className="animate-fade-in-down bg-destructive/10 text-destructive px-4 py-3 rounded-2xl text-sm"
         >
           {state.error}
         </div>
@@ -28,17 +28,16 @@ export function ProfileForm({ initialName }: { initialName: string }) {
       {state?.ok ? (
         <div
           role="status"
-          className="bg-primary/10 text-primary px-4 py-3 rounded-lg text-sm"
+          className="animate-fade-in-down bg-gradient-brand-soft px-4 py-3 rounded-2xl text-sm font-semibold"
         >
-          저장되었습니다.
+          {/* 텍스트만 그라데이션 — soft 배경(background-image)과 text-gradient-brand(background-image) 충돌
+              방지 위해 자식 span 으로 분리. */}
+          <span className="text-gradient-brand">저장되었습니다.</span>
         </div>
       ) : null}
 
       <div>
-        <label
-          htmlFor="profile-name"
-          className="block text-sm font-medium mb-2 text-foreground"
-        >
+        <label htmlFor="profile-name" className="block text-sm font-semibold mb-2 text-foreground">
           표시 이름
         </label>
         <input
@@ -48,9 +47,9 @@ export function ProfileForm({ initialName }: { initialName: string }) {
           defaultValue={initialName}
           placeholder="홍길동"
           autoComplete="name"
-          className="w-full px-4 py-3 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full px-4 py-3.5 border border-border rounded-2xl bg-card text-foreground transition-shadow focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
         />
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-xs text-muted-foreground mt-1.5">
           모임에서 다른 멤버에게 표시되는 이름이에요.
         </p>
       </div>
@@ -58,7 +57,7 @@ export function ProfileForm({ initialName }: { initialName: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="bg-gradient-brand w-full text-white py-3.5 rounded-2xl font-bold shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
       >
         {pending ? "저장 중..." : "저장"}
       </button>

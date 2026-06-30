@@ -21,23 +21,38 @@ export default async function ProfilePage() {
         day: "numeric",
       })
     : "—";
+  // 프로필 헤더 아바타 이니셜 — 표시 이름(보장) 첫 글자.
+  const initial = (profile.name ?? email).charAt(0).toUpperCase() || "M";
 
   return (
     <main className="flex flex-1 flex-col gap-6 p-6 max-w-md w-full mx-auto">
-      <h1 className="text-2xl font-bold text-foreground">마이</h1>
+      {/* 프로필 헤더 — 인스타 스타일 스토리링 아바타 + 이름 + 이메일. */}
+      <div className="animate-fade-in-up flex flex-col items-center gap-3 pt-2">
+        {/* [중요] 이니셜은 별도 span: bg-card(흰 원)와 text-gradient-brand 는 둘 다 background-image 를 써서
+            같은 요소에 두면 충돌한다(흰 원이 그라데이션으로 덮이고 텍스트 투명). 원과 텍스트를 분리한다. */}
+        <span className="gradient-ring shadow-lg shadow-primary/15">
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-card text-3xl font-extrabold">
+            <span className="text-gradient-brand">{initial}</span>
+          </span>
+        </span>
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-xl font-extrabold tracking-tight text-foreground">
+            {profile.name}
+          </span>
+          <span className="break-all text-sm text-muted-foreground">{email}</span>
+        </div>
+      </div>
 
       {/* 개인정보 카드 — 이메일/가입일(read-only) + 표시 이름(수정) */}
-      <section className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-5">
+      <section className="animate-fade-in-up flex flex-col gap-5 rounded-3xl border border-border bg-card p-5 shadow-sm [animation-delay:0.06s]">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">이메일</span>
-            <span className="text-sm text-foreground font-medium break-all text-right">
-              {email}
-            </span>
+            <span className="break-all text-right text-sm font-medium text-foreground">{email}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">가입일</span>
-            <span className="text-sm text-foreground font-medium">{joined}</span>
+            <span className="text-sm font-medium text-foreground">{joined}</span>
           </div>
         </div>
 
@@ -50,7 +65,7 @@ export default async function ProfilePage() {
       <form action={signOutAction}>
         <button
           type="submit"
-          className="w-full border border-border text-muted-foreground py-3 rounded-lg font-medium hover:bg-card transition-colors"
+          className="w-full rounded-2xl border border-border bg-card py-3 font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.99]"
         >
           로그아웃
         </button>
