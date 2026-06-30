@@ -37,19 +37,16 @@ function FullMoimModal({
       aria-modal="true"
       aria-labelledby="full-moim-title"
       // backdrop 비활성: 오버레이에 닫기 핸들러 없음(확인 버튼으로만 진행)
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
     >
-      <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <p
-          id="full-moim-title"
-          className="text-center text-base font-semibold text-gray-900"
-        >
+      <div className="animate-scale-in mx-4 w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
+        <p id="full-moim-title" className="text-center text-base font-bold text-foreground">
           {message}
         </p>
         <button
           type="button"
           onClick={onConfirm}
-          className="mt-5 w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+          className="bg-gradient-brand mt-5 w-full rounded-2xl py-3 text-sm font-bold text-white shadow-md shadow-primary/20 transition-transform active:scale-[0.98]"
         >
           확인
         </button>
@@ -178,11 +175,15 @@ export function InviteAcceptForm({
       {/* 독립 풀스크린 페이지(body min-h-dvh 의 직접 자식) — min-h-dvh 로 라이브 뷰포트를 채워 수직 중앙 정렬.
           콘텐츠가 길면 흐름대로 자라 문서 스크롤된다(탭바 없는 공개 랜딩). */}
       <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-8">
-        <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-bold mb-2 text-center">모임 초대</h1>
-          <p className="text-gray-600 text-center mb-8">
-            닉네임을 입력하고 모임에 참여하세요.
-          </p>
+        <div className="animate-fade-in-up w-full max-w-sm">
+          <div className="mb-8 flex flex-col items-center text-center">
+            {/* 그라데이션 환영 배지 — 모임 초대 첫인상. */}
+            <div className="bg-gradient-brand-animated animate-scale-in mb-4 flex h-16 w-16 items-center justify-center rounded-[1.4rem] shadow-lg shadow-primary/20">
+              <span className="text-3xl">🎉</span>
+            </div>
+            <h1 className="text-2xl font-extrabold tracking-tight mb-2">모임 초대</h1>
+            <p className="text-muted-foreground">닉네임을 입력하고 모임에 참여하세요.</p>
+          </div>
 
           {/* SPEC-MOIM-011: 모바일이면 앱으로 여는 버튼을 함께 둔다(로드 시 자동 시도 + 수동 재시도 폴백). */}
           {isMobile && !isInAppShell ? (
@@ -190,11 +191,11 @@ export function InviteAcceptForm({
               <button
                 type="button"
                 onClick={openInApp}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                className="bg-gradient-brand w-full text-white py-3.5 rounded-2xl font-bold shadow-lg shadow-primary/25 transition-transform active:scale-[0.98]"
               >
                 앱에서 열기
               </button>
-              <p className="text-gray-500 text-center text-xs mt-2">
+              <p className="text-muted-foreground text-center text-xs mt-2">
                 앱이 자동으로 열리지 않으면 위 버튼을 누르거나, 아래에서 바로 참여할 수 있어요.
               </p>
             </div>
@@ -203,7 +204,7 @@ export function InviteAcceptForm({
           {error ? (
             <div
               role="alert"
-              className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm mb-4"
+              className="animate-fade-in-down bg-destructive/10 text-destructive px-4 py-3 rounded-2xl text-sm mb-4"
             >
               {error}
             </div>
@@ -211,10 +212,7 @@ export function InviteAcceptForm({
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
-              <label
-                htmlFor="invite-nickname"
-                className="block text-sm font-medium mb-2"
-              >
+              <label htmlFor="invite-nickname" className="block text-sm font-semibold mb-2">
                 닉네임
               </label>
               <input
@@ -224,14 +222,14 @@ export function InviteAcceptForm({
                 value={nickname}
                 onChange={(ev) => setNickname(ev.target.value)}
                 placeholder="게스트1"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3.5 border border-border bg-card rounded-2xl transition-shadow focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
               />
             </div>
 
             <button
               type="submit"
               disabled={pending}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="bg-gradient-brand w-full text-white py-3.5 rounded-2xl font-bold shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
             >
               {pending ? "참여하는 중..." : "모임 참여하기"}
             </button>
