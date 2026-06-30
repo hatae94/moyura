@@ -61,27 +61,50 @@
   contain-intrinsic-size: auto 64px;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   디자인 시스템 v2 — Instagram 무드 + moyura 브랜드 오렌지 (전면 리디자인).
+   기존 Figma Make "One-time-Event-App" 따뜻한 단색 톤을, 콘텐츠 우선·그라데이션 액센트의 인스타그램
+   감성으로 교체한다. 브랜드 오렌지(#ff6b35)는 인스타 시그니처 그라데이션(옐로우→코랄→핑크→퍼플)의 시작
+   톤으로 녹여 브랜드 연속성과 트렌디함을 동시에 만족시킨다. light 전용(다크 팔레트는 범위 밖).
+   ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafafa; /* 인스타 피드 배경 — 카드(#fff)와 미세 대비로 분리감 */
+  --foreground: #18181b;
 
-  /* SPEC-MOBILE-003 R-WB2: Figma Make "One-time-Event-App" light-mode 토큰(theme.css 발췌). */
   --card: #ffffff;
-  --card-foreground: #1a1714;
-  --primary: #ff6b35;
+  --card-foreground: #18181b;
+  --primary: #ff5436; /* 브랜드 오렌지를 코랄 쪽으로 살짝 비비드하게(그라데이션과 자연 연결) */
   --primary-foreground: #ffffff;
-  --secondary: #fff4ef;
-  --secondary-foreground: #c44a1a;
-  --muted: #f0ede8;
-  --muted-foreground: #8a8074;
-  --accent: #fff4ef;
-  --accent-foreground: #ff6b35;
-  --destructive: #e53935;
+  --secondary: #fff1ec; /* 옅은 코랄 틴트 */
+  --secondary-foreground: #d8431a;
+  --muted: #f1f1f3; /* 중립 회색(인스타 톤) */
+  --muted-foreground: #8e8e93; /* 인스타 보조 텍스트 그레이 */
+  --accent: #fff1ec;
+  --accent-foreground: #ff5436;
+  --destructive: #ed4956; /* 인스타 레드 */
   --destructive-foreground: #ffffff;
-  --border: rgba(26, 23, 20, 0.08);
-  --input-background: #f0ede8;
-  --ring: #ff6b35;
+  --border: rgba(0, 0, 0, 0.07); /* 중립·연한 hairline 보더 */
+  --input-background: #f1f1f3;
+  --ring: #ff5436;
   --radius: 1rem;
+
+  /* 인스타 시그니처 그라데이션 — 브랜드 오렌지에서 시작해 코랄→핑크→퍼플로 흐른다.
+     주요 강조 표면(로고, 주요 CTA, 활성 탭, 스토리링 아바타, FAB, 채팅 버블, primary 버튼)에 입힌다. */
+  --gradient-brand: linear-gradient(115deg, #ff8a3d 0%, #ff5e57 36%, #f5317f 68%, #b43bce 100%);
+  /* 200% 폭 버전 — gradient-pan 애니메이션(살아있는 그라데이션)용. */
+  --gradient-brand-pan: linear-gradient(
+    115deg,
+    #ff8a3d 0%,
+    #ff5e57 25%,
+    #f5317f 50%,
+    #b43bce 75%,
+    #ff8a3d 100%
+  );
+  --gradient-brand-soft: linear-gradient(135deg, rgba(255, 138, 61, 0.14), rgba(245, 49, 127, 0.14));
+
+  /* 모션 easing — spring(overshoot)은 진입·팝, smooth 는 페이드·슬라이드에. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @theme inline {
@@ -90,7 +113,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* SPEC-MOBILE-003 R-WB2: Figma 토큰을 Tailwind v4 유틸로 노출(bg-card, text-primary 등). */
+  /* 시맨틱 토큰을 Tailwind v4 유틸로 노출(bg-card, text-primary 등). */
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
@@ -110,13 +133,13 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* 모션 키프레임을 Tailwind 테마에 등록(animate-* 유틸은 아래 @utility 로 별도 정의). */
+  --ease-spring: var(--ease-spring);
+  --ease-smooth: var(--ease-smooth);
 }
 
-/* 테마 톤 통일(SPEC-MOIM-007 후속 UX): Figma Make "One-time-Event-App" 는 light 전용 디자인이라
-   --card/--muted/--border/--input-background 등 시맨틱 토큰이 모두 light 값이다. create-next-app 기본
-   prefers-color-scheme:dark 오버라이드는 --background/--foreground 만 어둡게 바꿔, 검은 배경 위에 흰 카드·
-   밝은 입력·보이지 않는 테두리가 섞이는 톤 불일치를 만들었다. 다크 팔레트가 없으므로 OS 선호와 무관하게
-   설계된 light 팔레트로 일관 렌더한다(부분 다크 오버라이드 제거 — 전면 다크 테마 신설은 범위 밖). */
+/* 테마 톤 — light 전용 설계라 OS 선호와 무관하게 light 팔레트로 일관 렌더한다(다크 신설은 범위 밖). */
 :root {
   color-scheme: light;
 }
@@ -124,7 +147,224 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 탭/포커스 색을 브랜드로(텍스트 선택 하이라이트). */
+::selection {
+  background: rgba(255, 84, 54, 0.18);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   그라데이션 표면 유틸 — 인스타 무드의 핵심.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* 브랜드 그라데이션 배경(주요 CTA·FAB·로고 배지·채팅 버블·활성 칩). */
+@utility bg-gradient-brand {
+  background-image: var(--gradient-brand);
+}
+
+/* 살아있는 그라데이션 — background-position 을 천천히 패닝(로고/히어로 강조). */
+@utility bg-gradient-brand-animated {
+  background-image: var(--gradient-brand-pan);
+  background-size: 200% 200%;
+  animation: gradient-pan 6s ease infinite;
+}
+
+/* 옅은 그라데이션 배경(빈 상태 일러스트 배경, soft 카드). */
+@utility bg-gradient-brand-soft {
+  background-image: var(--gradient-brand-soft);
+}
+
+/* 그라데이션 텍스트(로고 워드마크·강조 숫자). 폴백 색은 primary. */
+@utility text-gradient-brand {
+  background-image: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--primary); /* background-clip 미지원 폴백 */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   진입/인터랙션 애니메이션 — GPU 합성(transform/opacity)만 사용해 네이티브 WebView 에서 부드럽다.
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translate3d(0, 100%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes gradient-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.4s var(--ease-smooth) both;
+}
+
+@utility animate-fade-in-up {
+  animation: fade-in-up 0.5s var(--ease-smooth) both;
+}
+
+@utility animate-fade-in-down {
+  animation: fade-in-down 0.4s var(--ease-smooth) both;
+}
+
+@utility animate-scale-in {
+  animation: scale-in 0.38s var(--ease-spring) both;
+}
+
+@utility animate-slide-up {
+  animation: slide-up 0.34s var(--ease-smooth) both;
+}
+
+@utility animate-pop {
+  animation: pop 0.42s var(--ease-spring);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   스토리링 아바타 — 인스타 시그니처. 그라데이션 보더 링 안에 아바타를 감싼다.
+   사용: <span class="gradient-ring"><span class="...아바타...">A</span></span>
+   ───────────────────────────────────────────────────────────────────────── */
+@utility gradient-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 2px;
+  background-image: var(--gradient-brand);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   스켈레톤 시머 — 기존 animate-pulse 보다 인스타틱한 좌→우 광택 스윕.
+   일반 클래스(::after 가상요소 필요 — @utility 단일 클래스로 표현 불가).
+   ───────────────────────────────────────────────────────────────────────── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--muted);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0,
+    rgba(255, 255, 255, 0.65) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+/* 스태거 진입 헬퍼 — 리스트 아이템에 nth-child 별 지연을 자동 부여(인라인 style 없이 stagger).
+   사용: 부모에 stagger-children, 자식에 animate-fade-in-up. 최대 10개까지 단계적 지연. */
+.stagger-children > * {
+  animation: fade-in-up 0.5s var(--ease-smooth) both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.02s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.06s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.14s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.18s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.22s; }
+.stagger-children > *:nth-child(7) { animation-delay: 0.26s; }
+.stagger-children > *:nth-child(8) { animation-delay: 0.3s; }
+.stagger-children > *:nth-child(n + 9) { animation-delay: 0.34s; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   접근성 — 모션 민감 사용자는 모든 애니메이션/트랜지션을 사실상 즉시 처리한다(WCAG 2.3.3).
+   ───────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* SPEC-MOBILE-003 R-WB3/R-WB4: 셸 모드(네이티브 WebView)에서 웹 하단 탭바를 숨긴다(이중 탭바 금지).

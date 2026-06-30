@@ -35,8 +35,8 @@ export const viewport: Viewport = {
   // 모바일 브라우저에서 0 이 아닌 실제 값을 반환하게 한다. 이게 없으면 하단 고정 탭바의 paddingBottom:
   // env(safe-area-inset-bottom) 과 (main) 콘텐츠 하단 회피 여백이 모두 no-op(0) 이 된다.
   viewportFit: "cover",
-  // 브랜드 오렌지(globals.css --primary) — 모바일 브라우저 주소창/상태바 틴트를 브랜드와 일치.
-  themeColor: "#ff6b35",
+  // 브랜드 오렌지-코랄(globals.css --primary) — 모바일 브라우저 주소창/상태바 틴트를 브랜드와 일치.
+  themeColor: "#ff5436",
 };
 
 export default function RootLayout({
