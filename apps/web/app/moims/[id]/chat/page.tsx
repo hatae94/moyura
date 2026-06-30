@@ -124,7 +124,7 @@ function MessageBubble({
         <div
           className={`whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm ${
             isOwn
-              ? "rounded-tr-md bg-primary text-primary-foreground"
+              ? "rounded-tr-md bg-gradient-brand text-white shadow-primary/20"
               : "rounded-tl-md bg-muted text-card-foreground"
           }`}
         >
@@ -288,7 +288,7 @@ export default function ChatPage({
       {error ? (
         <div
           role="alert"
-          className="mx-3 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600"
+          className="animate-fade-in-down mx-3 mt-3 rounded-2xl bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </div>
@@ -305,11 +305,14 @@ export default function ChatPage({
             />
           ))
         ) : (
-          <li className="flex flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
-            <p className="font-medium text-foreground">아직 메시지가 없어요</p>
-            <p className="text-sm text-muted-foreground">
-              첫 메시지를 보내보세요.
-            </p>
+          <li className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+            <div className="bg-gradient-brand-soft flex h-20 w-20 items-center justify-center rounded-full text-3xl ring-1 ring-border">
+              💬
+            </div>
+            <div className="flex flex-col gap-1">
+              <p className="font-bold text-foreground">아직 메시지가 없어요</p>
+              <p className="text-sm text-muted-foreground">첫 메시지를 보내보세요</p>
+            </div>
           </li>
         )}
         <div ref={bottomRef} />
@@ -333,7 +336,7 @@ export default function ChatPage({
           type="submit"
           disabled={!canSend}
           aria-label={pending ? "전송 중" : "전송"}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+          className="bg-gradient-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-primary/25 transition-transform active:scale-90 disabled:opacity-40 disabled:active:scale-100"
         >
           <Send size={18} aria-hidden="true" />
         </button>
