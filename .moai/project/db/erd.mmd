@@ -1,6 +1,6 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-06-20 (SPEC-MOIM-006 sync — Poll.multiSelect 추가 + PollVote PK 변경)
+%% 최종 갱신: 2026-07-02 (SPEC-NOTIFICATIONS-001 sync — NOTIFICATION + SETTLEMENT_REQUEST 엔티티 추가)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
@@ -74,6 +74,26 @@ erDiagram
         timestamp created_at
     }
 
+    NOTIFICATION {
+        bigint id PK "BigInt 자동 증가 — keyset 커서 (SPEC-NOTIFICATIONS-001 M1)"
+        string recipient_id "수신자 sub (= PROFILE.id)"
+        string type "알림 종류 String 컨벤션 (예: member.joined)"
+        string moim_id FK "→ MOIM.id onDelete Cascade"
+        string actor_id "유발자 sub (nullable)"
+        json data "타입별 미리보기 + 딥링크 id (default {})"
+        timestamp read_at "nullable = 안읽음"
+        timestamp created_at
+    }
+
+    SETTLEMENT_REQUEST {
+        string id PK "uuid() 자동 생성 (SPEC-NOTIFICATIONS-001 M2)"
+        string moim_id FK "→ MOIM.id onDelete Cascade"
+        string requester_id "채권자 sub (= PROFILE.id)"
+        string debtor_id "채무자 sub (= PROFILE.id)"
+        int amount "요청 금액 (원 단위)"
+        timestamp created_at
+    }
+
     MOIM ||--o{ MOIM_MEMBER : "has members (Cascade)"
     MOIM ||--o{ MOIM_INVITE : "has invites (Cascade)"
     MOIM ||--o{ CHAT_MESSAGE : "has messages (Cascade)"
@@ -81,3 +101,5 @@ erDiagram
     POLL ||--o{ POLL_OPTION : "has options (Cascade)"
     POLL ||--o{ POLL_VOTE : "has votes (Cascade)"
     POLL_OPTION ||--o{ POLL_VOTE : "voted by (Cascade)"
+    MOIM ||--o{ NOTIFICATION : "has notifications (Cascade)"
+    MOIM ||--o{ SETTLEMENT_REQUEST : "has settlement requests (Cascade)"
