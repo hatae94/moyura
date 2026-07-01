@@ -8,6 +8,11 @@ import { join } from 'node:path';
 const CHAT_DIR = join(__dirname, '..', 'chat');
 const PUSH_DIR = __dirname;
 
+// SPEC-NOTIFICATIONS-001 M6: 고신호 푸시(NotificationPushListener)가 단방향 의존하는 생산 도메인들.
+// 각 도메인은 push 를 인식하지 않아야 하며(도메인 → push import 0), push 는 각 도메인의 `*-events` 계약만
+// import 해야 한다(service/controller 미import — 역결합 방지). chat 과 동일한 규칙을 이 3개 도메인에 확장한다.
+const PRODUCER_DOMAINS = ['invite', 'schedule', 'expense'] as const;
+
 // 디렉터리(재귀)의 .ts 파일 목록을 모은다(.spec.ts 포함 — 테스트도 push를 import하면 결합이므로 검사).
 function collectTsFiles(dir: string): string[] {
   const out: string[] = [];
@@ -70,4 +75,45 @@ describe('느슨한 결합 정적 검사 (REQ-PUSH-004 / AC-3)', () => {
     }
     expect(forbiddenChatImports).toEqual([]);
   });
+
+  // SPEC-NOTIFICATIONS-001 M6: NotificationPushListener 가 구독하는 생산 도메인(invite/schedule/expense)도
+  // chat 과 동일한 단방향 결합 규칙을 지켜야 한다 — 도메인은 push 를 인식하지 않고, push 는 `*-events` 계약만 본다.
+  describe.each(PRODUCER_DOMAINS)(
+    '고신호 푸시 생산 도메인 결합 규칙: %s',
+    (domain) => {
+      it(`apps/backend/src/${domain}/** 는 push 모듈을 import하지 않는다 (${domain} ↛ push)`, () => {
+        const domainFiles = collectTsFiles(join(__dirname, '..', domain));
+        expect(domainFiles.length).toBeGreaterThan(0); // 스캔 대상 존재 보장.
+
+        const violations: string[] = [];
+        for (const file of domainFiles) {
+          const hits = findPushImports(file);
+          if (hits.length > 0) {
+            violations.push(`${file}:\n  ${hits.join('\n  ')}`);
+          }
+        }
+        expect(violations).toEqual([]);
+      });
+
+      it(`push 모듈은 ${domain}에서 ${domain}-events 계약만 import한다 (service/controller 미import)`, () => {
+        const pushFiles = collectTsFiles(PUSH_DIR);
+        const contractModule = `${domain}-events`;
+        const forbidden: string[] = [];
+        const importRe = new RegExp(
+          `from\\s+['"]\\.{1,2}/${domain}/([^'"]+)['"]`,
+        );
+        for (const file of pushFiles) {
+          const content = readFileSync(file, 'utf8');
+          for (const line of content.split('\n')) {
+            const m = importRe.exec(line);
+            if (m && m[1] !== contractModule) {
+              // push 가 도메인의 계약(*-events) 외 모듈을 import 하면 위반(역결합).
+              forbidden.push(`${file}: ${line.trim()}`);
+            }
+          }
+        }
+        expect(forbidden).toEqual([]);
+      });
+    },
+  );
 });
