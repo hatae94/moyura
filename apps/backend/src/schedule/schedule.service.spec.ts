@@ -389,6 +389,83 @@ describe('ScheduleService', () => {
     });
   });
 
+  // ── updateWindow (시간대 넓히기, 멤버 누구나) ─────────────────────────────────
+  describe('updateWindow', () => {
+    async function seedEvent(): Promise<void> {
+      // 18:00~24:00 / 30분 격자.
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
+    }
+
+    it('비멤버 403', async () => {
+      await seedEvent();
+      await expect(
+        service.updateWindow('stranger', MOIM_ID, 1020, 1440),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('미설정 세션 → NotFound(throw)', async () => {
+      await expect(
+        service.updateWindow('m2', MOIM_ID, 1020, 1440),
+      ).rejects.toThrow();
+    });
+
+    it('확정된 세션은 시간대 변경 불가(400)', async () => {
+      await seedEvent();
+      const ev = tables.event.get(MOIM_ID);
+      tables.event.set(MOIM_ID, { ...ev, confirmedAt: NOW });
+      await expect(
+        service.updateWindow('m2', MOIM_ID, 1020, 1440),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('좁히기 시도(시작 증가) → 400', async () => {
+      await seedEvent();
+      await expect(
+        service.updateWindow('m2', MOIM_ID, 1110, 1440),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('좁히기 시도(종료 감소) → 400', async () => {
+      await seedEvent();
+      await expect(
+        service.updateWindow('m2', MOIM_ID, 1080, 1410),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('격자 어긋난 시작(1065) → 400', async () => {
+      await seedEvent();
+      await expect(
+        service.updateWindow('m2', MOIM_ID, 1065, 1440),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('멤버가 앞으로 넓히기(17:00) 정상 + 기존 슬롯 보존', async () => {
+      await seedEvent();
+      // 멤버 슬롯 시드(18:00) — 넓혀도 유효해야 한다.
+      await service.setMyAvailability('m2', MOIM_ID, [
+        { date: '2026-07-04', startMinute: 1080 },
+      ]);
+      const ev = await service.updateWindow('m2', MOIM_ID, 1020, 1440);
+      expect(ev.startMinute).toBe(1020);
+      expect(ev.endMinute).toBe(1440);
+      expect(ev.slots.filter((s) => s.userId === 'm2')).toHaveLength(1);
+    });
+
+    it('멤버가 뒤로(자정 넘김, 익일 01:00) 넓히기 정상', async () => {
+      await seedEvent();
+      const ev = await service.updateWindow('m2', MOIM_ID, 1080, 1500);
+      expect(ev.startMinute).toBe(1080);
+      expect(ev.endMinute).toBe(1500);
+    });
+  });
+
   // ── confirmSchedule ───────────────────────────────────────────────────────
   describe('confirmSchedule', () => {
     async function seedEvent(): Promise<void> {

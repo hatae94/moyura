@@ -106,6 +106,56 @@ export class ScheduleController {
     await this.scheduleService.setMyAvailability(user.sub, moimId, slots);
   }
 
+  // PUT /moims/:id/schedule/dates — 후보 날짜 편집(멤버 누구나, 협업). 200. 시간범위/슬롯 유지·슬롯 보존.
+  @Put('dates')
+  @ApiOkResponse({
+    description: '후보 날짜 편집(멤버 누구나)',
+    type: ScheduleResponseDto,
+  })
+  @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
+  @ApiForbiddenResponse({ description: '멤버 아님(또는 모임 미존재) — 403' })
+  @ApiBadRequestResponse({ description: '미설정/확정됨/날짜 형식 — 400' })
+  async setDates(
+    @CurrentUser() user: VerifiedUser,
+    @Param('id') moimId: string,
+    @Body() body: { dates?: unknown },
+  ): Promise<ScheduleResponseDto> {
+    const dates = requireStringArray(body?.dates, 'dates');
+    const event = await this.scheduleService.updateDates(
+      user.sub,
+      moimId,
+      dates,
+    );
+    return { schedule: toScheduleDto(event) };
+  }
+
+  // PUT /moims/:id/schedule/window — 시간대 넓히기(멤버 누구나, 협업). 200. 넓히기 전용·슬롯 보존.
+  @Put('window')
+  @ApiOkResponse({
+    description: '시간대 넓히기(멤버 누구나)',
+    type: ScheduleResponseDto,
+  })
+  @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
+  @ApiForbiddenResponse({ description: '멤버 아님(또는 모임 미존재) — 403' })
+  @ApiBadRequestResponse({
+    description: '미설정/확정됨/좁히기/격자 어긋남 — 400',
+  })
+  async setWindow(
+    @CurrentUser() user: VerifiedUser,
+    @Param('id') moimId: string,
+    @Body() body: { startMinute?: unknown; endMinute?: unknown },
+  ): Promise<ScheduleResponseDto> {
+    const startMinute = requireInt(body?.startMinute, 'startMinute');
+    const endMinute = requireInt(body?.endMinute, 'endMinute');
+    const event = await this.scheduleService.updateWindow(
+      user.sub,
+      moimId,
+      startMinute,
+      endMinute,
+    );
+    return { schedule: toScheduleDto(event) };
+  }
+
   // POST /moims/:id/schedule/confirm — 일정 확정(owner). 204. moim.startsAt 이 갱신된다.
   @Post('confirm')
   @HttpCode(204)
