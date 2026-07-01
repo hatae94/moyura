@@ -180,15 +180,80 @@ export class ScheduleService {
     await this.prisma.scheduleEvent.deleteMany({ where: { moimId } });
   }
 
-  // ── 검증 ────────────────────────────────────────────────────────────────────
-
-  // 세션 설정 검증: 날짜 1개 이상·형식, 시간 범위 정합(start<end, 상한, 격자), 슬롯 단위 허용.
-  private validateConfig(
+  // 후보 날짜 편집(멤버 누구나 — 협업적 후보 날짜 추가/제거). setSchedule(owner 전용, 시간범위/슬롯
+  // 초기화)과 달리 시간범위/슬롯 단위는 그대로 두고 dates 만 교체하며, 남은 날짜의 슬롯은 보존한다.
+  // 후보에서 빠진 날짜의 슬롯만 무효로 삭제하고, event 를 touch 해 실시간 방송한다(확정된 세션은 편집 불가).
+  async updateDates(
+    sub: string,
+    moimId: string,
     dates: string[],
+  ): Promise<ScheduleEventWithSlots> {
+    await this.moim.assertMember(sub, moimId);
+    this.validateDates(dates);
+
+    const event = await this.prisma.scheduleEvent.findUnique({
+      where: { moimId },
+    });
+    if (!event) {
+      throw new NotFoundException('일정 조율이 아직 설정되지 않았습니다');
+    }
+    if (event.confirmedAt) {
+      throw new BadRequestException(
+        '이미 확정된 일정이라 날짜를 바꿀 수 없습니다',
+      );
+    }
+
+    // 트랜잭션: 후보에서 빠진 날짜의 슬롯 삭제(무효화) + dates 교체(update = touch → 방송).
+    // 남은/추가된 날짜의 슬롯은 보존된다(추가 날짜엔 아직 슬롯 없음).
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.scheduleSlot.deleteMany({
+        where: { scheduleEventId: event.id, date: { notIn: dates } },
+      }),
+      this.prisma.scheduleEvent.update({
+        where: { id: event.id },
+        data: { dates },
+        include: { slots: true },
+      }),
+    ]);
+    return updated;
+  }
+
+  // 시간대(조율 범위) 넓히기(멤버 누구나 — 협업). 좁히기는 기존 슬롯을 무효화하므로 금지하고(넓히기 전용),
+  // 슬롯 격자(startMinute anchor + slotMinutes step)를 유지해야 한다. 범위가 커지기만 하므로 기존 슬롯은
+  // 전부 유효 → 보존한다. event 를 touch 해 실시간 방송한다(확정된 세션은 편집 불가).
+  async updateWindow(
+    sub: string,
+    moimId: string,
     startMinute: number,
     endMinute: number,
-    slotMinutes: number,
-  ): void {
+  ): Promise<ScheduleEventWithSlots> {
+    await this.moim.assertMember(sub, moimId);
+
+    const event = await this.prisma.scheduleEvent.findUnique({
+      where: { moimId },
+    });
+    if (!event) {
+      throw new NotFoundException('일정 조율이 아직 설정되지 않았습니다');
+    }
+    if (event.confirmedAt) {
+      throw new BadRequestException(
+        '이미 확정된 일정이라 시간대를 바꿀 수 없습니다',
+      );
+    }
+    this.validateWindow(event, startMinute, endMinute);
+
+    // 넓히기 전용이라 기존 슬롯은 모두 범위 안에 남는다(삭제 없음). update = touch → 트리거 1회 방송.
+    return this.prisma.scheduleEvent.update({
+      where: { id: event.id },
+      data: { startMinute, endMinute },
+      include: { slots: true },
+    });
+  }
+
+  // ── 검증 ────────────────────────────────────────────────────────────────────
+
+  // 후보 날짜 검증(1개 이상·형식·중복 금지). 세션 설정과 날짜 편집(updateDates)이 공유한다.
+  private validateDates(dates: string[]): void {
     if (!Array.isArray(dates) || dates.length === 0) {
       throw new BadRequestException('후보 날짜를 한 개 이상 선택해 주세요');
     }
@@ -204,6 +269,16 @@ export class ScheduleService {
     if (new Set(dates).size !== dates.length) {
       throw new BadRequestException('후보 날짜에 중복이 있습니다');
     }
+  }
+
+  // 세션 설정 검증: 날짜(위 validateDates) + 시간 범위 정합(start<end, 상한, 격자), 슬롯 단위 허용.
+  private validateConfig(
+    dates: string[],
+    startMinute: number,
+    endMinute: number,
+    slotMinutes: number,
+  ): void {
+    this.validateDates(dates);
     if (!ALLOWED_SLOT_MINUTES.includes(slotMinutes as never)) {
       throw new BadRequestException(
         '슬롯 단위는 15/30/60분 중 하나여야 합니다',
@@ -226,6 +301,40 @@ export class ScheduleService {
       throw new BadRequestException(
         '시간 범위가 슬롯 단위로 나누어떨어지지 않습니다',
       );
+    }
+  }
+
+  // 시간대 넓히기 검증: 정수·상한·start<end + "넓히기 전용"(기존 범위를 포함) + 기존 슬롯 격자 유지.
+  private validateWindow(
+    event: ScheduleEvent,
+    startMinute: number,
+    endMinute: number,
+  ): void {
+    if (
+      !Number.isInteger(startMinute) ||
+      startMinute < 0 ||
+      startMinute > 1440
+    ) {
+      throw new BadRequestException('시작 시각이 올바르지 않습니다(0~1440분)');
+    }
+    if (!Number.isInteger(endMinute) || endMinute <= startMinute) {
+      throw new BadRequestException('종료 시각은 시작 시각보다 커야 합니다');
+    }
+    if (endMinute > MAX_END_MINUTE) {
+      throw new BadRequestException('시간 범위가 너무 넓습니다(최대 48시간)');
+    }
+    // 넓히기 전용: 기존 [start, end) 를 포함해야 한다(좁히면 슬롯 무효 → 방장 재설정으로만 가능).
+    if (startMinute > event.startMinute || endMinute < event.endMinute) {
+      throw new BadRequestException(
+        '시간대는 넓힐 수만 있어요(좁히려면 방장이 재설정)',
+      );
+    }
+    // 기존 슬롯 격자(startMinute anchor, slotMinutes step) 유지: 새 시작이 격자에 맞고 전체 범위가 나누어떨어져야.
+    if ((event.startMinute - startMinute) % event.slotMinutes !== 0) {
+      throw new BadRequestException('시작 시각이 슬롯 격자에 맞지 않습니다');
+    }
+    if ((endMinute - startMinute) % event.slotMinutes !== 0) {
+      throw new BadRequestException('종료 시각이 슬롯 격자에 맞지 않습니다');
     }
   }
 

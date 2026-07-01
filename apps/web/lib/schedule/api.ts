@@ -80,6 +80,41 @@ export async function setSchedule(
 }
 
 /**
+ * 후보 날짜를 편집한다(PUT /moims/:id/schedule/dates). 멤버 누구나(협업적 날짜 추가/제거).
+ * 시간범위/슬롯 단위는 유지되고 dates 만 교체된다(빠진 날짜의 슬롯만 삭제, 남은 슬롯 보존).
+ * 비멤버 → 403, 미설정/확정됨/형식 오류 → 400/404(ApiError 전파).
+ */
+export async function updateScheduleDates(
+  api: ApiClient,
+  moimId: string,
+  dates: string[],
+): Promise<ScheduleResponse> {
+  const path = `/moims/${encodeURIComponent(moimId)}/schedule/dates`;
+  return (await api.request(path as never, "put", {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dates }),
+  })) as ScheduleResponse;
+}
+
+/**
+ * 시간대(조율 범위)를 넓힌다(PUT /moims/:id/schedule/window). 멤버 누구나(협업).
+ * 넓히기 전용 — 좁히면 400. 슬롯 단위·격자는 유지되고 남은 슬롯은 모두 보존된다.
+ * 비멤버 → 403, 미설정/확정됨/좁히기/격자 오류 → 400/404(ApiError 전파).
+ */
+export async function updateScheduleWindow(
+  api: ApiClient,
+  moimId: string,
+  startMinute: number,
+  endMinute: number,
+): Promise<ScheduleResponse> {
+  const path = `/moims/${encodeURIComponent(moimId)}/schedule/window`;
+  return (await api.request(path as never, "put", {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ startMinute, endMinute }),
+  })) as ScheduleResponse;
+}
+
+/**
  * 내 가능 슬롯을 통째로 교체 저장한다(PUT /moims/:id/schedule/me). 멤버 전용.
  * 그리드에서 칠한 셀 전체를 매번 보낸다(증분 아님). 빈 배열 = 전부 해제. 확정된 세션 → 400.
  */

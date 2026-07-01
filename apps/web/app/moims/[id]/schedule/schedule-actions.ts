@@ -17,6 +17,8 @@ import {
   deleteSchedule,
   setMyAvailability,
   setSchedule,
+  updateScheduleDates,
+  updateScheduleWindow,
 } from "@/lib/schedule/api";
 import { createClient } from "@/lib/supabase/server";
 
@@ -88,6 +90,67 @@ export async function setMyAvailabilityAction(
   } catch (err) {
     const status = err instanceof ApiError ? err.status : "unknown";
     console.error(`setMyAvailabilityAction: PUT schedule/me 실패 (status ${status})`);
+    if (err instanceof ApiError && err.status === 400) {
+      return { error: err.message || GENERIC_ERROR };
+    }
+    return { error: GENERIC_ERROR };
+  }
+
+  revalidatePath(`/moims/${moimId}/schedule`);
+  return { ok: true };
+}
+
+/**
+ * 후보 날짜를 편집한다(멤버 누구나 — 협업). 성공 시 일정 페이지를 재검증한다.
+ * 실패(403 비멤버 / 400 확정됨·형식 / 네트워크) → 일반화 오류(400 은 서버 메시지 노출).
+ */
+export async function updateScheduleDatesAction(
+  moimId: string,
+  dates: string[],
+): Promise<ScheduleActionState> {
+  if (!moimId) {
+    return { error: GENERIC_ERROR };
+  }
+
+  const token = await requireToken();
+
+  try {
+    const api = createApiClient({ baseUrl: API_BASE_URL, getToken: () => token });
+    await updateScheduleDates(api, moimId, dates);
+  } catch (err) {
+    const status = err instanceof ApiError ? err.status : "unknown";
+    console.error(`updateScheduleDatesAction: PUT schedule/dates 실패 (status ${status})`);
+    if (err instanceof ApiError && err.status === 400) {
+      return { error: err.message || GENERIC_ERROR };
+    }
+    return { error: GENERIC_ERROR };
+  }
+
+  revalidatePath(`/moims/${moimId}/schedule`);
+  return { ok: true };
+}
+
+/**
+ * 시간대(조율 범위)를 넓힌다(멤버 누구나 — 협업). 성공 시 일정 페이지를 재검증한다.
+ * 실패(403 비멤버 / 400 확정됨·좁히기·격자 / 네트워크) → 일반화 오류(400 은 서버 메시지 노출).
+ */
+export async function updateScheduleWindowAction(
+  moimId: string,
+  startMinute: number,
+  endMinute: number,
+): Promise<ScheduleActionState> {
+  if (!moimId) {
+    return { error: GENERIC_ERROR };
+  }
+
+  const token = await requireToken();
+
+  try {
+    const api = createApiClient({ baseUrl: API_BASE_URL, getToken: () => token });
+    await updateScheduleWindow(api, moimId, startMinute, endMinute);
+  } catch (err) {
+    const status = err instanceof ApiError ? err.status : "unknown";
+    console.error(`updateScheduleWindowAction: PUT schedule/window 실패 (status ${status})`);
     if (err instanceof ApiError && err.status === 400) {
       return { error: err.message || GENERIC_ERROR };
     }

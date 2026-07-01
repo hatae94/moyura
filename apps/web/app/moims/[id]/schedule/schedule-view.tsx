@@ -1,10 +1,13 @@
-// 일정 조율 클라이언트 뷰 (SPEC-SCHEDULE-001, When2meet 스타일).
+// 일정 조율 클라이언트 뷰 (SPEC-SCHEDULE-001, 포커스 데이 타임라인).
 //
-// 미설정 + owner → 설정 폼(후보 날짜 + 시간 범위). 설정됨 → 드래그 그리드:
-//   - "내 가능시간" 모드: 드래그/탭으로 가능 셀 토글 → 저장(통째 교체).
-//   - "전체 보기" 모드: 그라데이션 히트맵(겹침 농도) + 셀 탭 시 가능/불가 멤버. owner 는 셀 탭 → 확정.
+// 미설정 + owner → 설정 폼(후보 날짜 + 시간 범위). 설정됨 → 하루씩 포커스하는 세로 타임라인:
+//   - 날짜 칩 레일: 하루씩 전환(스와이프), 칩마다 그날 최다 겹침 배지. 누구나 "＋날짜" 로 후보 추가.
+//   - 브라우즈(기본): 넓은 행에 밀도바 + N명 + 아바타 스택 → "누가·언제" 를 좁은 셀 없이 노출. 행 탭 → 상세.
+//   - 칠하기 모드(FAB): 전체화면 오버레이 + body 스크롤 잠금. 짧게 탭=한 칸 토글, 꾹 눌러 잡고 드래그=범위 칠하기.
+//     → 페인팅 중엔 스크롤이 없어 드래그가 스크롤로 오인되지 않는다(When2meet 계열의 스크롤·드래그 충돌 원천 제거).
+//   - 시간대 넓히기: 타임라인 위/아래 "＋이전/이후 시간" 으로 누구나 조율 범위를 앞뒤로 확장(넓히기 전용, 슬롯 보존).
 // 시간 범위가 자정을 넘으면(endMinute>1440) 다음날 새벽 슬롯이 "+1일" 구분으로 이어진다.
-// 실시간: useScheduleChannel 로 다른 멤버 변경 시 그리드/히트맵을 서버 재조회로 갱신(편집 중이면 내 선택 보존).
+// 실시간: useScheduleChannel 로 다른 멤버 변경 시 서버 재조회로 갱신(편집 중이면 내 선택은 dirty 가드로 보존).
 "use client";
 
 import {
@@ -17,9 +20,12 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
   Check,
+  Pencil,
+  Plus,
   Sparkles,
   Trash2,
   Users,
@@ -37,6 +43,8 @@ import {
   deleteScheduleAction,
   setMyAvailabilityAction,
   setScheduleAction,
+  updateScheduleDatesAction,
+  updateScheduleWindowAction,
 } from "./schedule-actions";
 
 // ─────────────────────────────────────────────
@@ -404,6 +412,119 @@ function SetupForm({ moimId }: { moimId: string }) {
 }
 
 // ─────────────────────────────────────────────
+// 날짜 편집 모달 — 멤버 누구나 후보 날짜 추가/제거(협업). MonthCalendar 재사용, bottom sheet.
+// 저장 시 updateScheduleDatesAction → 서버 event touch → schedule_change 방송으로 다른 멤버 그리드도 실시간 갱신.
+// ─────────────────────────────────────────────
+function DateEditModal({
+  moimId,
+  currentDates,
+  onClose,
+}: {
+  moimId: string;
+  currentDates: string[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [selected, setSelected] = useState<Set<string>>(new Set(currentDates));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const toggleDate = useCallback((iso: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(iso)) next.delete(iso);
+      else next.add(iso);
+      return next;
+    });
+  }, []);
+
+  function handleSave() {
+    setError(null);
+    const dates = [...selected].sort();
+    if (dates.length === 0) {
+      setError("후보 날짜를 한 개 이상 남겨주세요.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await updateScheduleDatesAction(moimId, dates);
+      if (res?.error) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="후보 날짜 편집"
+      className="animate-fade-in fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="animate-slide-up flex max-h-[88vh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-t-[1.75rem] bg-background p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-base font-extrabold text-foreground">후보 날짜 편집</span>
+          <span className="text-xs font-bold text-gradient-brand">{selected.size}일</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          날짜를 탭해 후보를 추가하거나 뺄 수 있어요(누구나 가능). 뺀 날짜의 가능시간은 사라져요.
+        </p>
+        <MonthCalendar selected={selected} onToggle={toggleDate} />
+        {selected.size > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {[...selected].sort().map((d) => {
+              const { md, weekday } = formatDateHeader(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => toggleDate(d)}
+                  className="bg-gradient-brand-soft flex items-center gap-1 rounded-full border border-primary/30 px-2.5 py-1 text-xs font-semibold transition-transform active:scale-95"
+                >
+                  <span className="text-gradient-brand">
+                    {md}({weekday})
+                  </span>
+                  <span className="text-primary">×</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onClose}
+            className="flex-1 rounded-2xl border border-border py-3 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98] disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleSave}
+            className="bg-gradient-brand flex-1 rounded-2xl py-3 text-sm font-bold text-white shadow-md shadow-primary/20 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+          >
+            {pending ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // 확정 다이얼로그
 // ─────────────────────────────────────────────
 function ConfirmDialog({
@@ -522,7 +643,9 @@ export function ScheduleView({
 // 상단 헤더(뒤로 + 타이틀). chat/expenses 헤더와 동일 토큰.
 function ScheduleHeader({ moimId, title }: { moimId: string; title: string }) {
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
+    // z-20: 그리드의 좌측 시간축 라벨(sticky left, z-10)보다 위에 두어, 세로 스크롤 시 시간축이 헤더를
+    // 가리지 않게 한다(둘 다 z-10 이던 문제 수정 — DOM 상 나중인 시간축이 헤더 위로 그려졌음).
+    <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <Link
         href={`/home/${moimId}`}
         aria-label="모임 상세로 돌아가기"
@@ -536,8 +659,18 @@ function ScheduleHeader({ moimId, title }: { moimId: string; title: string }) {
 }
 
 // ─────────────────────────────────────────────
-// 그리드(설정됨) — 드래그 편집 + 히트맵 + 확정
+// 그리드(설정됨) — 포커스 데이 타임라인 + 칠하기 오버레이 + 시간대 넓히기
 // ─────────────────────────────────────────────
+
+// 아바타 원형(닉네임 첫 글자). 프로필 이미지가 없어 이니셜로 "누가" 를 좁은 셀 없이 노출한다.
+function Avatar({ name }: { name: string }) {
+  return (
+    <span className="bg-gradient-brand flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-background">
+      {name.slice(0, 1)}
+    </span>
+  );
+}
+
 function ScheduleGrid({
   moimId,
   schedule,
@@ -556,10 +689,26 @@ function ScheduleGrid({
   const router = useRouter();
   const confirmed = schedule.confirmedAt !== null;
 
-  // 모드: 편집(내 가능시간) / 전체(히트맵). 확정되면 전체 보기 고정.
-  const [mode, setMode] = useState<"edit" | "all">(confirmed ? "all" : "edit");
+  // 활성 날짜(하루 포커스). 후보 날짜가 추가/삭제로 바뀌어 활성 날짜가 사라지면 첫 날로 보정한다
+  // (effect 대신 렌더 중 조정 — react-hooks/set-state-in-effect 회피, 아래 myInitial 동기화와 동일 패턴).
+  const [activeDate, setActiveDate] = useState<string>(schedule.dates[0] ?? "");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [syncedDates, setSyncedDates] = useState(schedule.dates);
+  if (syncedDates !== schedule.dates) {
+    setSyncedDates(schedule.dates);
+    if (!schedule.dates.includes(activeDate)) {
+      setActiveDate(schedule.dates[0] ?? "");
+      setSelected(null);
+    }
+  }
 
-  // 내 가능 슬롯(로컬 편집 상태). 초기값 = 서버의 내 슬롯.
+  // 날짜 전환 — 활성 날짜를 바꾸고 상세 선택을 초기화한다.
+  const pickDate = useCallback((d: string) => {
+    setActiveDate(d);
+    setSelected(null);
+  }, []);
+
+  // 내 가능 슬롯(로컬 편집 상태, 전체 날짜 통합). 초기값 = 서버의 내 슬롯.
   const myInitial = useMemo(() => {
     const s = new Set<string>();
     for (const slot of schedule.slots) {
@@ -573,17 +722,22 @@ function ScheduleGrid({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savePending, startSave] = useTransition();
 
-  // 실시간/서버 갱신으로 schedule 이 바뀌면, 내가 편집 중(dirty)이 아닐 때만 내 슬롯을 서버값과 동기화한다
-  // (편집 중이면 내 미저장 선택을 덮어쓰지 않는다 — 다른 멤버 변경은 히트맵에만 반영).
-  // [react-hooks/set-state-in-effect 회피] effect 가 아니라 "이전 렌더 값과 비교 후 렌더 중 조정"하는 React
-  // 공식 패턴(Adjusting state when a prop changes)을 쓴다 — myInitial 참조가 바뀌고 비-dirty 일 때만 동기화한다.
+  // 실시간/서버 갱신으로 schedule 이 바뀌면, 내가 편집 중(dirty)이 아닐 때만 서버값과 동기화한다
+  // (편집 중이면 미저장 선택을 덮어쓰지 않는다). effect 아닌 렌더 중 조정(React 공식 패턴).
   const [syncedInitial, setSyncedInitial] = useState(myInitial);
   if (syncedInitial !== myInitial && !dirty) {
     setSyncedInitial(myInitial);
     setMySlots(myInitial);
   }
 
-  // 전체 멤버 히트맵 집계: slotKey → 가능 userId 집합.
+  // mySlots 최신값을 ref 로 미러 — 롱프레스 타이머/네이티브 터치 리스너 콜백에서 stale 없이 참조한다.
+  // (렌더 중 ref 대입은 react-hooks/refs 위반 → effect 로 커밋 후 동기화. 콜백은 항상 최신 값을 읽는다.)
+  const mySlotsRef = useRef(mySlots);
+  useEffect(() => {
+    mySlotsRef.current = mySlots;
+  }, [mySlots]);
+
+  // 전체 멤버 히트맵 집계: slotKey → 가능 userId 배열.
   const heatmap = useMemo(() => {
     const m = new Map<string, string[]>();
     for (const slot of schedule.slots) {
@@ -595,15 +749,14 @@ function ScheduleGrid({
     return m;
   }, [schedule.slots]);
 
-  // 최다 겹침 수(베스트 슬롯 강조용).
+  // 최다 겹침 수(밀도바 정규화 + 베스트 강조용).
   const maxCount = useMemo(() => {
     let max = 0;
     for (const arr of heatmap.values()) max = Math.max(max, arr.length);
     return max;
   }, [heatmap]);
 
-  // 추천 슬롯(겹침 많은 순 TOP 3) — 좁은 격자 셀이 인원 몰림 정보를 다 못 보여주는 제약을 보완한다.
-  // 격자 밖 카드로 "어느 날·몇 시에·누가" 가능한지 멤버 칩까지 완전히 노출한다.
+  // 추천 슬롯(겹침 많은 순 TOP 3) — 어느 날·몇 시에·누가 가능한지 카드로 완전히 노출한다.
   const topSlots = useMemo(() => {
     return [...heatmap.entries()]
       .map(([key, users]) => ({ key, ...parseKey(key), users, count: users.length }))
@@ -617,7 +770,7 @@ function ScheduleGrid({
       .slice(0, 3);
   }, [heatmap]);
 
-  // 날짜별 최대 겹침(컬럼 헤더 배지) — 어느 날에 인원이 몰리는지 한눈에 비교한다.
+  // 날짜별 최대 겹침(날짜 칩 배지) — 어느 날에 인원이 몰리는지 한눈에 비교한다.
   const dateMax = useMemo(() => {
     const m = new Map<string, number>();
     for (const [key, users] of heatmap) {
@@ -632,9 +785,7 @@ function ScheduleGrid({
     [schedule.startMinute, schedule.endMinute, schedule.slotMinutes],
   );
 
-  // ── 드래그 편집(마우스 + 터치 통합) ──────────────────────────────────────
-  const dragModeRef = useRef<null | "add" | "remove">(null);
-
+  // ── 셀 적용(add/remove) ──────────────────────────────────────────────────
   const applyCell = useCallback((key: string, m: "add" | "remove") => {
     setMySlots((prev) => {
       if (m === "add" ? prev.has(key) : !prev.has(key)) return prev;
@@ -645,25 +796,108 @@ function ScheduleGrid({
     });
   }, []);
 
-  function startDrag(key: string) {
-    if (confirmed || mode !== "edit") return;
-    const m: "add" | "remove" = mySlots.has(key) ? "remove" : "add";
-    dragModeRef.current = m;
-    setDirty(true);
-    setSaveError(null);
-    applyCell(key, m);
-  }
+  // ── 칠하기 모드(전체화면 오버레이) ────────────────────────────────────────
+  const [paintOpen, setPaintOpen] = useState(false);
+  const paintingRef = useRef(false); // 활성 드래그(스크롤 차단 여부)
+  const dragModeRef = useRef<null | "add" | "remove">(null);
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStartRef = useRef<{ x: number; y: number; key: string } | null>(null);
+  const paintScrollRef = useRef<HTMLDivElement | null>(null);
+  const paintBackupRef = useRef<Set<string>>(new Set());
 
-  // 터치 드래그는 onPointerEnter 가 신뢰성 낮아 컨테이너 pointermove + elementFromPoint 로 현재 셀을 찾는다.
-  function handleGridPointerMove(e: React.PointerEvent) {
-    if (!dragModeRef.current) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const key = el?.getAttribute("data-slot-key");
-    if (key) applyCell(key, dragModeRef.current);
-  }
+  // 칠하기 오버레이 동안 body 스크롤 잠금(moim-action-dock 과 동일 기법 — 배경 스크롤 방지).
+  useEffect(() => {
+    if (!paintOpen) return;
+    const body = document.body;
+    const prev = body.style.overflow;
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.overflow = prev;
+    };
+  }, [paintOpen]);
 
+  // 드래그 시작(잡기) — 현재 셀 상태로 add/remove 를 정하고 즉시 한 칸 반영한다.
+  const beginPaint = useCallback(
+    (key: string) => {
+      paintingRef.current = true;
+      const m: "add" | "remove" = mySlotsRef.current.has(key) ? "remove" : "add";
+      dragModeRef.current = m;
+      setDirty(true);
+      setSaveError(null);
+      applyCell(key, m);
+    },
+    [applyCell],
+  );
+
+  // 셀 pointerdown — 마우스는 즉시 칠하기, 터치/펜은 160ms 롱프레스로 "잡기"(스크롤 vs 드래그 구분).
+  // 이 구분이 When2meet 계열의 "빠른 드래그가 스크롤로 오인" 문제를 없앤다(짧게 탭=한 칸 토글).
+  const handleCellDown = useCallback(
+    (e: React.PointerEvent, key: string) => {
+      if (confirmed) return;
+      if (e.pointerType === "mouse") {
+        beginPaint(key);
+        return;
+      }
+      if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+      pressStartRef.current = { x: e.clientX, y: e.clientY, key };
+      pressTimerRef.current = setTimeout(() => beginPaint(key), 160);
+    },
+    [confirmed, beginPaint],
+  );
+
+  // 마우스 드래그 — 컨테이너 위에서 elementFromPoint 로 현재 셀을 찾아 칠한다(터치는 아래 네이티브 리스너).
+  const handlePaintMouseMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType !== "mouse" || !paintingRef.current || !dragModeRef.current) return;
+      const el = document.elementFromPoint(e.clientX, e.clientY) as Element | null;
+      const key = el?.closest("[data-slot-key]")?.getAttribute("data-slot-key");
+      if (key) applyCell(key, dragModeRef.current);
+    },
+    [applyCell],
+  );
+
+  // 네이티브 touchmove(non-passive) — 잡힌 상태면 preventDefault 로 스크롤을 막고 칠한다.
+  // 잡기 전 8px 초과 이동은 스크롤 의도로 보고 롱프레스 타이머를 취소한다(스크롤 살림).
+  useEffect(() => {
+    if (!paintOpen) return;
+    const el = paintScrollRef.current;
+    if (!el) return;
+    function onTouchMove(e: TouchEvent) {
+      const t = e.touches[0];
+      if (!t) return;
+      if (paintingRef.current) {
+        e.preventDefault();
+        const target = document.elementFromPoint(t.clientX, t.clientY) as Element | null;
+        const key = target?.closest("[data-slot-key]")?.getAttribute("data-slot-key");
+        if (key && dragModeRef.current) applyCell(key, dragModeRef.current);
+      } else if (pressStartRef.current) {
+        const dx = t.clientX - pressStartRef.current.x;
+        const dy = t.clientY - pressStartRef.current.y;
+        if (Math.hypot(dx, dy) > 8) {
+          if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+          pressStartRef.current = null;
+        }
+      }
+    }
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+  }, [paintOpen, applyCell]);
+
+  // 포인터 종료(전역) — 잡기 전 짧은 탭이면 한 칸 토글, 그 외엔 드래그 상태를 정리한다.
   useEffect(() => {
     function end() {
+      if (!paintingRef.current && pressStartRef.current) {
+        const key = pressStartRef.current.key;
+        const m: "add" | "remove" = mySlotsRef.current.has(key) ? "remove" : "add";
+        setDirty(true);
+        applyCell(key, m);
+      }
+      if (pressTimerRef.current) {
+        clearTimeout(pressTimerRef.current);
+        pressTimerRef.current = null;
+      }
+      pressStartRef.current = null;
+      paintingRef.current = false;
       dragModeRef.current = null;
     }
     window.addEventListener("pointerup", end);
@@ -672,7 +906,18 @@ function ScheduleGrid({
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
     };
-  }, []);
+  }, [applyCell]);
+
+  function openPaint() {
+    paintBackupRef.current = new Set(mySlots);
+    setSaveError(null);
+    setPaintOpen(true);
+  }
+  function cancelPaint() {
+    setMySlots(paintBackupRef.current);
+    setDirty(false);
+    setPaintOpen(false);
+  }
 
   function handleSave() {
     setSaveError(null);
@@ -684,15 +929,17 @@ function ScheduleGrid({
         return;
       }
       setDirty(false);
+      setPaintOpen(false);
       router.refresh();
     });
   }
 
-  // ── 셀 선택(히트맵 정보 / 확정 후보) ────────────────────────────────────
-  const [selected, setSelected] = useState<string | null>(null);
+  // ── 확정 / 초기화 / 날짜편집 / 시간대 넓히기 ───────────────────────────────
   const [dialog, setDialog] = useState<{ date: string; minute: number } | null>(null);
+  const [dateEditOpen, setDateEditOpen] = useState(false);
   const [confirmPending, startConfirm] = useTransition();
   const [deletePending, startDelete] = useTransition();
+  const [windowPending, startWindow] = useTransition();
 
   function handleConfirm() {
     if (!dialog) return;
@@ -715,7 +962,22 @@ function ScheduleGrid({
     });
   }
 
-  // 선택된 셀의 가능/불가 멤버.
+  // 시간대 넓히기(멤버 누구나) — 앞/뒤로 60분씩 확장. 실시간 방송으로 전체 그리드가 갱신된다.
+  function extendWindow(newStart: number, newEnd: number) {
+    setSaveError(null);
+    startWindow(async () => {
+      const res = await updateScheduleWindowAction(moimId, newStart, newEnd);
+      if (res?.error) {
+        setSaveError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+  const canExtendEarlier = !confirmed && schedule.startMinute >= 60;
+  const canExtendLater = !confirmed && schedule.endMinute + 60 <= 2880;
+
+  // 선택된 셀의 가능/불가 멤버(브라우즈 상세 패널).
   const selectedInfo = useMemo(() => {
     if (!selected) return null;
     const available = heatmap.get(selected) ?? [];
@@ -725,8 +987,7 @@ function ScheduleGrid({
     return { date, startMinute, available, unavailable };
   }, [selected, heatmap, nicknameMap]);
 
-  // 그리드 컬럼 폭(날짜 수 기준). 시간 라벨 56px + 날짜 컬럼들.
-  const colTemplate = `56px repeat(${schedule.dates.length}, minmax(48px, 1fr))`;
+  const activeHeader = activeDate ? formatDateHeader(activeDate) : null;
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -740,38 +1001,66 @@ function ScheduleGrid({
             <div className="flex min-w-0 flex-col">
               <span className="text-xs font-semibold text-muted-foreground">확정된 모임 일정</span>
               <span className="truncate text-sm font-bold text-gradient-brand">
-                {/* confirmedAt 은 확정 처리 시각이라, 모임 일정은 startsAt(상세 헤더)이 정확.
-                    여기선 "확정됨" 사실만 보여주고 정확한 시각은 상세 페이지에서 확인하도록 안내. */}
                 일정이 확정되었어요 · 모임 상세에서 확인
               </span>
             </div>
           </div>
         ) : null}
 
-        {/* 모드 토글 + 멤버 수 */}
-        {!confirmed ? (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-1 gap-1 rounded-2xl border border-border bg-card p-1">
-              {(
-                [
-                  { v: "edit", label: "내 가능시간" },
-                  { v: "all", label: "전체 보기" },
-                ] as const
-              ).map((t) => (
-                <button
-                  key={t.v}
-                  type="button"
-                  onClick={() => setMode(t.v)}
-                  className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-all active:scale-95 ${
-                    mode === t.v
-                      ? "bg-gradient-brand text-white shadow-sm shadow-primary/20"
-                      : "text-muted-foreground"
-                  }`}
+        {/* 날짜 칩 레일 — 하루씩 포커스. 칩마다 그날 최다 겹침 배지. 누구나 "＋날짜" 로 후보 추가. */}
+        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+          {schedule.dates.map((d) => {
+            const { md, weekday } = formatDateHeader(d);
+            const peak = dateMax.get(d) ?? 0;
+            const active = d === activeDate;
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => pickDate(d)}
+                aria-pressed={active}
+                className={`flex shrink-0 flex-col items-center gap-0.5 rounded-2xl border px-3 py-2 transition-transform active:scale-95 ${
+                  active
+                    ? "bg-gradient-brand border-transparent text-white shadow-md shadow-primary/20"
+                    : "border-border bg-card text-foreground"
+                }`}
+              >
+                <span className="text-sm font-extrabold">{md}</span>
+                <span
+                  className={`text-[10px] ${active ? "text-white/80" : "text-muted-foreground"}`}
                 >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+                  {weekday}
+                </span>
+                {peak > 0 ? (
+                  <span
+                    className={`rounded-full px-1.5 text-[9px] font-bold ${
+                      active ? "bg-white/25 text-white" : "bg-gradient-brand-soft text-primary"
+                    }`}
+                  >
+                    ●{peak}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+          {!confirmed ? (
+            <button
+              type="button"
+              onClick={() => setDateEditOpen(true)}
+              className="flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-2xl border border-dashed border-primary/40 px-3 py-2 text-primary transition-transform active:scale-95"
+            >
+              <CalendarPlus size={16} />
+              <span className="text-[10px] font-bold">날짜</span>
+            </button>
+          ) : null}
+        </div>
+
+        {/* 활성 날짜 헤더 + 멤버 수 */}
+        {activeHeader ? (
+          <div className="flex items-center justify-between">
+            <span className="text-base font-extrabold text-foreground">
+              {activeHeader.md} ({activeHeader.weekday})
+            </span>
             <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               <Users size={14} />
               {memberCount}명
@@ -782,18 +1071,14 @@ function ScheduleGrid({
         {/* 안내 */}
         <p className="text-xs text-muted-foreground">
           {confirmed
-            ? "겹친 가능시간 결과예요. 진할수록 많은 멤버가 가능했어요."
-            : mode === "edit"
-              ? "가능한 시간을 드래그하거나 탭해서 칠해주세요. 다 칠했으면 저장하세요."
-              : maxCount > 0
-                ? `진할수록 많은 멤버가 가능해요. 셀을 탭하면 누가 가능한지 보여요.${isOwner ? " 방장은 탭해서 확정할 수 있어요." : ""}`
-                : "아직 아무도 가능시간을 칠하지 않았어요."}
+            ? "겹친 가능시간 결과예요. 막대가 길수록 많은 멤버가 가능했어요."
+            : maxCount > 0
+              ? `막대가 길수록 많은 멤버가 가능해요. 행을 탭하면 누가 가능한지 보여요.${isOwner ? " 방장은 확정할 수 있어요." : ""}`
+              : "아직 아무도 가능시간을 칠하지 않았어요. 아래 버튼으로 내 시간을 칠해보세요."}
         </p>
 
-        {/* 추천 시간 TOP — 좁은 격자 셀이 인원 몰림 정보를 다 못 보여주는 제약을 보완한다.
-            겹침 많은 슬롯을 카드로 꺼내, 어느 날·몇 시에·누가 가능한지 멤버 칩까지 완전히 노출한다.
-            전체/확정 모드에서만 표시(편집 모드는 내 가능시간 칠하기에 집중). */}
-        {(mode === "all" || confirmed) && topSlots.length > 0 ? (
+        {/* 추천 시간 TOP — 겹침 많은 슬롯을 카드로 꺼내, 어느 날·몇 시에·누가 가능한지 완전히 노출한다. */}
+        {topSlots.length > 0 ? (
           <div className="animate-fade-in-up flex flex-col gap-2">
             <span className="flex items-center gap-1.5 text-sm font-bold text-foreground">
               <Sparkles size={15} className="text-primary" />
@@ -817,22 +1102,29 @@ function ScheduleGrid({
                       >
                         {i + 1}
                       </span>
-                      <span className="truncate text-sm font-bold text-foreground">
-                        {md}({weekday}){" "}
-                        {isNextDay(s.startMinute) ? "익일 " : ""}
+                      {/* 카드 탭 → 해당 날짜로 포커스 이동 + 그 슬롯 상세 선택(격자 밖에서 바로 점프). */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          pickDate(s.date);
+                          setSelected(s.key);
+                        }}
+                        className="truncate text-left text-sm font-bold text-foreground"
+                      >
+                        {md}({weekday}) {isNextDay(s.startMinute) ? "익일 " : ""}
                         {formatMinute(s.startMinute)}
-                      </span>
+                      </button>
                     </div>
                     <span className="shrink-0 text-xs font-bold text-gradient-brand">
                       {s.count}/{memberCount}명
                     </span>
                   </div>
-                  {/* 가능 멤버 칩 — 인원이 몰려도 wrap 으로 전부 노출(격자 셀의 정보 제약 해소). */}
+                  {/* 가능 멤버 칩 — 인원이 몰려도 wrap 으로 전부 노출. */}
                   <div className="flex flex-wrap gap-1">
                     {s.users.map((u) => (
                       <span
                         key={u}
-                        className="bg-gradient-brand-soft rounded-full px-2 py-0.5 text-[11px] font-semibold text-gradient-brand"
+                        className="bg-gradient-brand-soft rounded-full px-2 py-0.5 text-[11px] font-semibold text-primary"
                       >
                         {nicknameMap[u] ?? "멤버"}
                       </span>
@@ -853,119 +1145,109 @@ function ScheduleGrid({
           </div>
         ) : null}
 
-        {/* ── 그리드 ── */}
-        <div className="overflow-x-auto pb-1">
-          <div
-            className="select-none"
-            style={{ touchAction: mode === "edit" && !confirmed ? "pan-y" : "auto" }}
-            onPointerMove={handleGridPointerMove}
-          >
-            {/* 날짜 헤더 */}
-            <div className="grid gap-px" style={{ gridTemplateColumns: colTemplate }}>
-              <div className="sticky left-0 z-10 bg-background" />
-              {schedule.dates.map((d) => {
-                const { md, weekday } = formatDateHeader(d);
-                return (
-                  <div
-                    key={d}
-                    className="flex flex-col items-center justify-center rounded-t-lg bg-card py-1.5"
-                  >
-                    <span className="text-[11px] font-bold text-foreground">{md}</span>
-                    <span className="text-[10px] text-muted-foreground">{weekday}</span>
-                    {/* 그 날 최대 겹침 배지 — 어느 날에 인원이 몰리는지 한눈에(격자 정보 제약 보완). */}
-                    {(mode === "all" || confirmed) && (dateMax.get(d) ?? 0) > 0 ? (
-                      <span className="bg-gradient-brand-soft mt-0.5 rounded-full px-1.5 py-px text-[9px] font-bold text-gradient-brand">
-                        최대 {dateMax.get(d)}
-                      </span>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+        {/* ── 활성 날짜 타임라인(브라우즈) ── */}
+        <div className="flex flex-col gap-1.5">
+          {/* 앞으로(이전 시간) 넓히기 — 누구나 */}
+          {canExtendEarlier ? (
+            <button
+              type="button"
+              disabled={windowPending}
+              onClick={() => extendWindow(schedule.startMinute - 60, schedule.endMinute)}
+              className="flex items-center justify-center gap-1.5 self-center rounded-full border border-dashed border-border px-3 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-primary disabled:opacity-50"
+            >
+              <Plus size={12} />
+              이전 시간 열기 ({formatMinute(schedule.startMinute - 60)}~)
+            </button>
+          ) : null}
 
-            {/* 시간 행들 */}
-            {rows.map((minute, ri) => {
-              const showNextDayMark = isNextDay(minute) && !isNextDay(rows[ri - 1] ?? minute);
-              const onHour = minute % 60 === 0;
-              return (
-                <div
-                  key={minute}
-                  className="grid gap-px"
-                  style={{ gridTemplateColumns: colTemplate }}
+          {rows.map((minute, ri) => {
+            const showNextDayMark = isNextDay(minute) && !isNextDay(rows[ri - 1] ?? minute);
+            const onHour = minute % 60 === 0;
+            const key = slotKey(activeDate, minute);
+            const users = heatmap.get(key) ?? [];
+            const count = users.length;
+            const ratio = maxCount > 0 ? count / maxCount : 0;
+            const isBest = count > 0 && count === maxCount;
+            const isSel = selected === key;
+            const mine = mySlots.has(key);
+            return (
+              <div key={minute} className="flex flex-col">
+                {showNextDayMark ? (
+                  <div className="my-1 flex items-center gap-2">
+                    <span className="h-px flex-1 bg-primary/30" />
+                    <span className="text-[10px] font-bold text-primary">+1일 (다음날)</span>
+                    <span className="h-px flex-1 bg-primary/30" />
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setSelected(isSel ? null : key)}
+                  aria-label={`${formatMinute(minute)}${count ? ` ${count}명 가능` : ""}`}
+                  className={`flex items-center gap-2 rounded-xl px-1.5 py-1 text-left transition-transform active:scale-[0.99] ${
+                    isSel ? "bg-muted" : ""
+                  }`}
                 >
-                  {/* 시간 라벨(sticky left) */}
-                  <div className="sticky left-0 z-10 flex items-start justify-end bg-background pr-1.5">
-                    {onHour ? (
-                      <span className="-mt-1.5 text-[10px] font-medium text-muted-foreground">
-                        {isNextDay(minute) && showNextDayMark ? (
-                          <span className="text-primary">+1일 </span>
-                        ) : null}
-                        {formatMinute(minute)}
+                  <span className="w-12 shrink-0 text-right text-[11px] font-medium text-muted-foreground">
+                    {onHour ? formatMinute(minute) : ""}
+                  </span>
+                  <div className="relative h-9 flex-1 overflow-hidden rounded-lg bg-muted">
+                    {count > 0 ? (
+                      <span
+                        className="bg-gradient-brand absolute inset-y-0 left-0 rounded-lg"
+                        style={{
+                          width: `${Math.max(ratio * 100, 8)}%`,
+                          opacity: 0.35 + 0.65 * ratio,
+                        }}
+                      />
+                    ) : null}
+                    {isBest ? (
+                      <Sparkles
+                        size={12}
+                        className="absolute left-1.5 top-1/2 -translate-y-1/2 text-white drop-shadow"
+                      />
+                    ) : null}
+                    {mine ? (
+                      <span className="absolute inset-y-0 right-1.5 flex items-center">
+                        <Check size={13} className="text-primary" />
                       </span>
                     ) : null}
                   </div>
+                  <span className="w-8 shrink-0 text-right text-[11px] font-bold text-foreground">
+                    {count > 0 ? `${count}명` : ""}
+                  </span>
+                  <div className="flex w-14 shrink-0 items-center">
+                    {users.slice(0, 3).map((u, idx) => (
+                      <span key={u} className={idx > 0 ? "-ml-1.5" : ""}>
+                        <Avatar name={nicknameMap[u] ?? "멤"} />
+                      </span>
+                    ))}
+                    {users.length > 3 ? (
+                      <span className="-ml-1.5 flex h-5 items-center rounded-full bg-muted px-1 text-[9px] font-bold text-muted-foreground ring-2 ring-background">
+                        +{users.length - 3}
+                      </span>
+                    ) : null}
+                  </div>
+                </button>
+              </div>
+            );
+          })}
 
-                  {/* 날짜별 셀 */}
-                  {schedule.dates.map((d) => {
-                    const key = slotKey(d, minute);
-                    const mine = mySlots.has(key);
-                    const arr = heatmap.get(key);
-                    const count = arr?.length ?? 0;
-                    const isBest = count > 0 && count === maxCount;
-                    const isSel = selected === key;
-
-                    // 셀 배경: 편집 모드면 내 선택 강조, 전체/확정 모드면 히트맵 농도.
-                    let bg: string;
-                    let opacity = 1;
-                    if (mode === "edit" && !confirmed) {
-                      bg = mine ? "bg-gradient-brand" : "bg-muted";
-                    } else {
-                      // 히트맵 — 농도(opacity)로 겹침 표현. 0이면 옅은 muted.
-                      if (count === 0) {
-                        bg = "bg-muted";
-                      } else {
-                        bg = "bg-gradient-brand";
-                        opacity = 0.25 + 0.75 * (count / Math.max(maxCount, 1));
-                      }
-                    }
-
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        data-slot-key={key}
-                        aria-label={`${formatDateHeader(d).md} ${formatMinute(minute)}${count ? ` ${count}명 가능` : ""}`}
-                        onPointerDown={() => {
-                          if (mode === "edit" && !confirmed) startDrag(key);
-                        }}
-                        onClick={() => {
-                          if (mode === "all" || confirmed) {
-                            setSelected(isSel ? null : key);
-                          }
-                        }}
-                        className={`relative h-7 overflow-hidden ${
-                          ri === 0 ? "" : ""
-                        } ${onHour ? "border-t border-border/40" : ""} ${
-                          isSel ? "ring-2 ring-primary ring-inset" : ""
-                        } transition-transform active:scale-[0.97]`}
-                      >
-                        <span className={`absolute inset-0 ${bg}`} style={{ opacity }} />
-                        {isBest && (mode === "all" || confirmed) ? (
-                          <Sparkles
-                            size={11}
-                            className="absolute inset-0 m-auto text-white drop-shadow"
-                          />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+          {/* 뒤로(이후 시간) 넓히기 — 누구나. 60분 뒤 경계가 자정 넘김이면 "익일" 표기. */}
+          {canExtendLater ? (
+            <button
+              type="button"
+              disabled={windowPending}
+              onClick={() => extendWindow(schedule.startMinute, schedule.endMinute + 60)}
+              className="flex items-center justify-center gap-1.5 self-center rounded-full border border-dashed border-border px-3 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-primary disabled:opacity-50"
+            >
+              <Plus size={12} />
+              이후 시간 열기 (~{schedule.endMinute + 60 > 1440 ? "익일 " : ""}
+              {formatMinute(schedule.endMinute + 60)})
+            </button>
+          ) : null}
         </div>
 
-        {/* 선택 셀 정보(전체/확정 모드) */}
+        {/* 선택 셀 상세(브라우즈) */}
         {selectedInfo ? (
           <div className="animate-scale-in flex flex-col gap-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between">
@@ -984,7 +1266,7 @@ function ScheduleGrid({
                 {selectedInfo.available.map((u) => (
                   <span
                     key={u}
-                    className="bg-gradient-brand-soft rounded-full px-2.5 py-1 text-xs font-semibold text-gradient-brand"
+                    className="bg-gradient-brand-soft rounded-full px-2.5 py-1 text-xs font-semibold text-primary"
                   >
                     {nicknameMap[u] ?? "멤버"}
                   </span>
@@ -1005,7 +1287,6 @@ function ScheduleGrid({
                 ))}
               </div>
             ) : null}
-            {/* owner 확정 버튼(미확정 시) */}
             {isOwner && !confirmed ? (
               <button
                 type="button"
@@ -1026,7 +1307,7 @@ function ScheduleGrid({
           </p>
         ) : null}
 
-        {/* owner 초기화(미확정 시, 그리드 하단) */}
+        {/* owner 초기화(미확정 시) */}
         {isOwner && !confirmed ? (
           <button
             type="button"
@@ -1040,17 +1321,134 @@ function ScheduleGrid({
         ) : null}
       </div>
 
-      {/* 저장 바(편집 모드 + 변경됨) — 하단 고정 */}
-      {mode === "edit" && !confirmed && dirty ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/90 p-3 backdrop-blur-xl">
+      {/* 칠하기 진입 FAB(미확정) — 하단 고정 */}
+      {!confirmed && !paintOpen ? (
+        <div
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/90 p-3 backdrop-blur-xl"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
           <button
             type="button"
-            disabled={savePending}
-            onClick={handleSave}
-            className="bg-gradient-brand w-full rounded-2xl py-3.5 text-base font-bold text-white shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+            onClick={openPaint}
+            className="bg-gradient-brand flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold text-white shadow-lg shadow-primary/25 transition-transform active:scale-[0.98]"
           >
-            {savePending ? "저장 중..." : `내 가능시간 저장 (${mySlots.size}칸)`}
+            <Pencil size={18} />
+            내 가능시간 칠하기{mySlots.size > 0 ? ` (${mySlots.size}칸)` : ""}
           </button>
+        </div>
+      ) : null}
+
+      {/* 칠하기 오버레이 — 전체화면 + body 스크롤 잠금. 짧게 탭=토글, 꾹 눌러 드래그=범위 칠하기. */}
+      {paintOpen ? (
+        <div className="animate-fade-in fixed inset-0 z-50 flex flex-col bg-background">
+          {/* 전용 헤더 */}
+          <header className="flex items-center justify-between border-b border-border px-4 py-3">
+            <button
+              type="button"
+              onClick={cancelPaint}
+              className="text-sm font-semibold text-muted-foreground"
+            >
+              취소
+            </button>
+            <span className="text-sm font-bold text-foreground">
+              {activeHeader
+                ? `${activeHeader.md}(${activeHeader.weekday}) 가능시간`
+                : "가능시간 칠하기"}
+            </span>
+            <button
+              type="button"
+              disabled={savePending}
+              onClick={handleSave}
+              className="text-sm font-bold text-gradient-brand disabled:opacity-50"
+            >
+              {savePending ? "저장 중" : "저장"}
+            </button>
+          </header>
+
+          {/* 날짜 칩(칠하기 중에도 날짜 전환) */}
+          <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-2">
+            {schedule.dates.map((d) => {
+              const { md, weekday } = formatDateHeader(d);
+              const active = d === activeDate;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => pickDate(d)}
+                  className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold transition-transform active:scale-95 ${
+                    active
+                      ? "bg-gradient-brand text-white shadow-sm shadow-primary/20"
+                      : "border border-border bg-card text-muted-foreground"
+                  }`}
+                >
+                  {md}({weekday})
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="px-4 py-2 text-xs text-muted-foreground">
+            꾹 눌러 잡은 뒤 드래그하면 여러 칸을 한 번에 칠해요. 짧게 탭하면 한 칸씩 켜고 꺼요.
+          </p>
+
+          {/* 칠하기 타임라인 — touch-action pan-y 로 평소엔 스크롤, 잡힌 동안엔 네이티브 리스너가 스크롤 차단. */}
+          <div
+            ref={paintScrollRef}
+            onPointerMove={handlePaintMouseMove}
+            className="flex-1 select-none overflow-y-auto overscroll-contain px-4 pb-6"
+            style={{ touchAction: "pan-y" }}
+          >
+            {rows.map((minute, ri) => {
+              const showNextDayMark = isNextDay(minute) && !isNextDay(rows[ri - 1] ?? minute);
+              const onHour = minute % 60 === 0;
+              const key = slotKey(activeDate, minute);
+              const mine = mySlots.has(key);
+              return (
+                <div key={minute} className="flex flex-col">
+                  {showNextDayMark ? (
+                    <div className="my-1 flex items-center gap-2">
+                      <span className="h-px flex-1 bg-primary/30" />
+                      <span className="text-[10px] font-bold text-primary">+1일 (다음날)</span>
+                      <span className="h-px flex-1 bg-primary/30" />
+                    </div>
+                  ) : null}
+                  <div className="flex items-stretch gap-2">
+                    <span className="w-14 shrink-0 pt-3 text-right text-[11px] font-medium text-muted-foreground">
+                      {onHour ? formatMinute(minute) : ""}
+                    </span>
+                    <button
+                      type="button"
+                      data-slot-key={key}
+                      onPointerDown={(e) => handleCellDown(e, key)}
+                      aria-pressed={mine}
+                      className={`my-0.5 flex min-h-[2.75rem] flex-1 items-center justify-center rounded-xl text-sm font-bold transition-colors ${
+                        mine
+                          ? "bg-gradient-brand text-white shadow-sm shadow-primary/20"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {mine ? "가능" : ""}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 저장 바 */}
+          <div
+            className="border-t border-border p-3"
+            style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+          >
+            <button
+              type="button"
+              disabled={savePending}
+              onClick={handleSave}
+              className="bg-gradient-brand w-full rounded-2xl py-3.5 text-base font-bold text-white shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+            >
+              {savePending ? "저장 중..." : `저장 (${mySlots.size}칸)`}
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -1061,6 +1459,15 @@ function ScheduleGrid({
           isPending={confirmPending}
           onCancel={() => setDialog(null)}
           onConfirm={handleConfirm}
+        />
+      ) : null}
+
+      {/* 후보 날짜 편집 모달(멤버 누구나). 저장 시 실시간 방송으로 다른 멤버 화면도 갱신된다. */}
+      {dateEditOpen ? (
+        <DateEditModal
+          moimId={moimId}
+          currentDates={schedule.dates}
+          onClose={() => setDateEditOpen(false)}
         />
       ) : null}
     </div>
