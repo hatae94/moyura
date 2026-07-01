@@ -139,6 +139,36 @@ function MessageBubble({
   );
 }
 
+// 채팅 리스트 초기 로딩 스켈레톤 — 좌/우 번갈아 폭이 다른 메시지 버블 자리표시자(.skeleton 시머).
+// 히스토리 fetch 가 끝날 때까지 표시되어, messages 초기값([])로 인한 빈 상태 flash 를 대체한다.
+function ChatLoadingSkeleton() {
+  const rows: Array<{ own: boolean; w: string }> = [
+    { own: false, w: "w-40" },
+    { own: false, w: "w-24" },
+    { own: true, w: "w-32" },
+    { own: false, w: "w-44" },
+    { own: true, w: "w-20" },
+    { own: false, w: "w-36" },
+  ];
+  return (
+    <li
+      className="flex flex-1 flex-col gap-3 py-2"
+      aria-busy="true"
+      aria-label="채팅 불러오는 중"
+    >
+      {rows.map((r, i) => (
+        <div key={i} className={`flex ${r.own ? "justify-end" : "justify-start"}`}>
+          <div
+            className={`skeleton h-9 ${r.w} rounded-2xl ${
+              r.own ? "rounded-tr-md" : "rounded-tl-md"
+            }`}
+          />
+        </div>
+      ))}
+    </li>
+  );
+}
+
 export default function ChatPage({
   params,
 }: {
@@ -154,6 +184,9 @@ export default function ChatPage({
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // 초기 히스토리 로딩 여부. true 동안은 로딩 스켈레톤을, 로드 완료 후에만 빈 상태("메시지 없음")를 보여준다
+  // — messages 초기값이 []라 로딩 중에도 빈 상태가 flash 되던 문제를 막는다.
+  const [loading, setLoading] = useState(true);
 
   // access_token을 Bearer로 주입하는 api-client(세션마다 토큰이 달라 useMemo로 1회 구성).
   const supabase = useMemo(() => createClient(), []);
@@ -208,6 +241,11 @@ export default function ChatPage({
       } catch (err) {
         if (!cancelled) {
           setError(chatErrorMessage(err));
+        }
+      } finally {
+        // 성공/실패 무관하게 초기 로딩 종료 — 이후에야 빈 상태/에러 판정이 유효하다.
+        if (!cancelled) {
+          setLoading(false);
         }
       }
     }
@@ -294,9 +332,14 @@ export default function ChatPage({
         </div>
       ) : null}
 
-      {/* 스크롤 영역: 남은 높이를 채우고 자동으로 맨 아래로 스크롤한다. */}
+      {/* 스크롤 영역: 남은 높이를 채우고 자동으로 맨 아래로 스크롤한다.
+          렌더 우선순위: (1) 초기 로딩 중 → 로딩 스켈레톤(빈 상태 flash 방지), (2) 메시지 있음 → 버블,
+          (3) 로딩 끝 + 에러 → 리스트는 비우고 상단 alert 만(빈 상태 문구는 오해 소지라 숨김),
+          (4) 로딩 끝 + 메시지 없음 → "아직 메시지가 없어요" 빈 상태. */}
       <ul className="flex flex-1 flex-col overflow-y-auto px-3 pb-3 pt-1">
-        {rows.length > 0 ? (
+        {loading ? (
+          <ChatLoadingSkeleton />
+        ) : rows.length > 0 ? (
           rows.map((row) => (
             <MessageBubble
               key={row.message.id}
@@ -304,7 +347,7 @@ export default function ChatPage({
               senderName={nicknameOf(row.message.senderId)}
             />
           ))
-        ) : (
+        ) : error ? null : (
           <li className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="bg-gradient-brand-soft flex h-20 w-20 items-center justify-center rounded-full text-3xl ring-1 ring-border">
               💬
