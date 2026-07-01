@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   Moim,
   Poll,
@@ -12,6 +13,7 @@ import type {
 } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import { MOIM_POLL_CLOSED, MOIM_POLL_CREATED } from './poll-events';
 import { PollService } from './poll.service';
 
 // PollService 단위 테스트(SPEC-MOIM-006 — MOIM-005 단일 선택 확장). 인메모리 fake prisma + stub MoimService 로 검증한다:
@@ -43,6 +45,8 @@ describe('PollService', () => {
   let existingMoims: Set<string>;
   let tables: Tables;
   let idSeq: number;
+  // SPEC-NOTIFICATIONS-001 M2: EventEmitter2.emit 스텁(발행 검증용, per-test 초기화).
+  let emit: jest.Mock;
 
   function reset(): void {
     members = new Map();
@@ -358,11 +362,14 @@ describe('PollService', () => {
   }
 
   function makeService(): PollService {
-    return new PollService(makePrisma(), makeMoimService());
+    return new PollService(makePrisma(), makeMoimService(), {
+      emit,
+    } as unknown as EventEmitter2);
   }
 
   beforeEach(() => {
     reset();
+    emit = jest.fn();
   });
 
   // ── REQ-MOIM6-002: createPoll (단일 기본 + multiSelect 옵트인) ──
@@ -1379,6 +1386,123 @@ describe('PollService', () => {
       expect(
         polls[0].options.find((o) => o.id === options[0].id)?.voteCount,
       ).toBe(1);
+    });
+  });
+
+  // ── SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행 ──────────────────────────────
+  // createPoll → poll.created(멤버-actor), closePoll 신규 마감 → poll.closed(멤버-actor).
+  // 멱등 재close/authz 실패는 미발행. 날짜/장소 finalize 여도 poll.closed 하나만(schedule.confirmed 추가 발행 안 함).
+  describe('M2 이벤트 발행 (SPEC-NOTIFICATIONS-001)', () => {
+    it('createPoll 성공 시 moim.poll.created 를 1회 발행한다(pollId/question 포함)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+
+      const poll = await service.createPoll(
+        'member-1',
+        'moim-A',
+        '점심?',
+        ['김밥', '라면'],
+        false,
+      );
+
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_POLL_CREATED, {
+        moimId: 'moim-A',
+        actorId: 'member-1',
+        pollId: poll.id,
+        question: '점심?',
+      });
+    });
+
+    it('closePoll 신규 마감 시 moim.poll.closed 를 1회 발행한다(pollId/question 포함)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'owner');
+      const { poll } = seedPoll(
+        'moim-A',
+        '언제 만날까?',
+        ['A', 'B'],
+        false,
+        'owner',
+      );
+
+      await service.closePoll('owner', 'moim-A', poll.id);
+
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_POLL_CLOSED, {
+        moimId: 'moim-A',
+        actorId: 'owner',
+        pollId: poll.id,
+        question: '언제 만날까?',
+      });
+    });
+
+    it('이미 마감된 poll 재close(멱등)는 발행하지 않는다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'owner');
+      const past = new Date(NOW.getTime() - 1000);
+      const { poll } = seedPoll(
+        'moim-A',
+        '이미마감',
+        ['A', 'B'],
+        false,
+        'owner',
+        past,
+      );
+
+      await service.closePoll('owner', 'moim-A', poll.id);
+
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('날짜 투표 close(finalize) 여도 poll.closed 하나만 발행한다(schedule.confirmed 추가 발행 안 함)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'owner');
+      const d0 = new Date('2026-07-10T10:00:00.000Z');
+      const d1 = new Date('2026-07-11T10:00:00.000Z');
+      const { poll, options } = seedPoll(
+        'moim-A',
+        '날짜 투표',
+        [d0.toISOString(), d1.toISOString()],
+        false,
+        'owner',
+        null,
+        'date',
+        [d0, d1],
+      );
+      // 단일 승자(옵션0)를 만들어 finalize 가 실제로 일어나게 한다.
+      seedVote(poll.id, options[0].id, 'owner');
+
+      await service.closePoll('owner', 'moim-A', poll.id);
+
+      // 정확히 1회, poll.closed 만(schedule.* 이벤트 미발행).
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(
+        MOIM_POLL_CLOSED,
+        expect.objectContaining({ moimId: 'moim-A', pollId: poll.id }),
+      );
+    });
+
+    it('비생성자 close(403) 경로는 발행하지 않는다', async () => {
+      const service = makeService();
+      setMember('moim-A', 'owner');
+      setMember('moim-A', 'member-2');
+      const { poll } = seedPoll('moim-A', 'q', ['A', 'B'], false, 'owner');
+
+      await expect(
+        service.closePoll('member-2', 'moim-A', poll.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('createPoll authz 실패(비멤버 403) 경로는 발행하지 않는다', async () => {
+      const service = makeService();
+      // 모임은 존재하되 stranger 는 멤버 아님 → assertMember 가 403.
+      setMember('moim-A', 'owner');
+
+      await expect(
+        service.createPoll('stranger', 'moim-A', 'q', ['A', 'B'], false),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(emit).not.toHaveBeenCalled();
     });
   });
 });

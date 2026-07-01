@@ -5,9 +5,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Poll, PollOption } from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  MOIM_POLL_CLOSED,
+  MOIM_POLL_CREATED,
+  type MoimPollClosedPayload,
+  type MoimPollCreatedPayload,
+} from './poll-events';
 
 // 생성된 poll + 그 옵션(투표 0 직후 상태). 컨트롤러가 PollResponseDto(voteCount:0/myVotes:[])로 매핑한다.
 // Poll 타입에 multiSelect 컬럼이 생겼으므로(SPEC-MOIM-006) 그대로 흐른다.
@@ -50,7 +57,23 @@ export class PollService {
     // @MX:NOTE: [AUTO] 멤버십 인가는 MOIM-001 MoimService.assertMember 단일 출처를 재사용한다(재구현 금지).
     // create/vote/list 모두 첫 줄에서 assertMember 를 호출해 비멤버 403·없는 모임 404 를 강제한다.
     private readonly moim: MoimService,
+    // SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행기(전역 EventEmitterModule.forRoot()). createPoll/closePoll
+    // 성공 후 moim.poll.created/moim.poll.closed 를 발행한다 — NotificationListener 가 구독(느슨한 결합).
+    private readonly events: EventEmitter2,
   ) {}
+
+  // 투표 도메인 이벤트 best-effort 발행 헬퍼(SPEC-NOTIFICATIONS-001 M2). 리스너 예외가 이미 성립한 영속
+  // (투표 생성/마감)을 무효화하지 않도록 try/catch 로 격리한다(발행 실패는 로깅만 — 삼킴 아님).
+  private emitPollEvent(name: string, payload: unknown): void {
+    try {
+      this.events.emit(name, payload);
+    } catch (err) {
+      console.error(
+        `[PollService] ${name} 발행 실패:`,
+        err instanceof Error ? err.message : 'unknown error',
+      );
+    }
+  }
 
   // @MX:ANCHOR: [AUTO] 투표 생성의 단일 진입점(REQ-MOIM7-002 / AC-2 — MOIM-006 확장). 컨트롤러(POST /moims/:id/polls)가 호출한다.
   // @MX:REASON: "멤버만 생성하고 poll+옵션을 항상 함께(원자) 만든다"는 불변식의 출처(createMoim 의 owner 멤버십
@@ -76,8 +99,8 @@ export class PollService {
     await this.moim.assertMember(sub, moimId);
 
     // poll + 옵션을 하나의 트랜잭션(네스티드 create)으로 생성한다 — 옵션 없는 poll 이 영속되지 않게 한다.
-    return this.prisma.$transaction(async (tx) => {
-      const created = await tx.poll.create({
+    const created = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.poll.create({
         data: {
           moimId,
           question,
@@ -95,8 +118,19 @@ export class PollService {
         },
         include: { options: true },
       });
-      return created;
+      return row;
     });
+
+    // SPEC-NOTIFICATIONS-001 M2: 트랜잭션 커밋 이후에만 발행한다(수신 대상 = 멤버 − actor).
+    const payload: MoimPollCreatedPayload = {
+      moimId,
+      actorId: sub,
+      pollId: created.id,
+      question: created.question,
+    };
+    this.emitPollEvent(MOIM_POLL_CREATED, payload);
+
+    return created;
   }
 
   // @MX:ANCHOR: [AUTO] 투표(단일 교체 / 다중 토글)의 단일 진입점(REQ-MOIM7-004 / AC-4 — MOIM-006 확장). 컨트롤러가 호출한다.
@@ -193,11 +227,27 @@ export class PollService {
       throw new ForbiddenException();
     }
 
+    // SPEC-NOTIFICATIONS-001 M2: 발행은 "열림→마감" 신규 전이일 때만 한다. 이미 마감된 poll(closesAt<=now)의
+    // 재close 는 멱등(no-op)이라 발행하지 않는다(중복 알림 방지, plan §A). update 이전 상태로 판정한다.
+    const alreadyClosed = poll.closesAt !== null && poll.closesAt <= new Date();
+
     // closesAt 를 now 로 설정(이미 마감이면 now 재설정 무해 — 멱등).
     const updated = await this.prisma.poll.update({
       where: { id: pollId },
       data: { closesAt: new Date() },
     });
+
+    // 신규 마감 전이에서만 moim.poll.closed 발행(수신 대상 = 멤버 − actor). finalize 분기 이전에 한 곳에서 발행해
+    // general/date/place/스킵 등 모든 반환 경로가 동일하게 한 번만 발행되도록 한다.
+    if (!alreadyClosed) {
+      const closedPayload: MoimPollClosedPayload = {
+        moimId,
+        actorId: sub,
+        pollId: poll.id,
+        question: poll.question,
+      };
+      this.emitPollEvent(MOIM_POLL_CLOSED, closedPayload);
+    }
 
     const [result] = await this.aggregatePolls(sub, [updated]);
 

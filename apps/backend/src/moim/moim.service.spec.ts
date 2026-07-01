@@ -3,9 +3,17 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Moim, MoimMember } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+import { MOIM_MEMBER_KICKED, MOIM_OWNER_TRANSFERRED } from './moim-events';
 import { MoimService } from './moim.service';
+
+// SPEC-NOTIFICATIONS-001 M2: MoimService 는 EventEmitter2 를 주입받는다. emit 호출을 검증하지 않는 기존 테스트는
+// no-op 스텁을 넘긴다(push.listener.spec 패턴 — standalone jest.fn 참조). 발행 검증 테스트는 별도 emit 스텁을 만든다.
+function makeEvents(): EventEmitter2 {
+  return { emit: jest.fn() } as unknown as EventEmitter2;
+}
 
 // MoimService 단위 테스트(SPEC-MOIM-001). Prisma는 jest.Mock 스텁으로 대체한다
 // (profile.service.spec.ts 패턴 — Prisma 7 WASM은 jest VM에서 동작 불가, 인자/분기만 검증).
@@ -213,7 +221,7 @@ describe('MoimService', () => {
   describe('createMoim (REQ-MOIM-004 / AC-1)', () => {
     it('모임과 생성자 owner 멤버십(host nickname 포함)을 단일 트랜잭션으로 생성한다', async () => {
       const { prisma, tables } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const moim = await service.createMoim('sub-U', '주말 모임', '호스트');
 
@@ -228,7 +236,7 @@ describe('MoimService', () => {
 
     it('생성은 인터랙티브 $transaction을 사용한다(owner row가 moim.id에 의존)', async () => {
       const { prisma, transaction } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await service.createMoim('sub-U', 'A', '호스트');
 
@@ -240,7 +248,7 @@ describe('MoimService', () => {
     // SPEC-MOIM-004 AC-2: optional startsAt/location 을 받으면 tx.moim.create data 에 그대로 전달해 영속한다.
     it('startsAt/location 을 받으면 모임에 영속한다(owner 멤버십 트랜잭션 불변)', async () => {
       const { prisma, tables } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
       const startsAt = new Date('2026-07-01T10:00:00.000Z');
 
       const moim = await service.createMoim(
@@ -262,7 +270,7 @@ describe('MoimService', () => {
     // SPEC-MOIM-004 AC-2: startsAt/location 미전달이면 null 로 저장한다.
     it('startsAt/location 미전달이면 두 필드를 null 로 저장한다', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const moim = await service.createMoim('sub-U', '모임', '호스트');
 
@@ -311,7 +319,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.assertMember('sub-member', 'moim-A'),
@@ -321,7 +329,7 @@ describe('MoimService', () => {
     it('인증되었으나 비멤버이면 403(ForbiddenException)', async () => {
       const { moim, owner } = seededMoim();
       const { prisma } = makePrisma({ moims: [moim], members: [owner] });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.assertMember('sub-stranger', 'moim-A'),
@@ -330,7 +338,7 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임이면 404(NotFoundException)', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.assertMember('sub-U', 'missing')).rejects.toThrow(
         NotFoundException,
@@ -345,7 +353,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.assertOwner('sub-owner', 'moim-A'),
@@ -358,7 +366,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.assertOwner('sub-member', 'moim-A')).rejects.toThrow(
         ForbiddenException,
@@ -368,7 +376,7 @@ describe('MoimService', () => {
     it('비멤버이면 403(ForbiddenException)', async () => {
       const { moim, owner } = seededMoim();
       const { prisma } = makePrisma({ moims: [moim], members: [owner] });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.assertOwner('sub-stranger', 'moim-A'),
@@ -377,7 +385,7 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임이면 404(NotFoundException)', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.assertOwner('sub-U', 'missing')).rejects.toThrow(
         NotFoundException,
@@ -392,7 +400,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const result = await service.getMoim('sub-member', 'moim-A');
 
@@ -403,7 +411,7 @@ describe('MoimService', () => {
     it('비멤버 단건 조회는 403', async () => {
       const { moim, owner } = seededMoim();
       const { prisma } = makePrisma({ moims: [moim], members: [owner] });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.getMoim('sub-stranger', 'moim-A')).rejects.toThrow(
         ForbiddenException,
@@ -412,7 +420,7 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임 단건 조회는 404', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.getMoim('sub-U', 'missing')).rejects.toThrow(
         NotFoundException,
@@ -480,7 +488,7 @@ describe('MoimService', () => {
         moims: [moimA, moimB, moimC],
         members,
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const result = await service.listMyMoims('sub-U');
 
@@ -490,7 +498,7 @@ describe('MoimService', () => {
 
     it('속한 모임이 없으면 빈 배열을 반환한다', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const result = await service.listMyMoims('sub-none');
 
@@ -505,7 +513,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const result = await service.listMembers('sub-member', 'moim-A');
 
@@ -516,7 +524,7 @@ describe('MoimService', () => {
     it('비멤버 멤버 목록 조회는 403', async () => {
       const { moim, owner } = seededMoim();
       const { prisma } = makePrisma({ moims: [moim], members: [owner] });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.listMembers('sub-stranger', 'moim-A'),
@@ -525,7 +533,7 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임 멤버 목록 조회는 404', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.listMembers('sub-U', 'missing')).rejects.toThrow(
         NotFoundException,
@@ -540,7 +548,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await service.leave('sub-member', 'moim-A');
 
@@ -555,7 +563,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.leave('sub-owner', 'moim-A')).rejects.toThrow(
         ForbiddenException,
@@ -567,7 +575,7 @@ describe('MoimService', () => {
     it('비멤버(가입한 적 없음) 탈퇴는 404(멤버십 부재)', async () => {
       const { moim, owner } = seededMoim();
       const { prisma } = makePrisma({ moims: [moim], members: [owner] });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.leave('sub-stranger', 'moim-A')).rejects.toThrow(
         NotFoundException,
@@ -582,7 +590,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await service.deleteMoim('sub-owner', 'moim-A');
 
@@ -598,7 +606,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.deleteMoim('sub-member', 'moim-A')).rejects.toThrow(
         ForbiddenException,
@@ -608,7 +616,7 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임 삭제는 404', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(service.deleteMoim('sub-U', 'missing')).rejects.toThrow(
         NotFoundException,
@@ -623,7 +631,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await service.kickMember('sub-owner', 'moim-A', 'sub-member');
 
@@ -638,7 +646,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.kickMember('sub-member', 'moim-A', 'sub-owner'),
@@ -651,7 +659,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.kickMember('sub-owner', 'moim-A', 'sub-stranger'),
@@ -664,7 +672,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       // owner가 자기 자신을 강제 퇴장 시도(대상 role === owner → 403).
       await expect(
@@ -674,7 +682,7 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임이면 404', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.kickMember('sub-owner', 'missing', 'sub-member'),
@@ -689,7 +697,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await service.transferOwner('sub-owner', 'moim-A', 'sub-member');
 
@@ -705,7 +713,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.transferOwner('sub-member', 'moim-A', 'sub-owner'),
@@ -718,7 +726,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.transferOwner('sub-owner', 'moim-A', 'sub-owner'),
@@ -731,7 +739,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.transferOwner('sub-owner', 'moim-A', '   '),
@@ -744,7 +752,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.transferOwner('sub-owner', 'moim-A', 'sub-stranger'),
@@ -753,7 +761,7 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임이면 404', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.transferOwner('sub-owner', 'missing', 'sub-member'),
@@ -767,7 +775,7 @@ describe('MoimService', () => {
   describe('createMoim — maxMembers (SPEC-MOIM-012 REQ-MOIM12-001)', () => {
     it('maxMembers 미전달 시 DB @default(15)가 적용된다', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const moim = await service.createMoim('sub-U', '모임', '호스트');
 
@@ -776,7 +784,7 @@ describe('MoimService', () => {
 
     it('custom maxMembers를 전달하면 해당 값으로 생성된다', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const moim = await service.createMoim(
         'sub-U',
@@ -798,7 +806,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const updated = await service.updateMaxMembers('sub-owner', 'moim-A', 30);
 
@@ -812,7 +820,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.updateMaxMembers('sub-member', 'moim-A', 20),
@@ -821,7 +829,7 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임이면 404', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.updateMaxMembers('sub-U', 'missing', 10),
@@ -835,7 +843,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const updated = await service.updateMaxMembers('sub-owner', 'moim-A', 1);
 
@@ -853,7 +861,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const updated = await service.updateMoimSettings(
         'sub-owner',
@@ -877,7 +885,7 @@ describe('MoimService', () => {
         moims: [moimWithBudget],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       const updated = await service.updateMoimSettings(
         'sub-owner',
@@ -895,7 +903,7 @@ describe('MoimService', () => {
         moims: [moim],
         members: [owner, member],
       });
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.updateMoimSettings('sub-member', 'moim-A', undefined, 100000),
@@ -904,11 +912,148 @@ describe('MoimService', () => {
 
     it('존재하지 않는 모임이면 404(NotFoundException)', async () => {
       const { prisma } = makePrisma();
-      const service = new MoimService(prisma);
+      const service = new MoimService(prisma, makeEvents());
 
       await expect(
         service.updateMoimSettings('sub-owner', 'missing', undefined, 100000),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // SPEC-NOTIFICATIONS-001 M2: transferOwner/kickMember 도메인 이벤트 발행
+  // 성공 경로만 정확히 1회 발행 + no-op/authz-fail 경로 미발행 + best-effort 격리.
+  // ─────────────────────────────────────────────────────────────────
+  describe('M2 이벤트 발행 (SPEC-NOTIFICATIONS-001)', () => {
+    // 발행 검증용 서비스: emit 스텁 참조를 유지해 호출 여부/인자를 단언한다(unbound-method 회피).
+    function makeServiceWithEmit(seed?: {
+      moims?: Moim[];
+      members?: MoimMember[];
+    }): { service: MoimService; tables: Tables; emit: jest.Mock } {
+      const { prisma, tables } = makePrisma(seed);
+      const emit = jest.fn();
+      const service = new MoimService(prisma, {
+        emit,
+      } as unknown as EventEmitter2);
+      return { service, tables, emit };
+    }
+
+    // best-effort 경로의 console.error 노이즈 억제(테스트 실패 아님 — 로깅은 의도된 동작).
+    beforeEach(() => {
+      jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    describe('kickMember', () => {
+      it('성공 시 moim.member.kicked 를 정확히 1회 발행한다(actorId=owner, targetId=퇴장자)', async () => {
+        const { moim, owner, member } = seededMoim();
+        const { service, emit } = makeServiceWithEmit({
+          moims: [moim],
+          members: [owner, member],
+        });
+
+        await service.kickMember('sub-owner', 'moim-A', 'sub-member');
+
+        expect(emit).toHaveBeenCalledTimes(1);
+        expect(emit).toHaveBeenCalledWith(MOIM_MEMBER_KICKED, {
+          moimId: 'moim-A',
+          actorId: 'sub-owner',
+          targetId: 'sub-member',
+        });
+      });
+
+      it('비-owner(403)/대상 owner(403)/대상 부재(404) 경로는 발행하지 않는다', async () => {
+        const { moim, owner, member } = seededMoim();
+        const { service, emit } = makeServiceWithEmit({
+          moims: [moim],
+          members: [owner, member],
+        });
+
+        await expect(
+          service.kickMember('sub-member', 'moim-A', 'sub-owner'),
+        ).rejects.toThrow(ForbiddenException);
+        await expect(
+          service.kickMember('sub-owner', 'moim-A', 'sub-owner'),
+        ).rejects.toThrow(ForbiddenException);
+        await expect(
+          service.kickMember('sub-owner', 'moim-A', 'sub-stranger'),
+        ).rejects.toThrow(NotFoundException);
+
+        expect(emit).not.toHaveBeenCalled();
+      });
+
+      it('발행이 throw 해도 퇴장은 성립한다(best-effort 격리)', async () => {
+        const { moim, owner, member } = seededMoim();
+        const { service, tables, emit } = makeServiceWithEmit({
+          moims: [moim],
+          members: [owner, member],
+        });
+        emit.mockImplementationOnce(() => {
+          throw new Error('listener boom');
+        });
+
+        await expect(
+          service.kickMember('sub-owner', 'moim-A', 'sub-member'),
+        ).resolves.toBeUndefined();
+        expect(tables.member.has('moim-A:sub-member')).toBe(false);
+      });
+    });
+
+    describe('transferOwner', () => {
+      it('성공 시 moim.owner.transferred 를 정확히 1회 발행한다(actorId=현owner, newOwnerId=대상)', async () => {
+        const { moim, owner, member } = seededMoim();
+        const { service, emit } = makeServiceWithEmit({
+          moims: [moim],
+          members: [owner, member],
+        });
+
+        await service.transferOwner('sub-owner', 'moim-A', 'sub-member');
+
+        expect(emit).toHaveBeenCalledTimes(1);
+        expect(emit).toHaveBeenCalledWith(MOIM_OWNER_TRANSFERRED, {
+          moimId: 'moim-A',
+          actorId: 'sub-owner',
+          newOwnerId: 'sub-member',
+        });
+      });
+
+      it('비-owner(403)/self(400)/대상 부재(404) 경로는 발행하지 않는다', async () => {
+        const { moim, owner, member } = seededMoim();
+        const { service, emit } = makeServiceWithEmit({
+          moims: [moim],
+          members: [owner, member],
+        });
+
+        await expect(
+          service.transferOwner('sub-member', 'moim-A', 'sub-owner'),
+        ).rejects.toThrow(ForbiddenException);
+        await expect(
+          service.transferOwner('sub-owner', 'moim-A', 'sub-owner'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.transferOwner('sub-owner', 'moim-A', 'sub-stranger'),
+        ).rejects.toThrow(NotFoundException);
+
+        expect(emit).not.toHaveBeenCalled();
+      });
+
+      it('발행이 throw 해도 이양은 성립한다(best-effort 격리)', async () => {
+        const { moim, owner, member } = seededMoim();
+        const { service, tables, emit } = makeServiceWithEmit({
+          moims: [moim],
+          members: [owner, member],
+        });
+        emit.mockImplementationOnce(() => {
+          throw new Error('listener boom');
+        });
+
+        await expect(
+          service.transferOwner('sub-owner', 'moim-A', 'sub-member'),
+        ).resolves.toBeUndefined();
+        expect(tables.member.get('moim-A:sub-member')?.role).toBe('owner');
+      });
     });
   });
 });

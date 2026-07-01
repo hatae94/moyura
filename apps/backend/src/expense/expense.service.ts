@@ -3,13 +3,23 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   Expense,
   ExpenseShare,
   Settlement,
+  SettlementRequest,
 } from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  MOIM_EXPENSE_ADDED,
+  MOIM_SETTLEMENT_COMPLETED,
+  MOIM_SETTLEMENT_REQUESTED,
+  type MoimExpenseAddedPayload,
+  type MoimSettlementCompletedPayload,
+  type MoimSettlementRequestedPayload,
+} from './expense-events';
 
 // 카테고리 프리셋(REQ-EXP-003). DB enum 없이 컨트롤러/서비스에서 검증.
 export const EXPENSE_CATEGORIES = [
@@ -65,7 +75,24 @@ export class ExpenseService {
     private readonly prisma: PrismaService,
     // @MX:NOTE: [AUTO] 멤버십 인가는 MoimService.assertMember/assertOwner 단일 출처를 재사용한다(재구현 금지).
     private readonly moim: MoimService,
+    // SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행기(전역 EventEmitterModule.forRoot()). createExpense/
+    // requestSettlement/createSettlement 성공 후 moim.expense.added/moim.settlement.* 를 발행한다 —
+    // NotificationListener 가 구독(느슨한 결합).
+    private readonly events: EventEmitter2,
   ) {}
+
+  // 경비/정산 도메인 이벤트 best-effort 발행 헬퍼(SPEC-NOTIFICATIONS-001 M2). 리스너 예외가 이미 성립한 영속
+  // (경비/정산 쓰기)을 무효화하지 않도록 try/catch 로 격리한다(발행 실패는 로깅만 — 삼킴 아님).
+  private emitExpenseEvent(name: string, payload: unknown): void {
+    try {
+      this.events.emit(name, payload);
+    } catch (err) {
+      console.error(
+        `[ExpenseService] ${name} 발행 실패:`,
+        err instanceof Error ? err.message : 'unknown error',
+      );
+    }
+  }
 
   // @MX:ANCHOR: [AUTO] 경비 생성의 단일 진입점(REQ-EXP-002/004 / AC-1/2/2b). 컨트롤러(POST /moims/:id/expenses)가 호출한다.
   // @MX:REASON: owner 전용 + Expense+ExpenseShare 원자 생성(트랜잭션). splitMethod 별 분담 산정 + 합=amount 불변식.
@@ -96,7 +123,7 @@ export class ExpenseService {
       shares,
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const expense = await tx.expense.create({
         data: {
           moimId,
@@ -116,12 +143,26 @@ export class ExpenseService {
           })),
         });
       }
-      const created = await tx.expense.findUnique({
+      const row = await tx.expense.findUnique({
         where: { id: expense.id },
         include: { shares: true },
       });
-      return created;
+      return row;
     });
+
+    // SPEC-NOTIFICATIONS-001 M2: 트랜잭션 커밋 이후에만 발행한다. 수신 대상 = 분담 참가자(shareRows) − actor.
+    // shareRows 는 트랜잭션 이전에 산정된 분담 행이라 참가자 id 집합의 권위 있는 출처다(빈 분담도 그대로 운반).
+    const addedPayload: MoimExpenseAddedPayload = {
+      moimId,
+      actorId: sub,
+      expenseId: created.id,
+      amount,
+      category,
+      shareUserIds: shareRows.map((r) => r.userId),
+    };
+    this.emitExpenseEvent(MOIM_EXPENSE_ADDED, addedPayload);
+
+    return created;
   }
 
   // @MX:ANCHOR: [AUTO] 경비 목록 + 요약 + 정산 조회의 단일 진입점(REQ-EXP-005 / AC-5). 멤버 한정.
@@ -332,12 +373,78 @@ export class ExpenseService {
       where: { moimId, fromUserId, toUserId, amount },
     });
     if (existing) {
+      // 멱등 재호출(no-op) — 발행하지 않는다(중복 알림 방지, plan §A).
       return existing;
     }
 
-    return this.prisma.settlement.create({
+    const created = await this.prisma.settlement.create({
       data: { moimId, fromUserId, toUserId, amount, settledBy: sub },
     });
+
+    // SPEC-NOTIFICATIONS-001 M2: 신규 마커 생성 시에만 발행한다(멱등 경로 제외). 수신 대상 = 상대방(actor 가 아닌
+    // 정산 당사자). actor 가 채권자(toUserId)면 채무자(fromUserId)에게, 그 외(통상 owner)면 채권자(toUserId=요청자)
+    // 에게 완료를 알린다 — "정산 요청"의 반대 방향으로 완료 알림이 돌아간다(plan §4 요청자 수신).
+    const counterpartyId = sub === toUserId ? fromUserId : toUserId;
+    const completedPayload: MoimSettlementCompletedPayload = {
+      moimId,
+      actorId: sub,
+      counterpartyId,
+      amount,
+    };
+    this.emitExpenseEvent(MOIM_SETTLEMENT_COMPLETED, completedPayload);
+
+    return created;
+  }
+
+  // @MX:ANCHOR: [AUTO] 정산 "요청" 생성의 단일 진입점(SPEC-NOTIFICATIONS-001 M2). 채권자(requester=sub)가
+  // 채무자(debtorId)에게 amount 지불을 요청하는 pending 레코드를 만든다. 완료(createSettlement=Settlement 마커)와
+  // 의도적으로 별 테이블(SettlementRequest)로 분리해 settled 매칭 로직 오염을 막는다. 성공 후 채무자를 수신
+  // 대상으로 moim.settlement.requested 를 발행한다(2단계 요청→완료 흐름의 1단계).
+  // @MX:REASON: "요청자·채무자 모두 멤버 + amount 유효 + 자기 자신 아님"을 강제하는 유일한 출처. 인가는 owner
+  // 전용이 아니라 멤버 누구나(채권자가 스스로 요청) — assertMember(요청자 403) + 명시적 채무자 멤버십 검증(400).
+  async requestSettlement(
+    sub: string,
+    moimId: string,
+    debtorId: string,
+    amount: number,
+  ): Promise<SettlementRequest> {
+    // 요청자(sub)가 그 모임의 멤버인지 인가(비멤버 403, 없는 모임 404). owner 전용 아님 — 멤버 누구나 요청 가능.
+    await this.moim.assertMember(sub, moimId);
+
+    // 금액 검증(1 이상 정수 — 컨트롤러 requirePositiveInt 와 이중 강제, 서비스 단위 검증 보장).
+    if (!Number.isInteger(amount) || amount < 1) {
+      throw new BadRequestException('amount 는 1 이상의 정수여야 합니다');
+    }
+    // 자기 자신에게 정산 요청은 무의미 → 400(수신자=발신자 유령 알림 방지).
+    if (debtorId === sub) {
+      throw new BadRequestException(
+        '자기 자신에게는 정산을 요청할 수 없습니다',
+      );
+    }
+    // 채무자가 그 모임의 멤버인지 검증(아니면 400). requireMember 는 payer 전용 메시지라 여기선 명시 검증.
+    const debtor = await this.prisma.moimMember.findUnique({
+      where: { moimId_userId: { moimId, userId: debtorId } },
+    });
+    if (!debtor) {
+      throw new BadRequestException(
+        `debtorId(${debtorId})가 해당 모임의 멤버가 아닙니다`,
+      );
+    }
+
+    const created = await this.prisma.settlementRequest.create({
+      data: { moimId, requesterId: sub, debtorId, amount },
+    });
+
+    // 영속 성공 이후에만 발행한다(채무자 수신 대상). best-effort 격리 — 리스너 예외가 이미 성립한 요청을 무효화하지 않음.
+    const payload: MoimSettlementRequestedPayload = {
+      moimId,
+      actorId: sub,
+      debtorId,
+      amount,
+    };
+    this.emitExpenseEvent(MOIM_SETTLEMENT_REQUESTED, payload);
+
+    return created;
   }
 
   // 정산 완료 마커 삭제(REQ-EXP-009 / AC-12). owner 전용.

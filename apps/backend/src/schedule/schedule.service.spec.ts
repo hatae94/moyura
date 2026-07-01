@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   Moim,
   ScheduleEvent,
@@ -6,6 +7,12 @@ import type {
 } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import {
+  MOIM_SCHEDULE_CONFIRMED,
+  MOIM_SCHEDULE_DATES_CHANGED,
+  MOIM_SCHEDULE_STARTED,
+  MOIM_SCHEDULE_WINDOW_CHANGED,
+} from './schedule-events';
 import { ScheduleService, computeStartsAt } from './schedule.service';
 
 // ScheduleService 단위 테스트(SPEC-SCHEDULE-001). 인메모리 fake Prisma + stub MoimService 로 검증한다:
@@ -35,6 +42,8 @@ describe('ScheduleService', () => {
   let owners: Map<string, string>; // moimId → owner sub
   let members: Set<string>; // `${moimId}:${sub}`
   let service: ScheduleService;
+  // SPEC-NOTIFICATIONS-001 M2: EventEmitter2.emit 스텁(발행 검증용, per-test 초기화).
+  let emit: jest.Mock;
 
   function reset(): void {
     tables = { event: new Map(), slot: new Map(), moim: new Map() };
@@ -186,7 +195,10 @@ describe('ScheduleService', () => {
 
   beforeEach(() => {
     reset();
-    service = new ScheduleService(prisma, moim);
+    emit = jest.fn();
+    service = new ScheduleService(prisma, moim, {
+      emit,
+    } as unknown as EventEmitter2);
     owners.set(MOIM_ID, 'owner');
     members.add(`${MOIM_ID}:owner`);
     members.add(`${MOIM_ID}:m2`);
@@ -526,6 +538,94 @@ describe('ScheduleService', () => {
       await expect(
         service.deleteSchedule('owner', MOIM_ID),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  // ── SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행 ──────────────────────────────
+  // create 경로만 started 발행(재설정 update 는 미발행), 나머지는 성공 후 각 이벤트 1회 + authz 실패 미발행.
+  describe('M2 이벤트 발행 (SPEC-NOTIFICATIONS-001)', () => {
+    async function seedEvent(): Promise<void> {
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
+    }
+
+    it('setSchedule create 경로는 schedule.started 를 1회 발행한다(scheduleEventId 포함)', async () => {
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_SCHEDULE_STARTED, {
+        moimId: MOIM_ID,
+        actorId: 'owner',
+        scheduleEventId: EVENT_ID,
+      });
+    });
+
+    it('setSchedule 재설정(update) 경로는 started 를 발행하지 않는다', async () => {
+      await seedEvent();
+      emit.mockClear();
+      // 이미 존재 → 재설정(update 경로).
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-05'],
+        1080,
+        1440,
+        30,
+      );
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('updateDates 는 schedule.dates_changed 를 1회 발행한다', async () => {
+      await seedEvent();
+      emit.mockClear();
+      await service.updateDates('m2', MOIM_ID, ['2026-07-04', '2026-07-05']);
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_SCHEDULE_DATES_CHANGED, {
+        moimId: MOIM_ID,
+        actorId: 'm2',
+      });
+    });
+
+    it('updateWindow 는 schedule.window_changed 를 1회 발행한다', async () => {
+      await seedEvent();
+      emit.mockClear();
+      await service.updateWindow('m2', MOIM_ID, 1020, 1440);
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_SCHEDULE_WINDOW_CHANGED, {
+        moimId: MOIM_ID,
+        actorId: 'm2',
+      });
+    });
+
+    it('confirmSchedule 은 schedule.confirmed 를 startsAt(ISO)과 함께 1회 발행한다', async () => {
+      await seedEvent();
+      emit.mockClear();
+      await service.confirmSchedule('owner', MOIM_ID, '2026-07-04', 1320);
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_SCHEDULE_CONFIRMED, {
+        moimId: MOIM_ID,
+        actorId: 'owner',
+        startsAt: '2026-07-04T13:00:00.000Z',
+      });
+    });
+
+    it('authz 실패(비-owner setSchedule 403) 경로는 발행하지 않는다', async () => {
+      await expect(
+        service.setSchedule('m2', MOIM_ID, ['2026-07-04'], 1080, 1440, 30),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(emit).not.toHaveBeenCalled();
     });
   });
 });

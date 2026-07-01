@@ -8,7 +8,10 @@ export interface PushNotification {
   body: string;
 }
 
-// FCM data 페이로드(문자열 맵). 탭 시 대상 모임으로 이동하기 위한 moimId 등을 운반한다(REQ-PUSH-007).
+// FCM data 페이로드(문자열 맵 — FCM data 는 문자열 값만 허용). 탭 시 딥링크를 위한 식별자를 운반한다(REQ-PUSH-007).
+// 채팅 푸시: { moimId } (대상 모임 이동). 고신호 알림 푸시(SPEC-NOTIFICATIONS-001 M6): { type, moimId } —
+// type 은 인앱 notification.type 문자열(member.joined 등)로, 네이티브 셸이 type+moimId 로 웹 라우트를 딥링크한다.
+// Record<string, string> 이라 타입 변경 없이 두 형태를 모두 수용한다(추가 식별자도 문자열이면 그대로 실린다).
 export type PushData = Record<string, string>;
 
 // @MX:WARN: [AUTO] 외부 네트워크(firebase-admin)로 푸시를 발송하는 best-effort 경계 — 재시도/큐 없음.

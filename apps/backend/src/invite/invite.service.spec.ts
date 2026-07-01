@@ -4,10 +4,12 @@ import {
   GoneException,
   NotFoundException,
 } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '../generated/prisma/client';
 import type { Moim, MoimInvite, MoimMember } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import { MOIM_MEMBER_JOINED } from './invite-events';
 import { InviteService } from './invite.service';
 
 // InviteService 단위 테스트(SPEC-MOIM-002). 인메모리 fake prisma + stub MoimService(assertOwner)로
@@ -240,11 +242,20 @@ describe('InviteService', () => {
     } as unknown as PrismaService;
   }
 
-  function makeService(): { service: InviteService; prisma: PrismaService } {
+  function makeService(): {
+    service: InviteService;
+    prisma: PrismaService;
+    emit: jest.Mock;
+  } {
     const prisma = makePrisma();
-    const service = new InviteService(prisma, makeMoimService());
+    // EventEmitter2 는 emit 만 사용한다(SPEC-NOTIFICATIONS-001 M1). standalone jest.fn 참조를 유지해
+    // 호출 여부/인자를 unbound-method 경고 없이 단언한다(push.listener.spec 패턴 동일).
+    const emit = jest.fn();
+    const service = new InviteService(prisma, makeMoimService(), {
+      emit,
+    } as unknown as EventEmitter2);
     jest.useFakeTimers().setSystemTime(NOW);
-    return { service, prisma };
+    return { service, prisma, emit };
   }
 
   beforeEach(() => {
@@ -794,6 +805,105 @@ describe('InviteService', () => {
       const result = await service.accept('guest-1', 'no-moim', '게스트1');
 
       expect(result.moimId).toBe('moim-B');
+    });
+  });
+
+  // ── SPEC-NOTIFICATIONS-001 M1: accept() 이벤트 발행 — 신규 멤버십 성공 경로만 emit ──
+  describe('accept() moim.member.joined 발행 (SPEC-NOTIFICATIONS-001 M1)', () => {
+    it('신규 멤버십 성공 시 정확히 1회 발행한다(payload = {moimId, actorId=가입자 sub})', async () => {
+      const { service, emit } = makeService();
+      seedInvite({ moimId: 'moim-A', token: 'good' });
+
+      await service.accept('guest-1', 'good', '게스트1');
+
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_MEMBER_JOINED, {
+        moimId: 'moim-A',
+        actorId: 'guest-1',
+      });
+    });
+
+    it('이미 멤버(멱등 재수락) 경로는 발행하지 않는다', async () => {
+      const { service, emit } = makeService();
+      seedInvite({ moimId: 'moim-A', token: 'good' });
+      // 1차 수락(신규) → 1회 발행. 이후 카운트를 초기화하고 재수락이 0회임을 검증한다.
+      await service.accept('guest-1', 'good', '게스트1');
+      expect(emit).toHaveBeenCalledTimes(1);
+      emit.mockClear();
+
+      // 2차(이미 멤버) → early return, 발행 없음.
+      await service.accept('guest-1', 'good', '게스트1');
+
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('동시 same-sub 경합(create P2002 → 멱등 성공) 경로는 발행하지 않는다', async () => {
+      const { service, prisma, emit } = makeService();
+      seedInvite({ moimId: 'moim-A', token: 'dup' });
+      // 멱등 선검사 통과 직후 두 번째 동시 요청의 create 가 P2002 로 던지는 상황(멱등 성공, 멤버십 미생성).
+      (prisma.moimMember.create as jest.Mock).mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      await service.accept('guest-1', 'dup', '게스트1');
+
+      // 경합 멱등 성공은 신규 멤버십 아님 → 발행 금지(중복/유령 발행 방지).
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('한도 초과 경합(updateMany count=0 → 409 롤백) 경로는 발행하지 않는다', async () => {
+      const { service, prisma, emit } = makeService();
+      seedInvite({ moimId: 'moim-A', token: 'race', maxUses: 1, usedCount: 0 });
+      // 선검사는 통과하지만 증가 시점에 경합으로 소진되어 count=0 → 409 로 롤백되는 상황.
+      (prisma.moimInvite.updateMany as jest.Mock).mockResolvedValueOnce({
+        count: 0,
+      });
+
+      await expect(
+        service.accept('guest-1', 'race', '게스트1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      // 트랜잭션 롤백 경로 → 멤버십 미생성 → 발행 금지.
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('유효하지 않은 토큰(404/410/409) 경로는 발행하지 않는다', async () => {
+      const { service, emit } = makeService();
+      seedInvite({
+        moimId: 'moim-A',
+        token: 'expired',
+        expiresAt: new Date(NOW.getTime() - DAY_MS),
+      });
+
+      // 미지 토큰(404)
+      await expect(
+        service.accept('guest-1', 'unknown', '게스트1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      // 만료 토큰(410)
+      await expect(
+        service.accept('guest-1', 'expired', '게스트1'),
+      ).rejects.toBeInstanceOf(GoneException);
+
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('발행(emit)이 throw 해도 가입 성공을 무효화하지 않는다(best-effort 격리)', async () => {
+      const { service, emit } = makeService();
+      seedInvite({ moimId: 'moim-A', token: 'good' });
+      // 동기 리스너 예외를 흉내: emit 이 던져도 accept 는 성공 결과를 반환해야 한다.
+      emit.mockImplementationOnce(() => {
+        throw new Error('listener boom');
+      });
+
+      const result = await service.accept('guest-1', 'good', '게스트1');
+
+      // 저장은 성립(usedCount 증가) + 예외 미전파.
+      expect(result.moimId).toBe('moim-A');
+      expect(tables.member.has(memberKey('moim-A', 'guest-1'))).toBe(true);
+      expect(emit).toHaveBeenCalledTimes(1);
     });
   });
 });

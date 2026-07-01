@@ -34,12 +34,14 @@ import {
   ExpenseShareDto,
   ExpenseSettlementDto,
   ExpenseSummaryDto,
+  RequestSettlementDto,
+  SettlementRequestResponseDto,
   SettlementResponseDto,
   SettlementTransactionDto,
 } from './dto/expense-response.dto';
 import type { ExpenseWithShares } from './expense.service';
 import { EXPENSE_CATEGORIES, ExpenseService } from './expense.service';
-import type { Settlement } from '../generated/prisma/client';
+import type { Settlement, SettlementRequest } from '../generated/prisma/client';
 
 // @MX:NOTE: [AUTO] 경비 HTTP 표면(SPEC-MOIM-EXPENSE-001 REQ-EXP-002~010). 모든 라우트는 per-route
 // @UseGuards(SupabaseAuthGuard)로 401 선처리. 인가(403)/존재(404)/검증(400)은 ExpenseService 가 단일 판정.
@@ -209,6 +211,36 @@ export class SettlementController {
     return toSettlementResponseDto(settlement);
   }
 
+  // POST /moims/:id/settlements/request — 정산 요청 생성(멤버 누구나 — 채권자가 스스로 요청, SPEC-NOTIFICATIONS-001 M2). 201.
+  // 완료 마커(POST /settlements)와 별 경로·별 테이블. moim.settlement.requested 를 채무자 수신 대상으로 발행한다.
+  @Post('request')
+  @ApiCreatedResponse({
+    description: '정산 요청 생성(채권자 → 채무자)',
+    type: SettlementRequestResponseDto,
+  })
+  @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
+  @ApiForbiddenResponse({ description: '멤버 아님(또는 모임 미존재) — 403' })
+  @ApiBadRequestResponse({
+    description:
+      '금액/채무자 검증 실패(비멤버 채무자·자기 요청·비정수 금액) — 400',
+  })
+  async request(
+    @CurrentUser() user: VerifiedUser,
+    @Param('id') moimId: string,
+    @Body() body: RequestSettlementDto,
+  ): Promise<SettlementRequestResponseDto> {
+    const debtorId = requireNonEmpty(body?.debtorId, 'debtorId');
+    const amount = requirePositiveInt(body?.amount, 'amount');
+
+    const created = await this.expenseService.requestSettlement(
+      user.sub,
+      moimId,
+      debtorId,
+      amount,
+    );
+    return toSettlementRequestResponseDto(created);
+  }
+
   // DELETE /moims/:id/settlements — (from,to,amount) 로 마커 삭제(owner 전용, REQ-EXP-009). 204.
   @Delete()
   @HttpCode(204)
@@ -364,6 +396,20 @@ function toSettlementResponseDto(s: Settlement): SettlementResponseDto {
     amount: s.amount,
     settledBy: s.settledBy,
     settledAt: s.settledAt.toISOString(),
+  };
+}
+
+// SPEC-NOTIFICATIONS-001 M2: 정산 요청 → 응답 DTO 매핑(createdAt ISO 직렬화).
+function toSettlementRequestResponseDto(
+  r: SettlementRequest,
+): SettlementRequestResponseDto {
+  return {
+    id: r.id,
+    moimId: r.moimId,
+    requesterId: r.requesterId,
+    debtorId: r.debtorId,
+    amount: r.amount,
+    createdAt: r.createdAt.toISOString(),
   };
 }
 
