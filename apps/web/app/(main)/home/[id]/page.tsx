@@ -13,8 +13,7 @@
 // 비멤버/미존재 안전 처리(REQ-MOIM3-005): 백엔드가 비멤버 403·미존재 404 를 반환하며(인가 단일 출처,
 // 약화하지 않는다), 양쪽 모두 notFound() 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
-import { Calendar, ChevronRight, MapPin, MessageCircle, Receipt } from "lucide-react";
+import { Calendar, MapPin } from "lucide-react";
 
 import { createApiClient } from "@moyura/api-client";
 
@@ -32,6 +31,7 @@ import { type PollWithResults, listPolls } from "@/lib/moim/polls";
 import { PollsSection } from "./polls-section";
 import { InviteButton } from "./invite-button";
 import { MembersSection } from "./members-section";
+import { MoimActionDock } from "./moim-action-dock";
 
 
 export default async function MoimDetailPage({
@@ -124,45 +124,11 @@ export default async function MoimDetailPage({
         <p className="mt-2 text-xs text-muted-foreground/60">{createdDate} 개설</p>
       </header>
 
-      {/* 문서 스크롤: overflow-y-auto 제거(흐름대로 자람). flex-1 유지로 짧은 콘텐츠가 화면을 채운다. */}
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-6 pt-4">
-        {/* 채팅 입장 — 기본 액션(/moims/{id}/chat 으로 이동). 그라데이션 강조 CTA. */}
-        <Link
-          href={`/moims/${moim.id}/chat`}
-          className="group animate-fade-in-up relative flex w-full items-center justify-between overflow-hidden rounded-3xl bg-gradient-brand p-5 text-white shadow-xl shadow-primary/25 transition-transform duration-200 active:scale-[0.98]"
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15 blur-xl"
-          />
-          <span className="relative flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
-              <MessageCircle size={22} />
-            </span>
-            <span className="text-lg font-extrabold">채팅 입장</span>
-          </span>
-          <ChevronRight
-            size={22}
-            className="relative transition-transform duration-200 group-hover:translate-x-0.5"
-          />
-        </Link>
-
-        {/* 경비 관리 — 보조 카드(아이콘만 그라데이션 틴트). hover lift + press scale. */}
-        <Link
-          href={`/moims/${moim.id}/expenses`}
-          className="group animate-fade-in-up flex w-full items-center justify-between rounded-3xl border border-border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] [animation-delay:0.05s]"
-        >
-          <span className="flex items-center gap-3">
-            <span className="bg-gradient-brand-soft flex h-11 w-11 items-center justify-center rounded-2xl">
-              <Receipt size={22} className="text-primary" />
-            </span>
-            <span className="text-lg font-bold text-foreground">경비</span>
-          </span>
-          <ChevronRight
-            size={22}
-            className="text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5"
-          />
-        </Link>
+      {/* 문서 스크롤: overflow-y-auto 제거(흐름대로 자람). flex-1 유지로 짧은 콘텐츠가 화면을 채운다.
+          pb-24: 우측 하단 플로팅 FAB(speed dial)에 마지막 콘텐츠가 가리지 않도록 하단 여백을 확보한다. */}
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-24 pt-4">
+        {/* 채팅·일정 조율·경비 액션은 우측 하단 speed dial FAB(MoimActionDock)로 이동했다 — 트리 끝에서 렌더.
+            목적지/기능은 동일하며, 초대·멤버·투표는 콘텐츠 흐름에 그대로 유지한다. */}
 
         {/* SPEC-MOIM-011: owner 전용 초대 링크 발급(비-owner 면 null 렌더). 모바일 WebView 안에서도 동작. */}
         <InviteButton moimId={moim.id} isOwner={isOwner} />
@@ -188,6 +154,9 @@ export default async function MoimDetailPage({
           accessToken={session.access_token}
         />
       </div>
+
+      {/* 우측 하단 플로팅 speed dial — 채팅/일정 조율/경비 액션(fixed, 문서 흐름 밖). */}
+      <MoimActionDock moimId={moim.id} />
     </div>
   );
 }
