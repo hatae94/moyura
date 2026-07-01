@@ -1007,8 +1007,11 @@ function ScheduleGrid({
           </div>
         ) : null}
 
-        {/* 날짜 칩 레일 — 하루씩 포커스. 칩마다 그날 최다 겹침 배지. 누구나 "＋날짜" 로 후보 추가. */}
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+        {/* 날짜 칩 레일 — 하루씩 포커스. 칩마다 그날 최다 겹침 배지. 누구나 "＋날짜" 로 후보 추가.
+            헤더(sticky top-0)처럼 스크롤 시 고정한다. top-[60px] = 헤더 높이(h-9 36px + py-3 24px).
+            sticky top 은 스크롤포트 기준이라 네이티브 상태바 인셋과 무관하게 헤더 바로 아래에 정렬된다.
+            z-10(헤더 z-20 아래) + 헤더와 동일한 배경/블러/하단 경계로, 타임라인이 레일 밑으로 스크롤된다. */}
+        <div className="sticky top-[60px] z-10 -mx-3 flex gap-2 overflow-x-auto border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
           {schedule.dates.map((d) => {
             const { md, weekday } = formatDateHeader(d);
             const peak = dateMax.get(d) ?? 0;
