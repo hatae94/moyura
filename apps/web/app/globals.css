@@ -378,3 +378,10 @@ html[data-shell="native"] [data-bottom-tab-bar] {
 html[data-shell="native"] [data-bottom-tab-spacer] {
   padding-bottom: 0;
 }
+
+/* 모임 상세 speed dial FAB(MoimActionDock) — 웹에서는 하단 탭바(약 4.5rem)를 회피해 bottom 5.5rem 에 뜬다
+   (컴포넌트가 Tailwind 클래스로 지정). 네이티브 셸은 탭바가 숨겨지므로 탭바 없는 하단에 맞춰 FAB 를 더 내린다.
+   attr 셀렉터라 컴포넌트의 bottom-[...] 유틸보다 우선순위가 높아 오버라이드된다(인라인 style 아님). */
+html[data-shell="native"] [data-moim-action-dock] {
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
