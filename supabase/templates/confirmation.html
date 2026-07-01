@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+  <body
+    style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fafafa; margin: 0; padding: 32px;"
+  >
+    <div
+      style="max-width: 420px; margin: 0 auto; background: #ffffff; border-radius: 20px; padding: 32px; text-align: center;"
+    >
+      <h1 style="font-size: 20px; font-weight: 800; margin: 0 0 8px; color: #18181b;">
+        moyura 이메일 인증
+      </h1>
+      <p style="color: #71717a; font-size: 14px; margin: 0 0 24px;">
+        아래 6자리 코드를 앱에 입력해 주세요.
+      </p>
+      <div
+        style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #f5317f; margin: 0 0 24px;"
+      >
+        {{ .Token }}
+      </div>
+      <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
+        이 코드는 1시간 후 만료됩니다. 본인이 요청하지 않았다면 이 메일을 무시하세요.
+      </p>
+    </div>
+  </body>
+</html>

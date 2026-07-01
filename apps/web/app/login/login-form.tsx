@@ -12,9 +12,11 @@ import Image from "next/image";
 import { Apple, Mail } from "lucide-react";
 
 import {
+  resendEmailOtpAction,
   signInAction,
   signInWithOAuthAction,
   signUpAction,
+  verifyEmailOtpAction,
   type AuthActionState,
 } from "@/lib/auth/actions";
 import { requestNativeGoogleSignIn } from "@/lib/native-bridge/bridge-client";
@@ -63,11 +65,112 @@ export function LoginForm({ initialError }: { initialError?: string }) {
     FormData
   >(signUpAction, undefined);
 
+  // 이메일 확인(6자리 코드) 검증/재전송 액션 상태.
+  const [verifyState, verify, verifyPending] = useActionState<
+    AuthActionState,
+    FormData
+  >(verifyEmailOtpAction, undefined);
+  const [resendState, resend, resendPending] = useActionState<
+    AuthActionState,
+    FormData
+  >(resendEmailOtpAction, undefined);
+
+  // 회원가입이 "확인 필요"를 반환하면 코드 입력 화면으로 전환한다. useActionState 결과를 렌더 중 1회
+  // 로컬 상태로 캡처한다(effect 아닌 "이전 값과 비교 후 렌더 중 조정" React 공식 패턴 — set-state-in-effect 회피).
+  const [otpEmail, setOtpEmail] = useState<string | null>(null);
+  const [ackedSignup, setAckedSignup] = useState<AuthActionState>(undefined);
+  if (signUpState !== ackedSignup) {
+    setAckedSignup(signUpState);
+    if (signUpState?.needsConfirmation && signUpState.email) {
+      setOtpEmail(signUpState.email);
+    }
+  }
+
   // isSignUp 에 따라 폼 action/pending/state 를 전환한다.
   const formAction = isSignUp ? signUp : signIn;
   const pending = isSignUp ? signUpPending : signInPending;
   // 두 채널 에러를 함께 반영한다(useActionState 에러 + 서버 ?error= 초기값, OD-2).
   const error = isSignUp ? signUpState?.error : signInState?.error;
+
+  // 이메일 확인 코드 입력 뷰 — 회원가입 후 6자리 코드 대기(가입 즉시 세션이 없으므로 검증 후 진입).
+  if (otpEmail) {
+    const otpError = verifyState?.error ?? resendState?.error;
+    const resent = Boolean(resendState?.needsConfirmation) && !resendState?.error;
+    return (
+      <div className="min-h-dvh w-full flex flex-col bg-background">
+        <div className="animate-fade-in flex-1 flex flex-col px-6 py-8">
+          {/* ← 뒤로: 이메일 가입 폼으로 복귀 */}
+          <button
+            type="button"
+            onClick={() => setOtpEmail(null)}
+            className="self-start flex items-center gap-1 text-sm font-medium text-muted-foreground mb-8 transition-colors hover:text-foreground"
+          >
+            ← 뒤로
+          </button>
+
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2">이메일 인증</h1>
+          <p className="text-muted-foreground mb-1">
+            아래 이메일로 6자리 인증 코드를 보냈어요.
+          </p>
+          <p className="font-semibold text-foreground mb-8">{otpEmail}</p>
+
+          {otpError ? (
+            <div
+              role="alert"
+              className="animate-fade-in-down bg-destructive/10 text-destructive px-4 py-3 rounded-2xl text-sm mb-4"
+            >
+              {otpError}
+            </div>
+          ) : resent ? (
+            <div className="animate-fade-in-down bg-primary/10 text-primary px-4 py-3 rounded-2xl text-sm mb-4">
+              새 인증 코드를 보냈어요.
+            </div>
+          ) : null}
+
+          {/* 코드 검증 폼 — hidden email + 6자리 코드 */}
+          <form action={verify} className="flex flex-col gap-4">
+            <input type="hidden" name="email" value={otpEmail} />
+            <div>
+              <label htmlFor="otp-code" className="block text-sm font-semibold mb-2">
+                인증 코드
+              </label>
+              <input
+                id="otp-code"
+                name="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                required
+                placeholder="000000"
+                className="w-full px-4 py-3.5 border border-border bg-card rounded-2xl text-center text-2xl font-bold tracking-[0.5em] transition-shadow focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={verifyPending}
+              className="w-full bg-gradient-brand text-white py-3.5 rounded-2xl font-bold shadow-lg shadow-primary/25 transition-transform mt-2 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+            >
+              {verifyPending ? "확인 중..." : "인증하고 시작하기"}
+            </button>
+          </form>
+
+          {/* 재전송(레이트리밋 email_sent 적용) */}
+          <div className="mt-6 text-center">
+            <form action={resend}>
+              <input type="hidden" name="email" value={otpEmail} />
+              <button
+                type="submit"
+                disabled={resendPending}
+                className="text-sm font-semibold text-primary transition-opacity hover:opacity-80 disabled:opacity-50"
+              >
+                {resendPending ? "재전송 중..." : "코드를 못 받으셨나요? 재전송"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 소셜 랜딩 뷰(R-A1~R-A5).
   if (!showEmailForm) {
