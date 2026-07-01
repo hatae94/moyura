@@ -231,7 +231,9 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# 이메일 회원가입 검증 — 확인 활성화. signUp 시 세션 대신 6자리 코드 메일을 보내고, verifyOtp 로 확인한다.
+# 프로덕션(호스팅 Supabase)은 대시보드 Auth 설정에서 별도로 켜야 한다(config.toml 은 로컬 전용).
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -255,6 +257,11 @@ otp_expiry = 3600
 # [auth.email.template.invite]
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
+
+# 회원가입 이메일 인증 — 링크 대신 6자리 코드(OTP) 발송. 템플릿이 {{ .Token }} 을 렌더한다.
+[auth.email.template.confirmation]
+subject = "moyura 이메일 인증 코드"
+content_path = "./supabase/templates/confirmation.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
