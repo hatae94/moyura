@@ -10,7 +10,7 @@
 // 탭바가 숨겨지므로 globals.css 가 html[data-shell="native"] [data-moim-action-dock] 로 bottom 을 낮춘다.
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, Menu, MessageCircle, Receipt, X } from "lucide-react";
 
@@ -42,6 +42,22 @@ const ACTIONS = [
 
 export function MoimActionDock({ moimId }: { moimId: string }) {
   const [open, setOpen] = useState(false);
+
+  // 메뉴가 열려(backdrop blur) 있는 동안 배경(모임 상세 문서) 스크롤을 잠근다 — 열린 상태에서 뒤 콘텐츠가
+  // 스크롤되던 UX 문제 방지. body(문서 스크롤 모델의 스크롤 컨테이너) overflow 를 hidden 으로 두고,
+  // overscroll-behavior 로 스크롤 체이닝도 차단한다. 닫히거나 언마운트 시 원래 값으로 복원한다.
+  useEffect(() => {
+    if (!open) return;
+    const body = document.body;
+    const prevOverflow = body.style.overflow;
+    const prevOverscroll = body.style.overscrollBehavior;
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    return () => {
+      body.style.overflow = prevOverflow;
+      body.style.overscrollBehavior = prevOverscroll;
+    };
+  }, [open]);
 
   return (
     <>
