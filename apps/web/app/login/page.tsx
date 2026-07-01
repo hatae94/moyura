@@ -22,6 +22,16 @@ export default async function LoginPage({
   // size-full 풀스크린 레이아웃을 채우는 LoginScreen 만 호스팅한다(R-H1).
   return (
     <>
+      {/* DEV 환경 표식 — 좌측 최상단 작은 배지(dev 전용). 비간섭(pointer-events:none)이라 아래 UI 를
+          가리지 않고, 노치/상태바를 피하도록 safe-area-inset-top 을 존중한다. prod 빌드에선 렌더되지 않는다. */}
+      {process.env.NODE_ENV === "development" ? (
+        <span
+          className="pointer-events-none fixed left-2.5 z-50 select-none rounded-md bg-foreground/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-background backdrop-blur"
+          style={{ top: "max(0.625rem, env(safe-area-inset-top))" }}
+        >
+          DEV
+        </span>
+      ) : null}
       {/* SPEC-MOBILE-002 R-R2/OD-10: 네이티브 SecureStore 토큰 클리어 통지(WebView 안에서만). */}
       <LogoutBridgeNotifier />
       <LoginForm initialError={error} />

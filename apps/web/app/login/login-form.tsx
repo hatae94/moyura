@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { useActionState } from "react";
+import Image from "next/image";
 import { Apple, Mail } from "lucide-react";
 
 import {
@@ -76,18 +77,19 @@ export function LoginForm({ initialError }: { initialError?: string }) {
       <div className="min-h-dvh w-full flex flex-col grow bg-background">
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
           <div className="w-full max-w-md">
-            {/* 헤더: 그라데이션 로고 배지 + 워드마크 + 서브타이틀(R-A2) — 인스타 무드로 교체. */}
+            {/* 헤더: 공식 앱 아이콘(블롭 링 — "모여라")을 히어로로. 아이콘이 자체 스퀘어클 배경을 가지므로
+                그라데이션 배지 래퍼 없이 이미지를 직접 렌더하고 모서리만 둥글린다. 워드마크는 제거한다
+                (아이콘 중심 미니멀 — 스플래시/로그인 트렌드), 태그라인만 남겨 맥락을 준다. [DEV] 는 좌상단 배지로 이동. */}
             <div className="text-center">
-              <div className="bg-gradient-brand-animated animate-scale-in mx-auto inline-flex items-center justify-center w-20 h-20 rounded-[1.75rem] shadow-xl shadow-primary/25 mb-5">
-                <span className="text-4xl">🎉</span>
-              </div>
-              <h1 className="animate-fade-in-up text-4xl font-extrabold mb-3 tracking-tight">
-                <span className="text-gradient-brand">moyura</span>
-                {process.env.NODE_ENV === "development" ? (
-                  <span className="text-muted-foreground"> [DEV]</span>
-                ) : null}
-              </h1>
-              <p className="animate-fade-in-up text-muted-foreground leading-relaxed [animation-delay:0.06s]">
+              <Image
+                src="/app-icon.png"
+                alt="moyura"
+                width={96}
+                height={96}
+                priority
+                className="animate-scale-in mx-auto mb-6 h-24 w-24 rounded-[1.75rem]"
+              />
+              <p className="animate-fade-in-up text-muted-foreground leading-relaxed">
                 간편하게 모임을 만들고
                 <br />
                 일정, 장소, 투표를 한곳에서
