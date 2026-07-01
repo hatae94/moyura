@@ -13,9 +13,14 @@
 //   CSS 규칙(globals.css)이 html[data-shell="native"] [data-bottom-tab-bar] { display:none } 으로 숨긴다.
 import { headers } from "next/headers";
 
+import { createApiClient } from "@moyura/api-client";
+
 import { requireNamedSession } from "@/lib/auth/require-named-session";
+import { API_BASE_URL } from "@/lib/env";
+import { getUnreadCount } from "@/lib/notifications/api";
 
 import { BottomTabBar } from "./_components/BottomTabBar";
+import { NotificationCountProvider } from "./_components/NotificationCountProvider";
 import { ShellModeEffect } from "./_components/ShellModeEffect";
 import { ShellSessionAnnouncer } from "./_components/ShellSessionAnnouncer";
 
@@ -35,12 +40,34 @@ export default async function MainLayout({
   // SPEC-MOBILE-004 REQ-MOB4-004: 세션 가드(R-WB1)에 이름 온보딩 가드를 합친다.
   //   세션 없음 → /login, 세션 있음 + Profile.name 미보유 → /onboarding(이 (main) 그룹 밖).
   // 데스크톱 웹도 이 server-side 가드로 자동 커버된다(AC-7). 미충족 시 내부에서 redirect 한다.
-  await requireNamedSession();
+  const { session } = await requireNamedSession();
+
+  // Notifications M4b: 하단 탭 배지의 초기 미읽음 카운트를 서버에서 fetch 한다(하드코딩 mock 대체).
+  //   graceful degrade: 조회 실패는 셸 진입을 절대 막지 않는다 → 0(배지 숨김)으로 폴백. 이후 실시간
+  //   신호(user:{sub} → NotificationCountProvider 재조회)가 자가 치유한다. 토큰은 Bearer 헤더로만 전달(R-D4).
+  let initialUnreadCount = 0;
+  try {
+    const api = createApiClient({
+      baseUrl: API_BASE_URL,
+      getToken: () => session.access_token,
+    });
+    initialUnreadCount = await getUnreadCount(api);
+  } catch (err) {
+    // 비차단 폴백(0). 관측을 위해 서버 로그만 남긴다(토큰/민감정보 미노출).
+    console.error("[moyura/web] 초기 미읽음 알림 카운트 조회 실패 — 배지 0 으로 폴백", err);
+  }
 
   return (
-    // 문서 스크롤 셸: 고정 높이를 두지 않는다. flex-1 로 body(min-h-dvh)를 채워(짧은 콘텐츠도 화면을 채움),
-    // 콘텐츠가 길면 함께 자라 문서가 스크롤된다(→ 브라우저 크롬 접힘). 하단 탭바는 흐름 밖 position:fixed 다.
-    <div className="flex flex-1 flex-col bg-background">
+    // Notifications M4b: 셸 전체를 카운트 프로바이더로 감싼다. children(서버 컴포넌트)은 그대로 통과하고,
+    //   BottomTabBar 와 M5 알림 탭(children 하위)이 useNotificationCount() 로 실카운트/refresh/reset 을 소비한다.
+    <NotificationCountProvider
+      initialCount={initialUnreadCount}
+      sub={session.user.id}
+      accessToken={session.access_token}
+    >
+      {/* 문서 스크롤 셸: 고정 높이를 두지 않는다. flex-1 로 body(min-h-dvh)를 채워(짧은 콘텐츠도 화면을 채움),
+          콘텐츠가 길면 함께 자라 문서가 스크롤된다(→ 브라우저 크롬 접힘). 하단 탭바는 흐름 밖 position:fixed 다. */}
+      <div className="flex flex-1 flex-col bg-background">
       {/* R-WB3/R-WB4: 콘텐츠 페인트 전 셸 모드 판정(하이드레이션 flash 없이 탭바 숨김). */}
       <script
         // 인라인 부트스트랩 스크립트 — DOM 페인트 전에 동기 실행되어야 한다(R-WB4).
@@ -62,8 +89,10 @@ export default async function MainLayout({
       <div data-bottom-tab-spacer className="flex flex-1 flex-col pb-bottom-tab">
         {children}
       </div>
-      {/* 셸 모드(네이티브 WebView)에서는 globals.css 규칙으로 숨겨진다 — 네이티브 탭바만 표시. */}
-      <BottomTabBar notificationCount={2} />
-    </div>
+        {/* 셸 모드(네이티브 WebView)에서는 globals.css 규칙으로 숨겨진다 — 네이티브 탭바만 표시.
+            배지 카운트는 prop 하드코딩이 아니라 NotificationCountProvider 컨텍스트에서 실시간으로 소비한다. */}
+        <BottomTabBar />
+      </div>
+    </NotificationCountProvider>
   );
 }

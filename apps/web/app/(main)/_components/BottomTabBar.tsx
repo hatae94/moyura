@@ -2,7 +2,8 @@
 //
 // Figma 원본은 button + onTabChange 콜백으로 탭 전환을 처리했지만, Next.js App Router 에서는
 // 각 탭을 <Link href> 로 만들어 라우트 이동으로 대체한다(R-WB1 적응 지침). active 상태는
-// usePathname() 으로 도출하므로 클라이언트 컴포넌트다. notifications 배지는 mock 카운트 prop.
+// usePathname() 으로 도출하므로 클라이언트 컴포넌트다. notifications 배지는 NotificationCountProvider
+// 컨텍스트에서 실시간 미읽음 카운트를 소비한다(Notifications M4b — 과거 mock prop 대체).
 //
 // 셸 모드(네이티브 WebView 내부)에서는 이 탭바를 숨긴다 — 네이티브 탭바만 보인다(R-WB3/R-WB4).
 // 숨김은 layout.tsx 가 html[data-shell="native"] CSS 규칙으로 처리하므로 여기서는 마크업만 둔다.
@@ -12,6 +13,8 @@ import { Home, Compass, Bell, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useNotificationCount } from "./NotificationCountProvider";
+
 /** 웹/앱 동일 라우트 트리(R-NC1) — URL 경로와 1:1 매핑된다. */
 const TABS = [
   { href: "/home", label: "홈", icon: Home },
@@ -20,17 +23,14 @@ const TABS = [
   { href: "/profile", label: "마이", icon: User },
 ] as const;
 
-export interface BottomTabBarProps {
-  /** 알림 탭 배지에 표시할 mock 카운트(0 이면 미표시). */
-  notificationCount?: number;
-}
-
 /**
  * 하단 탭바(R-WB1). 4개 탭을 next/link 로 렌더하고 usePathname() 으로 active 를 도출한다.
  * 셸 모드에서는 상위 CSS 규칙(html[data-shell="native"])으로 숨겨진다(R-WB3).
+ * 알림 배지 카운트는 NotificationCountProvider 컨텍스트에서 실시간으로 소비한다(반드시 프로바이더 하위에서 렌더).
  */
-export function BottomTabBar({ notificationCount = 0 }: BottomTabBarProps) {
+export function BottomTabBar() {
   const pathname = usePathname();
+  const { count: notificationCount } = useNotificationCount();
 
   return (
     <nav
