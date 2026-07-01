@@ -3,15 +3,22 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   Expense,
   ExpenseShare,
   Moim,
   MoimMember,
   Settlement,
+  SettlementRequest,
 } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import {
+  MOIM_EXPENSE_ADDED,
+  MOIM_SETTLEMENT_COMPLETED,
+  MOIM_SETTLEMENT_REQUESTED,
+} from './expense-events';
 import { ExpenseService } from './expense.service';
 
 // ExpenseService 단위 테스트(SPEC-MOIM-EXPENSE-001). 인메모리 fake Prisma + stub MoimService 로 검증한다:
@@ -32,6 +39,8 @@ interface Tables {
   expense: Map<string, Expense>;
   share: Map<string, ExpenseShare>; // key: `${expenseId}:${userId}`
   settlement: Map<string, Settlement>;
+  // SPEC-NOTIFICATIONS-001 M2: 정산 요청 테이블(requestSettlement 검증용).
+  settlementRequest: Map<string, SettlementRequest>;
 }
 
 function memberKey(moimId: string, userId: string): string {
@@ -47,6 +56,8 @@ describe('ExpenseService', () => {
   let idSeq: number;
   // moimId별 owner sub 집합(assertOwner 판정).
   let owners: Map<string, string>;
+  // SPEC-NOTIFICATIONS-001 M2: EventEmitter2.emit 스텁(발행 검증용, per-test 초기화).
+  let emit: jest.Mock;
 
   function reset(): void {
     tables = {
@@ -55,9 +66,11 @@ describe('ExpenseService', () => {
       expense: new Map(),
       share: new Map(),
       settlement: new Map(),
+      settlementRequest: new Map(),
     };
     idSeq = 0;
     owners = new Map();
+    emit = jest.fn();
   }
 
   function nextId(prefix: string): string {
@@ -417,6 +430,32 @@ describe('ExpenseService', () => {
       }),
     };
 
+    // SPEC-NOTIFICATIONS-001 M2: 정산 요청 fake 클라이언트(create 만 — requestSettlement 검증용).
+    const settlementRequestClient = {
+      create: jest.fn(
+        (arg: {
+          data: {
+            moimId: string;
+            requesterId: string;
+            debtorId: string;
+            amount: number;
+          };
+        }) => {
+          const id = nextId('sreq');
+          const row: SettlementRequest = {
+            id,
+            moimId: arg.data.moimId,
+            requesterId: arg.data.requesterId,
+            debtorId: arg.data.debtorId,
+            amount: arg.data.amount,
+            createdAt: NOW,
+          };
+          tables.settlementRequest.set(id, row);
+          return Promise.resolve(row);
+        },
+      ),
+    };
+
     // $transaction(인터랙티브 콜백) — createExpense/updateExpense 의 원자 write 를 그대로 실행.
     const $transaction = jest.fn((cb: (tx: unknown) => Promise<unknown>) =>
       cb({
@@ -432,12 +471,15 @@ describe('ExpenseService', () => {
       expense: expenseClient,
       expenseShare: expenseShareClient,
       settlement: settlementClient,
+      settlementRequest: settlementRequestClient,
       $transaction,
     } as unknown as PrismaService;
   }
 
   function makeService(): ExpenseService {
-    return new ExpenseService(makePrisma(), makeMoimService());
+    return new ExpenseService(makePrisma(), makeMoimService(), {
+      emit,
+    } as unknown as EventEmitter2);
   }
 
   beforeEach(() => {
@@ -1250,6 +1292,188 @@ describe('ExpenseService', () => {
       await expect(
         service.deleteSettlement('member', 'moim-A', 'member', 'owner', 5000),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  // ── SPEC-NOTIFICATIONS-001 M2: 경비/정산 도메인 이벤트 발행 ─────────────────────
+  describe('createExpense() — moim.expense.added 발행 (SPEC-NOTIFICATIONS-001 M2)', () => {
+    it('성공 시 분담 참가자(shareUserIds)를 실은 이벤트를 1회 발행한다', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+      addMember('moim-A', 'user-C');
+
+      const created = await service.createExpense(
+        'owner',
+        'moim-A',
+        9000,
+        '식비',
+        'owner',
+        undefined,
+        'equal',
+        ['owner', 'user-B', 'user-C'],
+        undefined,
+      );
+
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_EXPENSE_ADDED, {
+        moimId: 'moim-A',
+        actorId: 'owner',
+        expenseId: created.id,
+        amount: 9000,
+        category: '식비',
+        shareUserIds: ['owner', 'user-B', 'user-C'],
+      });
+    });
+
+    it('authz 실패(비-owner 403) 경로는 발행하지 않는다', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'member');
+
+      await expect(
+        service.createExpense(
+          'member',
+          'moim-A',
+          5000,
+          '식비',
+          'owner',
+          undefined,
+          'equal',
+          undefined,
+          undefined,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createSettlement() — moim.settlement.completed 발행 (SPEC-NOTIFICATIONS-001 M2)', () => {
+    it('신규 마커 시 상대방(counterparty=actor 아닌 당사자)에게 1회 발행한다', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+      addMember('moim-A', 'user-C');
+      // user-C 가 10000 지불, user-B/user-C 균등 → user-B 가 user-C 에게 5000 채무.
+      seedExpense('moim-A', 'user-C', 10000, '식비', [
+        { userId: 'user-B', shareAmount: 5000 },
+        { userId: 'user-C', shareAmount: 5000 },
+      ]);
+
+      await service.createSettlement(
+        'owner',
+        'moim-A',
+        'user-B',
+        'user-C',
+        5000,
+      );
+
+      expect(emit).toHaveBeenCalledTimes(1);
+      // actor(owner)는 정산 당사자가 아니므로 counterparty = 채권자(toUserId=user-C=요청자).
+      expect(emit).toHaveBeenCalledWith(MOIM_SETTLEMENT_COMPLETED, {
+        moimId: 'moim-A',
+        actorId: 'owner',
+        counterpartyId: 'user-C',
+        amount: 5000,
+      });
+    });
+
+    it('멱등(기존 마커 재호출)은 발행하지 않는다', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+      addMember('moim-A', 'user-C');
+      seedExpense('moim-A', 'user-C', 10000, '식비', [
+        { userId: 'user-B', shareAmount: 5000 },
+        { userId: 'user-C', shareAmount: 5000 },
+      ]);
+      // 동일 (from,to,amount) 마커를 미리 시드 → 재호출은 멱등(no-op).
+      seedSettlement('moim-A', 'user-B', 'user-C', 5000, 'owner');
+
+      await service.createSettlement(
+        'owner',
+        'moim-A',
+        'user-B',
+        'user-C',
+        5000,
+      );
+
+      expect(emit).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── SPEC-NOTIFICATIONS-001 M2: 정산 요청(신규 액션) ────────────────────────────
+  describe('requestSettlement() (SPEC-NOTIFICATIONS-001 M2)', () => {
+    it('멤버가 채무자에게 요청 시 요청 행 생성 + moim.settlement.requested 1회 발행', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+
+      const req = await service.requestSettlement(
+        'owner',
+        'moim-A',
+        'user-B',
+        4000,
+      );
+
+      expect(req.requesterId).toBe('owner');
+      expect(req.debtorId).toBe('user-B');
+      expect(req.amount).toBe(4000);
+      expect(tables.settlementRequest.size).toBe(1);
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(MOIM_SETTLEMENT_REQUESTED, {
+        moimId: 'moim-A',
+        actorId: 'owner',
+        debtorId: 'user-B',
+        amount: 4000,
+      });
+    });
+
+    it('요청자가 비멤버면 403(요청 미생성·미발행)', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+
+      await expect(
+        service.requestSettlement('stranger', 'moim-A', 'user-B', 4000),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(tables.settlementRequest.size).toBe(0);
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('채무자가 모임 멤버가 아니면 400(요청 미생성·미발행)', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+
+      await expect(
+        service.requestSettlement('owner', 'moim-A', 'outsider', 4000),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(tables.settlementRequest.size).toBe(0);
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('자기 자신에게 요청하면 400', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+
+      await expect(
+        service.requestSettlement('owner', 'moim-A', 'owner', 4000),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('금액이 1 미만/비정수이면 400', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+
+      await expect(
+        service.requestSettlement('owner', 'moim-A', 'user-B', 0),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.requestSettlement('owner', 'moim-A', 'user-B', 1.5),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(emit).not.toHaveBeenCalled();
     });
   });
 });

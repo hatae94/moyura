@@ -4,15 +4,28 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Moim, MoimMember } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  MOIM_MEMBER_KICKED,
+  MOIM_OWNER_TRANSFERRED,
+  type MoimMemberKickedPayload,
+  type MoimOwnerTransferredPayload,
+} from './moim-events';
 
 // owner 멤버십 role 상수(REQ-MOIM-004). owner는 탈퇴 불가(REQ-MOIM-008)·삭제 전용(REQ-MOIM-003).
 const ROLE_OWNER = 'owner';
 
 @Injectable()
 export class MoimService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행기(전역 EventEmitterModule.forRoot()). transferOwner/kickMember
+    // 성공(트랜잭션/삭제 완료) 후에만 moim.owner.transferred/moim.member.kicked 를 발행한다 — NotificationListener
+    // 가 구독(느슨한 결합, moim→알림 인식 0).
+    private readonly events: EventEmitter2,
+  ) {}
 
   // @MX:ANCHOR: [AUTO] 모임 + 생성자 owner 멤버십을 하나의 트랜잭션으로 원자 생성하는 진입점(REQ-MOIM-004).
   // @MX:REASON: moim과 owner moim_member는 항상 함께 존재해야 한다는 불변식의 단일 출처. owner row가
@@ -191,6 +204,22 @@ export class MoimService {
     await this.prisma.moimMember.delete({
       where: { moimId_userId: { moimId, userId: targetUserId } },
     });
+
+    // SPEC-NOTIFICATIONS-001 M2: 삭제 성공 이후에만 발행한다(no-op/authz-fail 경로는 위에서 이미 throw).
+    // best-effort 격리 — 리스너 예외가 이미 성립한 퇴장을 무효화하지 않는다(actorId=owner, targetId=퇴장 당사자).
+    const kickedPayload: MoimMemberKickedPayload = {
+      moimId,
+      actorId: sub,
+      targetId: targetUserId,
+    };
+    try {
+      this.events.emit(MOIM_MEMBER_KICKED, kickedPayload);
+    } catch (err) {
+      console.error(
+        `[MoimService] ${MOIM_MEMBER_KICKED} 발행 실패(moimId=${moimId}):`,
+        err,
+      );
+    }
   }
 
   // 소유권 이양(owner 전용). 단일 트랜잭션: 현 owner → member, 대상 → owner. createdBy 불변.
@@ -228,6 +257,23 @@ export class MoimService {
         data: { role: ROLE_OWNER },
       }),
     ]);
+
+    // SPEC-NOTIFICATIONS-001 M2: 트랜잭션 커밋 이후에만 발행한다(self-transfer 400/비-owner 403/대상 부재 404
+    // 경로는 위에서 이미 throw). best-effort 격리 — 리스너 예외가 이미 성립한 이양을 무효화하지 않는다.
+    // 수신 대상 = 모임 전체 − actor(신 방장 강조는 data.newOwnerId 로 전달).
+    const transferredPayload: MoimOwnerTransferredPayload = {
+      moimId,
+      actorId: sub,
+      newOwnerId: targetUserId,
+    };
+    try {
+      this.events.emit(MOIM_OWNER_TRANSFERRED, transferredPayload);
+    } catch (err) {
+      console.error(
+        `[MoimService] ${MOIM_OWNER_TRANSFERRED} 발행 실패(moimId=${moimId}):`,
+        err,
+      );
+    }
   }
 
   // 모임 삭제(REQ-MOIM-003 / AC-7). owner 전용 — 비-owner 403/없는 모임 404는 assertOwner가 판정한다.

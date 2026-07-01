@@ -1,6 +1,23 @@
 import type { MoimMember } from '../generated/prisma/client';
+import {
+  type MoimExpenseAddedPayload,
+  type MoimSettlementCompletedPayload,
+  type MoimSettlementRequestedPayload,
+} from '../expense/expense-events';
 import { type MoimMemberJoinedPayload } from '../invite/invite-events';
+import {
+  type MoimMemberKickedPayload,
+  type MoimOwnerTransferredPayload,
+} from '../moim/moim-events';
+import {
+  type MoimPollClosedPayload,
+  type MoimPollCreatedPayload,
+} from '../poll/poll-events';
 import type { PrismaService } from '../prisma/prisma.service';
+import {
+  type MoimScheduleConfirmedPayload,
+  type MoimScheduleStartedPayload,
+} from '../schedule/schedule-events';
 import { NotificationListener } from './notification.listener';
 import { NotificationService } from './notification.service';
 
@@ -136,6 +153,233 @@ describe('NotificationListener', () => {
     mocks.memberFindMany.mockRejectedValueOnce('boom');
 
     await expect(listener.handleMemberJoined(PAYLOAD)).resolves.toBeUndefined();
+    expect(mocks.createMany).not.toHaveBeenCalled();
+  });
+
+  // ── SPEC-NOTIFICATIONS-001 M2: 이벤트별 수신자 전략 + type/data ────────────────
+
+  it('owner.transferred: 모임 전체 − actor 에게 owner.delegated 를 발행한다(data.newOwnerId)', async () => {
+    const { listener, mocks } = makeListener([
+      member('sub-owner'),
+      member('sub-2'),
+      member('sub-new'),
+    ]);
+    const payload: MoimOwnerTransferredPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      newOwnerId: 'sub-2',
+    };
+
+    await listener.handleOwnerTransferred(payload);
+
+    expect(mocks.createMany).toHaveBeenCalledTimes(1);
+    const arg = mocks.createMany.mock.calls[0][0];
+    const recipients = arg.data.map((r) => r.recipientId).sort();
+    // actor(sub-owner)만 제외 — 신 방장(sub-2)도 모임 전체 공지를 받는다.
+    expect(recipients).toEqual(['sub-2', 'sub-new']);
+    for (const row of arg.data) {
+      expect(row.type).toBe('owner.delegated');
+      expect(row.moimId).toBe('moim-A');
+      expect(row.actorId).toBe('sub-owner');
+      expect(row.data).toEqual({ newOwnerId: 'sub-2' });
+    }
+  });
+
+  it('member.kicked: 퇴장 당사자(targetId)에게만 발행한다(모임 방송 아님)', async () => {
+    const { listener, mocks } = makeListener([
+      member('sub-owner'),
+      member('sub-2'),
+    ]);
+    const payload: MoimMemberKickedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      targetId: 'sub-2',
+    };
+
+    await listener.handleMemberKicked(payload);
+
+    const arg = mocks.createMany.mock.calls[0][0];
+    expect(arg.data.map((r) => r.recipientId)).toEqual(['sub-2']);
+    expect(arg.data[0].type).toBe('member.kicked');
+    expect(arg.data[0].actorId).toBe('sub-owner');
+    expect(arg.data[0].data).toEqual({});
+    // moim_member 조회 없이 payload.targetId 를 직접 쓴다(개인 통지).
+    expect(mocks.memberFindMany).not.toHaveBeenCalled();
+  });
+
+  it('schedule.started: 모임 − actor 에게 schedule.started 를 발행한다', async () => {
+    const { listener, mocks } = makeListener([
+      member('sub-owner'),
+      member('sub-2'),
+    ]);
+    const payload: MoimScheduleStartedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      scheduleEventId: 'ev-1',
+    };
+
+    await listener.handleScheduleStarted(payload);
+
+    const arg = mocks.createMany.mock.calls[0][0];
+    expect(arg.data.map((r) => r.recipientId)).toEqual(['sub-2']);
+    expect(arg.data[0].type).toBe('schedule.started');
+    expect(arg.data[0].data).toEqual({});
+  });
+
+  it('schedule.confirmed: data.startsAt(ISO) 을 실어 모임 − actor 에게 발행한다', async () => {
+    const { listener, mocks } = makeListener([
+      member('sub-owner'),
+      member('sub-2'),
+    ]);
+    const payload: MoimScheduleConfirmedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      startsAt: '2026-07-04T13:00:00.000Z',
+    };
+
+    await listener.handleScheduleConfirmed(payload);
+
+    const arg = mocks.createMany.mock.calls[0][0];
+    expect(arg.data.map((r) => r.recipientId)).toEqual(['sub-2']);
+    expect(arg.data[0].type).toBe('schedule.confirmed');
+    expect(arg.data[0].data).toEqual({ startsAt: '2026-07-04T13:00:00.000Z' });
+  });
+
+  it('poll.created: data{pollId, question} 를 실어 모임 − actor 에게 발행한다', async () => {
+    const { listener, mocks } = makeListener([
+      member('sub-owner'),
+      member('sub-2'),
+    ]);
+    const payload: MoimPollCreatedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      pollId: 'poll-1',
+      question: '점심 뭐 먹지?',
+    };
+
+    await listener.handlePollCreated(payload);
+
+    const arg = mocks.createMany.mock.calls[0][0];
+    expect(arg.data.map((r) => r.recipientId)).toEqual(['sub-2']);
+    expect(arg.data[0].type).toBe('poll.created');
+    expect(arg.data[0].data).toEqual({
+      pollId: 'poll-1',
+      question: '점심 뭐 먹지?',
+    });
+  });
+
+  it('poll.closed: data{pollId, question} 를 실어 모임 − actor 에게 발행한다', async () => {
+    const { listener, mocks } = makeListener([
+      member('sub-owner'),
+      member('sub-2'),
+    ]);
+    const payload: MoimPollClosedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      pollId: 'poll-1',
+      question: '점심 뭐 먹지?',
+    };
+
+    await listener.handlePollClosed(payload);
+
+    const arg = mocks.createMany.mock.calls[0][0];
+    expect(arg.data.map((r) => r.recipientId)).toEqual(['sub-2']);
+    expect(arg.data[0].type).toBe('poll.closed');
+    expect(arg.data[0].data).toEqual({
+      pollId: 'poll-1',
+      question: '점심 뭐 먹지?',
+    });
+  });
+
+  it('expense.added: 분담 참가자(shareUserIds) − actor 에게만 발행한다(모임 방송 아님)', async () => {
+    // 이 핸들러는 moim_member 를 조회하지 않고 payload.shareUserIds 를 직접 쓴다.
+    const { listener, mocks } = makeListener([]);
+    const payload: MoimExpenseAddedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      expenseId: 'exp-1',
+      amount: 9000,
+      category: '식비',
+      shareUserIds: ['sub-owner', 'sub-2', 'sub-3'],
+    };
+
+    await listener.handleExpenseAdded(payload);
+
+    const arg = mocks.createMany.mock.calls[0][0];
+    const recipients = arg.data.map((r) => r.recipientId).sort();
+    // actor(sub-owner) 제외 — 분담 참가자에게만.
+    expect(recipients).toEqual(['sub-2', 'sub-3']);
+    expect(arg.data[0].type).toBe('expense.added');
+    expect(arg.data[0].data).toEqual({
+      expenseId: 'exp-1',
+      amount: 9000,
+      category: '식비',
+    });
+    expect(mocks.memberFindMany).not.toHaveBeenCalled();
+  });
+
+  it('expense.added: 분담 참가자가 actor 뿐이면 수신자 0명 — createMany 미호출', async () => {
+    const { listener, mocks } = makeListener([]);
+    const payload: MoimExpenseAddedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      expenseId: 'exp-1',
+      amount: 9000,
+      category: '식비',
+      shareUserIds: ['sub-owner'],
+    };
+
+    await listener.handleExpenseAdded(payload);
+
+    expect(mocks.createMany).not.toHaveBeenCalled();
+  });
+
+  it('settlement.requested: 채무자(debtorId)에게만 data{amount} 로 발행한다', async () => {
+    const { listener, mocks } = makeListener([]);
+    const payload: MoimSettlementRequestedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      debtorId: 'sub-2',
+      amount: 4000,
+    };
+
+    await listener.handleSettlementRequested(payload);
+
+    const arg = mocks.createMany.mock.calls[0][0];
+    expect(arg.data.map((r) => r.recipientId)).toEqual(['sub-2']);
+    expect(arg.data[0].type).toBe('settlement.requested');
+    expect(arg.data[0].data).toEqual({ amount: 4000 });
+  });
+
+  it('settlement.completed: 상대방(counterpartyId)에게만 data{amount} 로 발행한다', async () => {
+    const { listener, mocks } = makeListener([]);
+    const payload: MoimSettlementCompletedPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      counterpartyId: 'sub-3',
+      amount: 5000,
+    };
+
+    await listener.handleSettlementCompleted(payload);
+
+    const arg = mocks.createMany.mock.calls[0][0];
+    expect(arg.data.map((r) => r.recipientId)).toEqual(['sub-3']);
+    expect(arg.data[0].type).toBe('settlement.completed');
+    expect(arg.data[0].data).toEqual({ amount: 5000 });
+  });
+
+  it('best-effort: moim-wide 핸들러의 조회 실패는 throw 하지 않는다(발행 격리)', async () => {
+    const { listener, mocks } = makeListener([member('sub-2')]);
+    mocks.memberFindMany.mockRejectedValueOnce(new Error('DB down'));
+    const payload: MoimOwnerTransferredPayload = {
+      moimId: 'moim-A',
+      actorId: 'sub-owner',
+      newOwnerId: 'sub-2',
+    };
+
+    await expect(
+      listener.handleOwnerTransferred(payload),
+    ).resolves.toBeUndefined();
     expect(mocks.createMany).not.toHaveBeenCalled();
   });
 });

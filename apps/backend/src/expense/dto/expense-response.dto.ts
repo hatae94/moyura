@@ -128,6 +128,37 @@ export class CreateSettlementDto {
   amount!: number;
 }
 
+// SPEC-NOTIFICATIONS-001 M2: 정산 요청 생성 바디 DTO(채권자 → 채무자). requesterId 는 가드-검증 sub 로 서버가
+// 채우므로 바디에 없다(mass-assignment 차단). amount 는 KRW 정수.
+export class RequestSettlementDto {
+  @ApiProperty({ description: '채무자 멤버 sub(돈을 낼 사람)' })
+  debtorId!: string;
+
+  @ApiProperty({ description: '정산 요청 금액(KRW 정수)', example: 4000 })
+  amount!: number;
+}
+
+// SPEC-NOTIFICATIONS-001 M2: 정산 요청 응답 DTO.
+export class SettlementRequestResponseDto {
+  @ApiProperty({ description: '정산 요청 id' })
+  id!: string;
+
+  @ApiProperty({ description: '모임 id' })
+  moimId!: string;
+
+  @ApiProperty({ description: '요청자 sub(채권자)' })
+  requesterId!: string;
+
+  @ApiProperty({ description: '채무자 sub' })
+  debtorId!: string;
+
+  @ApiProperty({ description: '요청 금액(KRW 정수)' })
+  amount!: number;
+
+  @ApiProperty({ description: '요청 생성 시각(ISO-8601)' })
+  createdAt!: string;
+}
+
 // Settlement 마커 응답 DTO.
 export class SettlementResponseDto {
   @ApiProperty({ description: 'Settlement 마커 id' })

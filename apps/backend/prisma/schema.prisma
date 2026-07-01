@@ -57,6 +57,9 @@ model Moim {
   // SPEC-MOIM-EXPENSE-001 REQ-EXP-001: 경비 역참조(additive). moim 테이블 자체는 budget 컬럼 추가 외 무변경.
   expenses    Expense[]
   settlements Settlement[]
+  // SPEC-NOTIFICATIONS-001 M2: 정산 요청 역참조(additive). moim 테이블 자체는 무변경 — settlement_request 만
+  // 신규 CREATE. 모임 삭제 시 그 모임의 정산 요청도 Cascade 로 함께 정리된다(고아 요청 방지).
+  settlementRequests SettlementRequest[]
   // SPEC-MOIM-EXPENSE-001 REQ-EXP-001: 선택적 모임 예산(KRW 정수, nullable). 미설정=null(남은예산 카드 미표시).
   budget      Int?         @map("budget")
   // SPEC-SCHEDULE-001: 일정 조율 세션 역참조(additive, 모임당 0..1). moim 테이블 자체는 무변경 —
@@ -119,6 +122,28 @@ model Settlement {
 
   @@index([moimId])
   @@map("settlement")
+}
+
+// SPEC-NOTIFICATIONS-001 M2: 정산 "요청"(creditor → debtor 지불 요청). 기존 Settlement(정산 "완료" 마커)와
+// 의도적으로 분리한 별도 테이블이다 — Settlement 는 listExpenses 가 (from,to,amount) 로 매칭해 settled=true 를
+// 계산하는 "완료됨" 스냅샷이라, 여기에 status 컬럼을 얹으면 그 매칭 로직에 "요청(pending)" 행이 섞여 settled
+// 계산을 오염시킨다(회귀 위험). 두 개념(요청=아직 안 냄 / 완료=냈음)을 별 테이블로 분리하면 인가·수명주기·이벤트
+// (settlement.requested→채무자 / settlement.completed→요청자)가 각각 독립적이다. surrogate id PK.
+// FK ON DELETE CASCADE — moim 삭제 시 요청도 정리된다. RLS enable + 정책 없음(notification 선례 default deny).
+model SettlementRequest {
+  id          String   @id @default(uuid())
+  moimId      String   @map("moim_id")
+  // 요청자 sub(= 채권자, 돈을 받을 사람). 가드-검증 sub 만 들어온다(mass-assignment 차단 — 전 도메인 동일).
+  requesterId String   @map("requester_id")
+  // 채무자 sub(= 돈을 낼 사람). 알림 수신 대상(settlement.requested → debtorId).
+  debtorId    String   @map("debtor_id")
+  amount      Int
+  createdAt   DateTime @default(now()) @map("created_at")
+  moim        Moim     @relation(fields: [moimId], references: [id], onDelete: Cascade)
+
+  // 모임별 정산 요청 조회를 커버한다.
+  @@index([moimId])
+  @@map("settlement_request")
 }
 
 // SPEC-MOIM-002 초대 링크(REQ-INV-001~006). 모임당 다중 초대 + 만료(기본 7일/상한 30일) + 선택적 max_uses + revoke.

@@ -3,9 +3,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ScheduleEvent, ScheduleSlot } from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  MOIM_SCHEDULE_CONFIRMED,
+  MOIM_SCHEDULE_DATES_CHANGED,
+  MOIM_SCHEDULE_STARTED,
+  MOIM_SCHEDULE_WINDOW_CHANGED,
+  type MoimScheduleConfirmedPayload,
+  type MoimScheduleDatesChangedPayload,
+  type MoimScheduleStartedPayload,
+  type MoimScheduleWindowChangedPayload,
+} from './schedule-events';
 
 // 세션 + 전체 멤버 슬롯(GET 응답 / 변경 후 반환의 형태).
 export type ScheduleEventWithSlots = ScheduleEvent & { slots: ScheduleSlot[] };
@@ -27,7 +38,23 @@ export class ScheduleService {
     private readonly prisma: PrismaService,
     // 인가는 MoimService.assertOwner/assertMember 단일 출처를 재사용한다(재구현 금지 — expense/poll 동일).
     private readonly moim: MoimService,
+    // SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행기(전역 EventEmitterModule.forRoot()). setSchedule(create)/
+    // updateDates/updateWindow/confirmSchedule 성공 후 moim.schedule.* 를 발행한다 — NotificationListener 가 구독.
+    private readonly events: EventEmitter2,
   ) {}
+
+  // 일정 조율 도메인 이벤트 best-effort 발행 헬퍼(SPEC-NOTIFICATIONS-001 M2). 리스너 예외가 이미 성립한
+  // 영속(일정 변경)을 무효화하지 않도록 try/catch 로 격리한다(발행 실패는 로깅만 — 삼킴 아님).
+  private emitScheduleEvent(name: string, payload: unknown): void {
+    try {
+      this.events.emit(name, payload);
+    } catch (err) {
+      console.error(
+        `[ScheduleService] ${name} 발행 실패:`,
+        err instanceof Error ? err.message : 'unknown error',
+      );
+    }
+  }
 
   // 일정 조율 세션 설정/재설정(owner 전용). moimId @unique 라 모임당 1개 — 재설정은 upsert.
   // 재설정 시 후보 날짜/시간 범위가 바뀌어 기존 슬롯이 무효가 되므로 전부 삭제하고 confirmedAt 도 리셋한다.
@@ -65,7 +92,7 @@ export class ScheduleService {
       });
     }
 
-    return this.prisma.scheduleEvent.create({
+    const created = await this.prisma.scheduleEvent.create({
       data: {
         moimId,
         createdBy: sub,
@@ -76,6 +103,16 @@ export class ScheduleService {
       },
       include: { slots: true },
     });
+
+    // SPEC-NOTIFICATIONS-001 M2: create 경로에서만 발행한다 — 위 재설정(update) 경로는 발행하지 않는다(소음 방지).
+    const payload: MoimScheduleStartedPayload = {
+      moimId,
+      actorId: sub,
+      scheduleEventId: created.id,
+    };
+    this.emitScheduleEvent(MOIM_SCHEDULE_STARTED, payload);
+
+    return created;
   }
 
   // 세션 + 전체 멤버 슬롯 조회(멤버 한정). 미설정이면 null(빈 상태 UI). 비멤버/없는 모임 → assertMember 가 throw.
@@ -172,6 +209,14 @@ export class ScheduleService {
         data: { confirmedAt: new Date() },
       }),
     ]);
+
+    // SPEC-NOTIFICATIONS-001 M2: 확정 트랜잭션 커밋 이후에만 발행한다. startsAt 은 원시 문자열(ISO)로 운반한다.
+    const payload: MoimScheduleConfirmedPayload = {
+      moimId,
+      actorId: sub,
+      startsAt: startsAt.toISOString(),
+    };
+    this.emitScheduleEvent(MOIM_SCHEDULE_CONFIRMED, payload);
   }
 
   // 세션 삭제/초기화(owner). 없어도 멱등(no-op). event DELETE 트리거가 방송, 슬롯은 Cascade 정리.
@@ -215,6 +260,11 @@ export class ScheduleService {
         include: { slots: true },
       }),
     ]);
+
+    // SPEC-NOTIFICATIONS-001 M2: 날짜 편집 트랜잭션 커밋 이후에만 발행한다(수신 대상 = 멤버 − actor).
+    const payload: MoimScheduleDatesChangedPayload = { moimId, actorId: sub };
+    this.emitScheduleEvent(MOIM_SCHEDULE_DATES_CHANGED, payload);
+
     return updated;
   }
 
@@ -243,11 +293,17 @@ export class ScheduleService {
     this.validateWindow(event, startMinute, endMinute);
 
     // 넓히기 전용이라 기존 슬롯은 모두 범위 안에 남는다(삭제 없음). update = touch → 트리거 1회 방송.
-    return this.prisma.scheduleEvent.update({
+    const updated = await this.prisma.scheduleEvent.update({
       where: { id: event.id },
       data: { startMinute, endMinute },
       include: { slots: true },
     });
+
+    // SPEC-NOTIFICATIONS-001 M2: 시간대 넓히기 성공 이후에만 발행한다(수신 대상 = 멤버 − actor).
+    const payload: MoimScheduleWindowChangedPayload = { moimId, actorId: sub };
+    this.emitScheduleEvent(MOIM_SCHEDULE_WINDOW_CHANGED, payload);
+
+    return updated;
   }
 
   // ── 검증 ────────────────────────────────────────────────────────────────────
