@@ -27,7 +27,11 @@ export class ScheduleEventDto {
   @ApiProperty({ description: '생성자 sub', example: 'uuid' })
   createdBy!: string;
 
-  @ApiProperty({ description: '후보 날짜 배열', type: [String], example: ['2026-07-05', '2026-07-06'] })
+  @ApiProperty({
+    description: '후보 날짜 배열',
+    type: [String],
+    example: ['2026-07-05', '2026-07-06'],
+  })
   dates!: string[];
 
   @ApiProperty({ description: '하루 시작(분)', example: 1080 })
@@ -40,7 +44,8 @@ export class ScheduleEventDto {
   slotMinutes!: number;
 
   @ApiPropertyOptional({
-    description: '확정 시각(ISO datetime, nullable). 있으면 moim.startsAt 이 확정되어 그리드가 읽기 전용.',
+    description:
+      '확정 시각(ISO datetime, nullable). 있으면 moim.startsAt 이 확정되어 그리드가 읽기 전용.',
     example: '2026-07-01T12:00:00.000Z',
     nullable: true,
   })

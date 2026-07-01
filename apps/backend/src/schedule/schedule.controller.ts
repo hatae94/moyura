@@ -41,10 +41,15 @@ export class ScheduleController {
 
   // PUT /moims/:id/schedule — 세션 설정/재설정(owner 전용). 200. 재설정은 멤버 슬롯을 초기화한다.
   @Put()
-  @ApiOkResponse({ description: '일정 조율 세션 설정/재설정', type: ScheduleResponseDto })
+  @ApiOkResponse({
+    description: '일정 조율 세션 설정/재설정',
+    type: ScheduleResponseDto,
+  })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   @ApiForbiddenResponse({ description: 'owner 아님(또는 모임 미존재) — 403' })
-  @ApiBadRequestResponse({ description: '날짜/시간 범위/슬롯 단위 검증 실패 — 400' })
+  @ApiBadRequestResponse({
+    description: '날짜/시간 범위/슬롯 단위 검증 실패 — 400',
+  })
   async set(
     @CurrentUser() user: VerifiedUser,
     @Param('id') moimId: string,
@@ -71,7 +76,10 @@ export class ScheduleController {
 
   // GET /moims/:id/schedule — 세션 + 전체 멤버 슬롯(멤버 한정). 200. 미설정이면 schedule=null.
   @Get()
-  @ApiOkResponse({ description: '일정 조율 세션(미설정이면 null)', type: ScheduleResponseDto })
+  @ApiOkResponse({
+    description: '일정 조율 세션(미설정이면 null)',
+    type: ScheduleResponseDto,
+  })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   @ApiForbiddenResponse({ description: '멤버 아님(또는 모임 미존재) — 403' })
   async get(
@@ -104,7 +112,9 @@ export class ScheduleController {
   @ApiNoContentResponse({ description: '일정 확정(moim.startsAt 갱신)' })
   @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
   @ApiForbiddenResponse({ description: 'owner 아님(또는 모임 미존재) — 403' })
-  @ApiBadRequestResponse({ description: '미설정/후보 밖 날짜/범위 밖 시각 — 400' })
+  @ApiBadRequestResponse({
+    description: '미설정/후보 밖 날짜/범위 밖 시각 — 400',
+  })
   async confirm(
     @CurrentUser() user: VerifiedUser,
     @Param('id') moimId: string,
@@ -162,11 +172,13 @@ function requireSlotArray(value: unknown): SlotInput[] {
   if (!Array.isArray(value)) {
     throw new BadRequestException('slots 는 배열이어야 합니다');
   }
-  return value.map((s, i) => {
+  // Array.isArray 는 any[] 로 좁히므로 unknown[] 로 재캐스팅해 각 원소를 명시적으로 검증한다(no-unsafe 회피).
+  return (value as unknown[]).map((raw, i): SlotInput => {
+    const s = raw as { date?: unknown; startMinute?: unknown };
     if (
-      typeof s?.date !== 'string' ||
+      typeof s.date !== 'string' ||
       s.date.trim().length === 0 ||
-      !Number.isInteger(s?.startMinute)
+      !Number.isInteger(s.startMinute)
     ) {
       throw new BadRequestException(
         `slots[${i}] 형식이 올바르지 않습니다(date:string, startMinute:int)`,

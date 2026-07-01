@@ -1,5 +1,9 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import type { Moim, ScheduleEvent, ScheduleSlot } from '../generated/prisma/client';
+import type {
+  Moim,
+  ScheduleEvent,
+  ScheduleSlot,
+} from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { ScheduleService, computeStartsAt } from './schedule.service';
@@ -39,13 +43,16 @@ describe('ScheduleService', () => {
   }
 
   function slotsFor(eventId: string): ScheduleSlot[] {
-    return [...tables.slot.values()].filter((s) => s.scheduleEventId === eventId);
+    return [...tables.slot.values()].filter(
+      (s) => s.scheduleEventId === eventId,
+    );
   }
 
   // ── fake Prisma (ScheduleService 가 쓰는 메서드만 구현) ──────────────────────
+  // expense.service.spec 패턴: async 대신 Promise.resolve/reject 반환(require-await 회피, 반환은 Promise 유지).
   const prisma = {
     scheduleEvent: {
-      findUnique: async ({
+      findUnique: ({
         where: { moimId },
         include,
       }: {
@@ -53,14 +60,19 @@ describe('ScheduleService', () => {
         include?: { slots: true };
       }) => {
         const ev = tables.event.get(moimId) ?? null;
-        if (!ev) return null;
-        return include ? { ...ev, slots: slotsFor(ev.id) } : ev;
+        if (!ev) return Promise.resolve(null);
+        return Promise.resolve(
+          include ? { ...ev, slots: slotsFor(ev.id) } : ev,
+        );
       },
-      create: async ({
+      create: ({
         data,
         include,
       }: {
-        data: Omit<ScheduleEvent, 'id' | 'confirmedAt' | 'createdAt' | 'updatedAt'>;
+        data: Omit<
+          ScheduleEvent,
+          'id' | 'confirmedAt' | 'createdAt' | 'updatedAt'
+        >;
         include?: { slots: true };
       }) => {
         const ev: ScheduleEvent = {
@@ -69,11 +81,13 @@ describe('ScheduleService', () => {
           confirmedAt: null,
           createdAt: NOW,
           updatedAt: NOW,
-        } as ScheduleEvent;
+        };
         tables.event.set(data.moimId, ev);
-        return include ? { ...ev, slots: slotsFor(ev.id) } : ev;
+        return Promise.resolve(
+          include ? { ...ev, slots: slotsFor(ev.id) } : ev,
+        );
       },
-      update: async ({
+      update: ({
         where,
         data,
         include,
@@ -85,24 +99,27 @@ describe('ScheduleService', () => {
         const ev = where.moimId
           ? tables.event.get(where.moimId)
           : [...tables.event.values()].find((e) => e.id === where.id);
-        if (!ev) throw new Error('event not found');
+        if (!ev) return Promise.reject(new Error('event not found'));
         const next = { ...ev, ...data, updatedAt: NOW };
         tables.event.set(ev.moimId, next);
-        return include ? { ...next, slots: slotsFor(ev.id) } : next;
+        return Promise.resolve(
+          include ? { ...next, slots: slotsFor(ev.id) } : next,
+        );
       },
-      deleteMany: async ({ where: { moimId } }: { where: { moimId: string } }) => {
+      deleteMany: ({ where: { moimId } }: { where: { moimId: string } }) => {
         const ev = tables.event.get(moimId);
         if (ev) {
           for (const k of [...tables.slot.keys()]) {
-            if (tables.slot.get(k)!.scheduleEventId === ev.id) tables.slot.delete(k);
+            if (tables.slot.get(k)?.scheduleEventId === ev.id)
+              tables.slot.delete(k);
           }
           tables.event.delete(moimId);
         }
-        return { count: ev ? 1 : 0 };
+        return Promise.resolve({ count: ev ? 1 : 0 });
       },
     },
     scheduleSlot: {
-      deleteMany: async ({
+      deleteMany: ({
         where: { scheduleEventId, userId },
       }: {
         where: { scheduleEventId: string; userId?: string };
@@ -117,23 +134,28 @@ describe('ScheduleService', () => {
             count += 1;
           }
         }
-        return { count };
+        return Promise.resolve({ count });
       },
-      createMany: async ({
+      createMany: ({
         data,
       }: {
-        data: Array<{ scheduleEventId: string; userId: string; date: string; startMinute: number }>;
+        data: Array<{
+          scheduleEventId: string;
+          userId: string;
+          date: string;
+          startMinute: number;
+        }>;
         skipDuplicates?: boolean;
       }) => {
         for (const d of data) {
           const k = slotKey(d.scheduleEventId, d.userId, d.date, d.startMinute);
-          tables.slot.set(k, { ...d, createdAt: NOW } as ScheduleSlot);
+          tables.slot.set(k, { ...d, createdAt: NOW });
         }
-        return { count: data.length };
+        return Promise.resolve({ count: data.length });
       },
     },
     moim: {
-      update: async ({
+      update: ({
         where: { id },
         data,
       }: {
@@ -143,21 +165,23 @@ describe('ScheduleService', () => {
         const m = tables.moim.get(id) ?? ({ id } as Moim);
         const next = { ...m, ...data };
         tables.moim.set(id, next);
-        return next;
+        return Promise.resolve(next);
       },
     },
     // ScheduleService 는 $transaction(배열)을 쓴다. fake 는 eager 평가된 Promise 들을 모아 await 한다.
-    $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
+    $transaction: (ops: Promise<unknown>[]) => Promise.all(ops),
   } as unknown as PrismaService;
 
   // ── stub MoimService (owner/member 집합 기반 인가) ──────────────────────────
   const moim = {
-    assertOwner: async (sub: string, moimId: string) => {
-      if (owners.get(moimId) !== sub) throw new ForbiddenException();
-    },
-    assertMember: async (sub: string, moimId: string) => {
-      if (!members.has(`${moimId}:${sub}`)) throw new ForbiddenException();
-    },
+    assertOwner: (sub: string, moimId: string) =>
+      owners.get(moimId) === sub
+        ? Promise.resolve()
+        : Promise.reject(new ForbiddenException()),
+    assertMember: (sub: string, moimId: string) =>
+      members.has(`${moimId}:${sub}`)
+        ? Promise.resolve()
+        : Promise.reject(new ForbiddenException()),
   } as unknown as MoimService;
 
   beforeEach(() => {
@@ -238,9 +262,16 @@ describe('ScheduleService', () => {
     });
 
     it('재설정 시 기존 슬롯 초기화 + 확정 해제', async () => {
-      await service.setSchedule('owner', MOIM_ID, ['2026-07-04'], 1080, 1440, 30);
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
       // 멤버 슬롯 + 확정 시드
-      const ev = tables.event.get(MOIM_ID)!;
+      const ev = tables.event.get(MOIM_ID);
       tables.slot.set(slotKey(ev.id, 'm2', '2026-07-04', 1080), {
         scheduleEventId: ev.id,
         userId: 'm2',
@@ -250,17 +281,31 @@ describe('ScheduleService', () => {
       });
       tables.event.set(MOIM_ID, { ...ev, confirmedAt: NOW });
 
-      await service.setSchedule('owner', MOIM_ID, ['2026-07-05'], 1080, 1440, 30);
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-05'],
+        1080,
+        1440,
+        30,
+      );
       expect(slotsFor(EVENT_ID)).toHaveLength(0);
-      expect(tables.event.get(MOIM_ID)!.confirmedAt).toBeNull();
-      expect(tables.event.get(MOIM_ID)!.dates).toEqual(['2026-07-05']);
+      expect(tables.event.get(MOIM_ID).confirmedAt).toBeNull();
+      expect(tables.event.get(MOIM_ID).dates).toEqual(['2026-07-05']);
     });
   });
 
   // ── setMyAvailability ─────────────────────────────────────────────────────
   describe('setMyAvailability', () => {
     async function seedEvent(): Promise<void> {
-      await service.setSchedule('owner', MOIM_ID, ['2026-07-04'], 1080, 1440, 30);
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
     }
 
     it('비멤버 403', async () => {
@@ -278,7 +323,7 @@ describe('ScheduleService', () => {
 
     it('확정된 세션은 수정 불가(400)', async () => {
       await seedEvent();
-      const ev = tables.event.get(MOIM_ID)!;
+      const ev = tables.event.get(MOIM_ID);
       tables.event.set(MOIM_ID, { ...ev, confirmedAt: NOW });
       await expect(
         service.setMyAvailability('owner', MOIM_ID, [
@@ -340,14 +385,21 @@ describe('ScheduleService', () => {
       const all = slotsFor(EVENT_ID);
       expect(all.filter((s) => s.userId === 'owner')).toHaveLength(1);
       expect(all.filter((s) => s.userId === 'm2')).toHaveLength(1);
-      expect(all.find((s) => s.userId === 'owner')!.startMinute).toBe(1140);
+      expect(all.find((s) => s.userId === 'owner').startMinute).toBe(1140);
     });
   });
 
   // ── confirmSchedule ───────────────────────────────────────────────────────
   describe('confirmSchedule', () => {
     async function seedEvent(): Promise<void> {
-      await service.setSchedule('owner', MOIM_ID, ['2026-07-04'], 1080, 1440, 30);
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
     }
 
     it('비-owner 403', async () => {
@@ -367,10 +419,10 @@ describe('ScheduleService', () => {
     it('정상 확정 → moim.startsAt 갱신 + confirmedAt', async () => {
       await seedEvent();
       await service.confirmSchedule('owner', MOIM_ID, '2026-07-04', 1320);
-      expect(tables.moim.get(MOIM_ID)!.startsAt!.toISOString()).toBe(
+      expect(tables.moim.get(MOIM_ID).startsAt.toISOString()).toBe(
         '2026-07-04T13:00:00.000Z',
       );
-      expect(tables.event.get(MOIM_ID)!.confirmedAt).not.toBeNull();
+      expect(tables.event.get(MOIM_ID).confirmedAt).not.toBeNull();
     });
   });
 
@@ -383,11 +435,20 @@ describe('ScheduleService', () => {
     });
 
     it('owner 삭제 + 멱등(없어도 성공)', async () => {
-      await service.setSchedule('owner', MOIM_ID, ['2026-07-04'], 1080, 1440, 30);
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
       await service.deleteSchedule('owner', MOIM_ID);
       expect(tables.event.get(MOIM_ID)).toBeUndefined();
       // 멱등 — 다시 호출해도 throw 하지 않음
-      await expect(service.deleteSchedule('owner', MOIM_ID)).resolves.toBeUndefined();
+      await expect(
+        service.deleteSchedule('owner', MOIM_ID),
+      ).resolves.toBeUndefined();
     });
   });
 });

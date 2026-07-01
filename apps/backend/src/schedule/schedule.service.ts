@@ -66,7 +66,14 @@ export class ScheduleService {
     }
 
     return this.prisma.scheduleEvent.create({
-      data: { moimId, createdBy: sub, dates, startMinute, endMinute, slotMinutes },
+      data: {
+        moimId,
+        createdBy: sub,
+        dates,
+        startMinute,
+        endMinute,
+        slotMinutes,
+      },
       include: { slots: true },
     });
   }
@@ -198,9 +205,15 @@ export class ScheduleService {
       throw new BadRequestException('후보 날짜에 중복이 있습니다');
     }
     if (!ALLOWED_SLOT_MINUTES.includes(slotMinutes as never)) {
-      throw new BadRequestException('슬롯 단위는 15/30/60분 중 하나여야 합니다');
+      throw new BadRequestException(
+        '슬롯 단위는 15/30/60분 중 하나여야 합니다',
+      );
     }
-    if (!Number.isInteger(startMinute) || startMinute < 0 || startMinute > 1440) {
+    if (
+      !Number.isInteger(startMinute) ||
+      startMinute < 0 ||
+      startMinute > 1440
+    ) {
       throw new BadRequestException('시작 시각이 올바르지 않습니다(0~1440분)');
     }
     if (!Number.isInteger(endMinute) || endMinute <= startMinute) {
@@ -210,15 +223,14 @@ export class ScheduleService {
       throw new BadRequestException('시간 범위가 너무 넓습니다(최대 48시간)');
     }
     if ((endMinute - startMinute) % slotMinutes !== 0) {
-      throw new BadRequestException('시간 범위가 슬롯 단위로 나누어떨어지지 않습니다');
+      throw new BadRequestException(
+        '시간 범위가 슬롯 단위로 나누어떨어지지 않습니다',
+      );
     }
   }
 
   // 멤버 슬롯 검증: 각 슬롯의 날짜가 후보에 있고, startMinute 이 시간 범위·격자에 정렬되는지 확인 후 중복 제거.
-  private validateSlots(
-    event: ScheduleEvent,
-    slots: SlotInput[],
-  ): SlotInput[] {
+  private validateSlots(event: ScheduleEvent, slots: SlotInput[]): SlotInput[] {
     if (!Array.isArray(slots)) {
       throw new BadRequestException('슬롯 형식이 올바르지 않습니다');
     }
@@ -227,7 +239,9 @@ export class ScheduleService {
     const result: SlotInput[] = [];
     for (const s of slots) {
       if (typeof s?.date !== 'string' || !dateSet.has(s.date)) {
-        throw new BadRequestException(`후보 날짜가 아닌 슬롯입니다: ${s?.date}`);
+        throw new BadRequestException(
+          `후보 날짜가 아닌 슬롯입니다: ${s?.date}`,
+        );
       }
       this.assertSlotAligned(event, s.startMinute);
       const key = `${s.date}#${s.startMinute}`;

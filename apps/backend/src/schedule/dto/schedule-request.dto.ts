@@ -57,7 +57,8 @@ export class SetAvailabilityDto {
 // 선택한 (date, startMinute)을 moim.startsAt 으로 확정한다(KST 기준 절대 시각 계산).
 export class ConfirmScheduleDto {
   @ApiProperty({
-    description: '확정할 날짜(ISO date "YYYY-MM-DD"). 세션 dates 중 하나여야 한다.',
+    description:
+      '확정할 날짜(ISO date "YYYY-MM-DD"). 세션 dates 중 하나여야 한다.',
     example: '2026-07-05',
   })
   date!: string;
