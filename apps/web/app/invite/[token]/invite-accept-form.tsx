@@ -13,6 +13,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { createApiClient } from "@moyura/api-client";
@@ -177,10 +178,15 @@ export function InviteAcceptForm({
       <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-8">
         <div className="animate-fade-in-up w-full max-w-sm">
           <div className="mb-8 flex flex-col items-center text-center">
-            {/* 그라데이션 환영 배지 — 모임 초대 첫인상. */}
-            <div className="bg-gradient-brand-animated animate-scale-in mb-4 flex h-16 w-16 items-center justify-center rounded-[1.4rem] shadow-lg shadow-primary/20">
-              <span className="text-3xl">🎉</span>
-            </div>
+            {/* 공식 앱 아이콘 — 모임 초대 첫인상(브랜드 일관성, 임시 이모지 대체). */}
+            <Image
+              src="/app-icon.png"
+              alt="moyura"
+              width={64}
+              height={64}
+              priority
+              className="animate-scale-in mb-4 h-16 w-16 rounded-[1.4rem] shadow-lg shadow-primary/20"
+            />
             <h1 className="text-2xl font-extrabold tracking-tight mb-2">모임 초대</h1>
             <p className="text-muted-foreground">닉네임을 입력하고 모임에 참여하세요.</p>
           </div>
