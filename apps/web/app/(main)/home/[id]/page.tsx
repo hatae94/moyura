@@ -28,10 +28,12 @@ import {
   moimErrorStatus,
 } from "@/lib/moim/api";
 import { type PollWithResults, listPolls } from "@/lib/moim/polls";
+import { type ScheduleEvent, getSchedule } from "@/lib/schedule/api";
 import { PollsSection } from "./polls-section";
 import { InviteButton } from "./invite-button";
 import { MembersSection } from "./members-section";
 import { MoimActionDock } from "./moim-action-dock";
+import { ScheduleVoteBar } from "./schedule-vote-bar";
 
 
 export default async function MoimDetailPage({
@@ -74,12 +76,16 @@ export default async function MoimDetailPage({
   // SPEC-MOIM-006: 투표 목록 + 결과(multiSelect + 호출자 myVotes 포함)를 서버에서 조회한다. 멤버십은 위 getMoim 이 이미
   // 통과시켰으므로(같은 assertMember 게이트) 정상 멤버에게는 성공한다. poll 조회 실패는 상세 전체를 막지 않고
   // 빈 배열로 graceful degrade 한다("아직 투표가 없어요" — 허위 값 금지). 인가는 위에서 이미 강제됐다.
-  let polls: PollWithResults[];
-  try {
-    polls = await listPolls(api, id);
-  } catch {
-    polls = [];
-  }
+  // 투표 + 일정 요약을 병렬 조회. 각각 실패해도 상세 전체는 막지 않는다(graceful degrade — 인가는 위에서 강제됨).
+  // polls 실패 → 빈 배열("아직 투표 없음"). schedule 실패 → undefined(요약 위젯 미렌더, 오해 소지 있는 CTA 방지).
+  const [pollsSettled, scheduleSettled] = await Promise.allSettled([
+    listPolls(api, id),
+    getSchedule(api, id),
+  ]);
+  const polls: PollWithResults[] =
+    pollsSettled.status === "fulfilled" ? pollsSettled.value : [];
+  const schedule: ScheduleEvent | null | undefined =
+    scheduleSettled.status === "fulfilled" ? scheduleSettled.value.schedule : undefined;
 
   const createdDate = new Date(moim.createdAt).toLocaleDateString("ko-KR", {
     year: "numeric",
@@ -129,6 +135,16 @@ export default async function MoimDetailPage({
       <div className="flex flex-1 flex-col gap-4 px-5 pb-24 pt-4">
         {/* 채팅·일정 조율·경비 액션은 우측 하단 speed dial FAB(MoimActionDock)로 이동했다 — 트리 끝에서 렌더.
             목적지/기능은 동일하며, 초대·멤버·투표는 콘텐츠 흐름에 그대로 유지한다. */}
+
+        {/* 최상단 — 후보 날짜별 참여(투표) 현황 가로 스크롤 바 그래프(일정 조율 요약). 미설정이면 "시작" CTA.
+            조회 실패(undefined) 시에만 미렌더(오해 소지 있는 CTA 노출 방지). 탭 → 일정 조율 페이지. */}
+        {schedule !== undefined ? (
+          <ScheduleVoteBar
+            moimId={moim.id}
+            schedule={schedule}
+            memberCount={members.length}
+          />
+        ) : null}
 
         {/* SPEC-MOIM-011: owner 전용 초대 링크 발급(비-owner 면 null 렌더). 모바일 WebView 안에서도 동작. */}
         <InviteButton moimId={moim.id} isOwner={isOwner} />
