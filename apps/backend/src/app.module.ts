@@ -9,6 +9,7 @@ import { ExpenseModule } from './expense/expense.module';
 import { HealthModule } from './health/health.module';
 import { InviteModule } from './invite/invite.module';
 import { MoimModule } from './moim/moim.module';
+import { NotificationModule } from './notification/notification.module';
 import { PollModule } from './poll/poll.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfileModule } from './profile/profile.module';
@@ -41,6 +42,9 @@ import { ScheduleModule } from './schedule/schedule.module';
     // 단방향 의존하고(@OnEvent 구독), chat은 push의 존재를 인식하지 않는다(REQ-PUSH-004 — 느슨한 결합 HARD).
     // FIREBASE_CREDENTIALS 부재 시 FcmSender는 no-op으로 동작해 자격증명 없이도 부팅이 성립한다(graceful degrade).
     PushModule,
+    // SPEC-NOTIFICATIONS-001 M1: 인앱 알림. NotificationListener 가 invite 가 export 한 moim.member.joined 계약에만
+    // 단방향 의존한다(@OnEvent 구독). invite/moim 도메인은 notification 의 존재를 인식하지 않는다(느슨한 결합 HARD).
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

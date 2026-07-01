@@ -62,6 +62,9 @@ model Moim {
   // SPEC-SCHEDULE-001: 일정 조율 세션 역참조(additive, 모임당 0..1). moim 테이블 자체는 무변경 —
   // schedule_event/schedule_slot 만 신규 CREATE. 모임 삭제 시 Cascade 로 함께 정리된다.
   schedule    ScheduleEvent?
+  // SPEC-NOTIFICATIONS-001 M1: 인앱 알림 역참조(additive). moim 테이블 자체는 무변경 — notification 만 신규
+  // CREATE. 모임 삭제 시 그 모임 컨텍스트의 알림도 Cascade 로 함께 정리된다(고아 알림 방지).
+  notifications Notification[]
 
   @@map("moim")
 }
@@ -316,4 +319,35 @@ model ScheduleSlot {
   // 멤버당 슬롯당 1행 불변식(중복 칠 방지). PUT /me 교체 저장이 이 PK 에 의존한다.
   @@id([scheduleEventId, userId, date, startMinute])
   @@map("schedule_slot")
+}
+
+// SPEC-NOTIFICATIONS-001 M1 인앱 알림(fan-out = 수신자당 1행). 모임 정원 상한(≈15)으로 이벤트당 쓰기가
+// 유계라 fan-out 을 채택한다 — read/unread·미읽음 카운트가 단일 인덱스 O(log n)이고 readAt 이 행 자체에 있어
+// per-item/mark-all-read 가 자명하다. PushListener 의 수신자 산정(멤버 − actor)과 동형이라 리스너 로직을 답습한다.
+// id 는 BigInt autoincrement — chat_message 선례의 keyset 커서 기준(응답 DTO 는 id.toString()). type 은 Prisma
+// enum 이 아닌 String 컬럼(poll.kind/expense.category/device_token.platform 컨벤션 — CREATE TYPE 마찰 회피).
+// 허용값은 도메인 상수(리스너 NOTIFICATION_TYPE_*)로 관리한다. 웹은 백엔드 API 로만 알림을 읽으므로(전 도메인
+// 동일) notification 테이블은 마이그레이션 수동 SQL 로 RLS enable + 정책 없음(PostgREST 직독 차단 = default deny).
+model Notification {
+  id          BigInt    @id @default(autoincrement())
+  // 수신자 sub(= profile.id). 가드-검증 sub 만 이 값으로 들어온다. 모든 조회는 recipientId=sub 로 필터한다.
+  recipientId String    @map("recipient_id")
+  // 알림 종류(enum 아님 — String 컬럼). 허용값은 리스너 상수(예: 'member.joined'). 이벤트명과는 별개 값이다.
+  type        String
+  // 컨텍스트 모임 id(현 전 타입 moim-scoped). Cascade 로 모임 삭제 시 알림도 정리된다.
+  moimId      String    @map("moim_id")
+  // 유발자 sub(nullable — 무행위자 알림 대비). nickname 은 저장하지 않고 응답 시점에 해석한다(트리거 thin 원칙).
+  actorId     String?   @map("actor_id")
+  // 타입별 미리보기 + 딥링크 타깃 id. M1 member.joined 는 추가 미리보기가 없어 {} 로 둔다(DB @default 도 "{}").
+  data        Json      @default("{}")
+  // nullable = 안읽음. 읽음 처리 시 now 로 갱신한다(mark-all/per-item).
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  moim        Moim      @relation(fields: [moimId], references: [id], onDelete: Cascade)
+
+  // 피드 keyset 페이지네이션: (recipientId, id desc)로 수신자별 최신순 조회를 커버한다.
+  @@index([recipientId, id(sort: Desc)])
+  // 미읽음 카운트 / mark-all: (recipientId, readAt)로 recipientId=sub AND readAt=null 필터를 커버한다.
+  @@index([recipientId, readAt])
+  @@map("notification")
 }

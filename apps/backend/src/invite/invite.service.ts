@@ -6,10 +6,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '../generated/prisma/client';
 import type { MoimInvite } from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  MOIM_MEMBER_JOINED,
+  type MoimMemberJoinedPayload,
+} from './invite-events';
 
 // 수락자에게 부여되는 멤버십 role(REQ-INV-005 — 항상 member, per-invite 역할은 비범위).
 const ROLE_MEMBER = 'member';
@@ -36,6 +41,9 @@ export class InviteService {
     // "모임 없음 → 404, owner 아님 → 403" 판정이 한 곳에 모여 드리프트를 막는다. 발급/목록/폐기 3개 관리
     // 경로가 모두 이 계약에 의존한다. 목록(list)은 live 토큰을 응답에 담으므로 owner 전용이어야 한다(REQ-INV-004).
     private readonly moim: MoimService,
+    // SPEC-NOTIFICATIONS-001 M1: 도메인 이벤트 발행기(전역 EventEmitterModule.forRoot()). accept 의 신규 멤버십
+    // 성공 경로에서만 moim.member.joined 를 발행한다 — NotificationListener 가 구독(느슨한 결합, invite→알림 인식 0).
+    private readonly events: EventEmitter2,
   ) {}
 
   // 초대 발급(REQ-INV-001 / AC-1). owner 전용 — assertOwner가 비-owner를 403으로 거른다.
@@ -150,7 +158,11 @@ export class InviteService {
     }
 
     // 멤버십 create + usedCount 조건부 원자 증가를 한 트랜잭션으로 묶는다.
-    return this.prisma.$transaction(async (tx) => {
+    // membershipCreated: "실제로 신규 멤버십이 생성되고 usedCount 증가까지 성공한" 경로에서만 true 로 세운다.
+    // 멱등(이미 멤버, early return) / 경합 P2002(트랜잭션 내 return invite) / 한도 초과(throw) 는 모두 false 유지 →
+    // 트랜잭션 커밋 이후 이 플래그로만 발행 여부를 판정한다(유령/중복 발행 방지 — plan §4).
+    let membershipCreated = false;
+    const result = await this.prisma.$transaction(async (tx) => {
       try {
         await tx.moimMember.create({
           data: {
@@ -163,7 +175,8 @@ export class InviteService {
       } catch (err) {
         // 동시 same-sub 수락 경합: 두 사용자가 멱등 선검사를 동시에 통과한 뒤 두 번째 create가
         // 복합 PK(moimId,userId) 유일성 위반(P2002)으로 던진다 → 멱등 성공으로 처리한다(AC-7 의도).
-        // usedCount는 증가시키지 않고(중복은 슬롯 소비 아님) 원본 invite를 반환한다.
+        // usedCount는 증가시키지 않고(중복은 슬롯 소비 아님) 원본 invite를 반환한다. membershipCreated=false 유지 →
+        // 경합 재수락은 알림을 발행하지 않는다(중복 발행 금지).
         if (
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === PRISMA_UNIQUE_VIOLATION
@@ -187,11 +200,34 @@ export class InviteService {
         data: { usedCount: { increment: 1 } },
       });
       if (updated.count === 0) {
-        // 동시 경합으로 한도 소진 → 멤버십 create 롤백 + 409(AC-3d 경계 동시성).
+        // 동시 경합으로 한도 소진 → 멤버십 create 롤백 + 409(AC-3d 경계 동시성). membershipCreated 미설정 → 미발행.
         throw new ConflictException('초대 사용 횟수를 초과했습니다');
       }
+      // 신규 멤버십 생성 + usedCount 원자 증가가 모두 성공한 유일한 경로.
+      membershipCreated = true;
       return { ...invite, usedCount: invite.usedCount + 1 };
     });
+
+    // @MX:NOTE: [AUTO] 트랜잭션 커밋 이후에만 moim.member.joined 를 발행한다(SPEC-NOTIFICATIONS-001 M1). "영속
+    // 성공 → 발행" 순서를 지켜(chat.service 선례) 저장 없는 발행이 없도록 보장하며, best-effort 격리로 리스너
+    // 예외가 이미 성립한 가입(accept)을 500 으로 만들지 않게 한다. 신규 멤버십 경로에서만 발행하고 멱등/경합/한도
+    // 초과 경로는 발행하지 않는다(actorId = 가입한 사용자 sub).
+    if (membershipCreated) {
+      const payload: MoimMemberJoinedPayload = {
+        moimId: invite.moimId,
+        actorId: sub,
+      };
+      try {
+        this.events.emit(MOIM_MEMBER_JOINED, payload);
+      } catch (err) {
+        // 발행 실패는 로깅만(삼킴 아님) — 전달은 느슨히 결합된 부가 작업이라 가입 성공을 무효화하지 않는다.
+        console.error(
+          `[InviteService] ${MOIM_MEMBER_JOINED} 발행 실패(moimId=${invite.moimId}):`,
+          err,
+        );
+      }
+    }
+    return result;
   }
 
   // @MX:ANCHOR: [AUTO] 비인증 초대 유효성 단일 진입점(SPEC-MOIM-011). 웹/모바일 랜딩 페이지가
