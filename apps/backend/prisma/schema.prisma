@@ -59,6 +59,9 @@ model Moim {
   settlements Settlement[]
   // SPEC-MOIM-EXPENSE-001 REQ-EXP-001: 선택적 모임 예산(KRW 정수, nullable). 미설정=null(남은예산 카드 미표시).
   budget      Int?         @map("budget")
+  // SPEC-SCHEDULE-001: 일정 조율 세션 역참조(additive, 모임당 0..1). moim 테이블 자체는 무변경 —
+  // schedule_event/schedule_slot 만 신규 CREATE. 모임 삭제 시 Cascade 로 함께 정리된다.
+  schedule    ScheduleEvent?
 
   @@map("moim")
 }
@@ -262,4 +265,55 @@ model DeviceToken {
   // 사용자별 토큰 조회(수신 대상 산정 시 userId in [...] 필터)를 커버한다.
   @@index([userId])
   @@map("device_token")
+}
+
+// SPEC-SCHEDULE-001 일정 조율 세션(When2meet 스타일). 모임당 0..1개(moimId @unique) — 텍스트 날짜 투표를
+// 대체하는 시각적 가능시간 조율. owner 가 후보 날짜들 + 하루 시간 범위를 설정하면, 멤버가 그리드에서 가능한
+// (날짜×시간 슬롯)을 칠하고, 히트맵으로 겹침을 본 뒤 owner 가 확정한다(→ moim.startsAt 갱신).
+//
+// [자정 넘김] 시간 범위는 "후보일 00:00 기준 분(minute)"으로 저장한다. endMinute 가 1440(24:00)을 넘으면
+// 다음날 새벽까지 이어지는 범위다(예: 18:00~익일 02:00 = startMinute 1080, endMinute 1560). 슬롯의
+// startMinute 도 같은 기준이라 1440 이상이면 자연히 다음날 슬롯이 된다 — 별도 날짜 컬럼 없이 한 축으로 표현된다.
+model ScheduleEvent {
+  id          String   @id @default(uuid())
+  // 모임당 1개(@unique) — 재설정은 upsert. owner 만 생성/재설정/확정/삭제할 수 있다.
+  moimId      String   @unique @map("moim_id")
+  // 생성자 sub(= profile.id). 가드-검증 sub 만 들어온다(mass-assignment 차단 — moim/expense 패턴 동일).
+  createdBy   String   @map("created_by")
+  // 후보 날짜 배열(ISO date "YYYY-MM-DD", 임의 다수). Postgres text[] — 연속 범위가 아닌 임의 날짜 선택 허용.
+  dates       String[] @map("dates")
+  // 하루 시간 범위(후보일 00:00 기준 분). endMinute > startMinute. endMinute > 1440 이면 자정 넘김(다음날 새벽).
+  startMinute Int      @map("start_minute")
+  endMinute   Int      @map("end_minute")
+  // 슬롯 단위(분). 기본 30분(When2meet 표준). 그리드 행 = (endMinute-startMinute)/slotMinutes 개.
+  slotMinutes Int      @default(30) @map("slot_minutes")
+  // 확정 시각(nullable). owner 확정 시 기록 — 동시에 moim.startsAt 이 확정 (날짜+시간)으로 갱신된다.
+  confirmedAt DateTime? @map("confirmed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  moim        Moim     @relation(fields: [moimId], references: [id], onDelete: Cascade)
+  slots       ScheduleSlot[]
+
+  @@map("schedule_event")
+}
+
+// SPEC-SCHEDULE-001 멤버별 가능 슬롯. 한 (멤버, 날짜, 시작분) = 한 행. 멤버가 그리드에서 칠한 셀들을
+// 통째로 교체 저장한다(PUT /me = deleteMany(내 것) + createMany). 복합 PK 가 "멤버당 슬롯당 1행" 불변식을
+// DB 레벨에서 강제한다(중복 칠 방지). 집계(히트맵)는 슬롯별 userId 수를 세어 산출한다.
+model ScheduleSlot {
+  scheduleEventId String   @map("schedule_event_id")
+  // 가능 멤버 sub(= profile.id). 가드-검증 sub 만 들어온다(mass-assignment 차단).
+  userId          String   @map("user_id")
+  // 슬롯 날짜(ISO date "YYYY-MM-DD"). ScheduleEvent.dates 중 하나여야 한다(service 가 검증).
+  date            String
+  // 슬롯 시작(후보일 00:00 기준 분). startMinute~endMinute 범위 안 + slotMinutes 격자에 정렬되어야 한다.
+  startMinute     Int      @map("start_minute")
+  createdAt       DateTime @default(now()) @map("created_at")
+  event           ScheduleEvent @relation(fields: [scheduleEventId], references: [id], onDelete: Cascade)
+
+  // 세션별 전체 슬롯 조회(히트맵 집계)를 커버한다.
+  @@index([scheduleEventId])
+  // 멤버당 슬롯당 1행 불변식(중복 칠 방지). PUT /me 교체 저장이 이 PK 에 의존한다.
+  @@id([scheduleEventId, userId, date, startMinute])
+  @@map("schedule_slot")
 }
