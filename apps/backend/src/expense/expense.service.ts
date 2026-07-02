@@ -12,6 +12,7 @@ import type {
 } from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SafetyService } from '../safety/safety.service';
 import {
   MOIM_EXPENSE_ADDED,
   MOIM_SETTLEMENT_COMPLETED,
@@ -20,6 +21,10 @@ import {
   type MoimSettlementCompletedPayload,
   type MoimSettlementRequestedPayload,
 } from './expense-events';
+
+// SPEC-SAFETY-001 T-006(REQ-FLT-003): 차단/신고 대상 작성자를 지출 표시 목록에서 가릴 때 쓰는 마스킹 라벨.
+// 행 자체는 유지하고(금액·정산 무결성) createdBy 표면만 이 값으로 대체한다.
+export const BLOCKED_MEMBER_LABEL = '차단한 멤버';
 
 // 카테고리 프리셋(REQ-EXP-003). DB enum 없이 컨트롤러/서비스에서 검증.
 export const EXPENSE_CATEGORIES = [
@@ -79,6 +84,10 @@ export class ExpenseService {
     // requestSettlement/createSettlement 성공 후 moim.expense.added/moim.settlement.* 를 발행한다 —
     // NotificationListener 가 구독(느슨한 결합).
     private readonly events: EventEmitter2,
+    // @MX:NOTE: [AUTO] 뷰어 측 읽기 필터의 숨김 목록 단일 출처(SPEC-SAFETY-001 T-006 / REQ-CPL-002). expense→
+    // safety 단방향(ExpenseModule 이 SafetyModule 을 import). listExpenses 가 표시 목록의 차단 대상 작성자를
+    // 마스킹하는 데 쓴다(계산에는 미적용 — 원장 정합).
+    private readonly safety: SafetyService,
   ) {}
 
   // 경비/정산 도메인 이벤트 best-effort 발행 헬퍼(SPEC-NOTIFICATIONS-001 M2). 리스너 예외가 이미 성립한 영속
@@ -167,9 +176,17 @@ export class ExpenseService {
 
   // @MX:ANCHOR: [AUTO] 경비 목록 + 요약 + 정산 조회의 단일 진입점(REQ-EXP-005 / AC-5). 멤버 한정.
   // @MX:REASON: balance 계산(payer합-share합) + greedy 최소 거래 + settled 마커 매칭을 서버에서 단일 계산.
+  // SPEC-SAFETY-001 T-006(REQ-FLT-003): 계산은 전체 원본, 표시 목록은 차단 대상 작성자만 마스킹(행 유지) 한다.
   async listExpenses(sub: string, moimId: string): Promise<ExpenseListResult> {
     // 멤버 인가(비멤버/모임 미존재 → 403).
     await this.moim.assertMember(sub, moimId);
+
+    // @MX:WARN: [AUTO] SPEC-SAFETY-001 REQ-FLT-003: hiddenIds(block∪report)는 표시 반환 직전 작성자 마스킹에만
+    // 쓴다. 아래 balance/transactions/total 계산은 반드시 전체 원본(expenses)으로 수행한다 — 마스킹을 계산 입력에
+    // 섞으면 정산 수치가 뷰어마다 달라져 원장이 훼손된다(R-2). 요청당 1회만 조회(N+1 회피).
+    // @MX:REASON: 지출은 채팅/투표와 달리 행 제거가 아니라 작성자 마스킹이라, 계산/표시 분기를 물리적으로 분리해야
+    // "표시 항목 합 == 표시 합계" 정합을 유지하면서 차단 대상 작성자를 가릴 수 있다(AC-FLT-3).
+    const hiddenIds = await this.safety.getHiddenUserIds(sub);
 
     // moim.budget 조회.
     const moimRow = await this.prisma.moim.findUnique({
@@ -177,7 +194,7 @@ export class ExpenseService {
     });
     const budget = (moimRow as { budget?: number | null })?.budget ?? null;
 
-    // 경비 목록(분담 포함).
+    // 경비 목록(분담 포함). 이 배열이 계산의 단일 원본이다(마스킹은 반환 직전 별도 사본에만 적용).
     const expenses = await this.prisma.expense.findMany({
       where: { moimId },
       include: { shares: true },
@@ -197,7 +214,7 @@ export class ExpenseService {
 
     if (expenses.length === 0) {
       return {
-        expenses: expenses,
+        expenses: maskHiddenCreators(expenses, hiddenIds),
         summary: { total: 0, perPerson: 0, budget, remaining },
         settlement: { balances: [], transactions: [] },
       };
@@ -234,8 +251,9 @@ export class ExpenseService {
       settled: markerSet.has(markerKey(t.from, t.to, t.amount)),
     }));
 
+    // 표시 반환 직전에만 작성자 마스킹을 적용한다(위 계산은 전체 원본 기준). 원본 expenses 배열은 불변.
     return {
-      expenses: expenses,
+      expenses: maskHiddenCreators(expenses, hiddenIds),
       summary: { total, perPerson, budget, remaining },
       settlement: { balances, transactions: txWithSettled },
     };
@@ -563,6 +581,23 @@ export class ExpenseService {
 }
 
 // ── 순수 계산 함수 ────────────────────────────────────────────────────────────
+
+// SPEC-SAFETY-001 T-006(REQ-FLT-003): 표시 목록의 차단/신고 대상 작성자만 마스킹한다. 행은 그대로 유지하고
+// (금액·분담 등 나머지 필드 불변) createdBy 만 BLOCKED_MEMBER_LABEL 로 교체한 새 사본 배열을 반환한다.
+// 원본 배열/객체를 변형하지 않으므로(map + 스프레드) 상위의 계산 로직이 참조하는 원본은 오염되지 않는다.
+// hiddenIds 가 비어 있으면 마스킹 대상이 없어 원본과 동일한 값의 사본을 반환한다.
+function maskHiddenCreators(
+  expenses: ExpenseWithShares[],
+  hiddenIds: string[],
+): ExpenseWithShares[] {
+  if (hiddenIds.length === 0) {
+    return expenses;
+  }
+  const hidden = new Set(hiddenIds);
+  return expenses.map((e) =>
+    hidden.has(e.createdBy) ? { ...e, createdBy: BLOCKED_MEMBER_LABEL } : e,
+  );
+}
 
 // 균등 분배: 나머지는 앞선 참가자에게 1원씩 배분해 분담 합 = amount 보장.
 function equalSplit(

@@ -14,6 +14,7 @@ import {
   type MoimPollCreatedPayload,
 } from '../poll/poll-events';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { SafetyService } from '../safety/safety.service';
 import {
   type MoimScheduleConfirmedPayload,
   type MoimScheduleStartedPayload,
@@ -70,7 +71,12 @@ function makeListener(members: MoimMember[]): {
     moimMember: { findMany: memberFindMany },
     notification: { createMany },
   } as unknown as PrismaService;
-  const service = new NotificationService(prisma);
+  // SPEC-SAFETY-001 T-005: NotificationService 가 SafetyService 를 주입받는다. 리스너는 fan-out 쓰기
+  // (createForRecipients)만 쓰고 getHiddenUserIds 는 호출하지 않으므로 스텁만 있으면 된다.
+  const safety = {
+    getHiddenUserIds: jest.fn(() => Promise.resolve([])),
+  } as unknown as SafetyService;
+  const service = new NotificationService(prisma, safety);
   const listener = new NotificationListener(prisma, service);
 
   return { listener, mocks: { memberFindMany, createMany } };

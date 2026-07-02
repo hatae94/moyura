@@ -36,6 +36,8 @@ CREATE POLICY "users_update_own"
 | `chat_message` | (정책 없음 — default deny) | ALL | RLS enable + 정책 부재 = 모두 거부 | SPEC-CHAT-001 — anon/authenticated PostgREST 직접 접근 차단. Prisma(postgres 롤)는 영향 없음(쓰기 인가 = NestJS 서비스 레이어) |
 | `notification` | (정책 없음 — default deny) | ALL | RLS enable + 정책 부재 = 모두 거부 | SPEC-NOTIFICATIONS-001 M1 — 웹은 백엔드 API 로만 알림 열람. anon/authenticated 직독 차단(RLS enable 은 `20260701200000_add_notification`, 실시간 배지 방송·구독은 위 `realtime.messages` user: 정책 M4a) |
 | `settlement_request` | (정책 없음 — default deny) | ALL | RLS enable + 정책 부재 = 모두 거부 | SPEC-NOTIFICATIONS-001 M2 — anon/authenticated 직독 차단. 마이그레이션 `20260701210000_add_settlement_request`. notification 과 동일 default-deny |
+| `block` | (정책 없음 — default deny) | ALL | RLS enable + 정책 부재 = 모두 거부 | SPEC-SAFETY-001 M1 (REQ-CPL-004) — 웹은 백엔드 API 로만 차단을 다룬다. anon/authenticated 직독 차단. 마이그레이션 `20260702100000_add_safety`. notification 과 동일 default-deny |
+| `report` | (정책 없음 — default deny) | ALL | RLS enable + 정책 부재 = 모두 거부 | SPEC-SAFETY-001 M1 (REQ-CPL-004) — 운영자 수동 DB 조회(REQ-STO-001)는 postgres 롤 경유. anon/authenticated 직독 차단. 마이그레이션 `20260702100000_add_safety`. content_type CHECK(4종)도 이 마이그레이션 수동 SQL |
 
 ---
 

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { SafetyModule } from '../safety/safety.module';
 import { DeviceTokenController } from './device-token.controller';
 import { DeviceTokenService } from './device-token.service';
 import { FcmSender } from './fcm-sender';
@@ -14,8 +15,10 @@ import { PushListener } from './push.listener';
 // settlement.completed)을 별도로 @OnEvent 구독해 FCM 으로 승격한다(인앱 NotificationListener 와 독립 구독 —
 // EventEmitter2 다중 구독). PrismaService는 global이라 재import 불필요. 이 모듈은 chat/invite/schedule/expense 로
 // 아무것도 export하지 않는다(역방향 의존 0 — 생산 도메인의 *-events 계약에만 단방향 의존).
+// SPEC-SAFETY-001 T-008: SafetyModule 을 import 해 SafetyService(getBlockersOf)를 PushListener 에 주입받는다 —
+// push→safety 단방향(REQ-CPL-002). handleChatMessageCreated 가 sender 를 차단한 수신자를 FCM 대상에서 차감(REQ-FLT-006).
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, SafetyModule],
   controllers: [DeviceTokenController],
   providers: [
     DeviceTokenService,

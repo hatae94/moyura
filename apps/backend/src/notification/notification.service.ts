@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SafetyService } from '../safety/safety.service';
 
 // actor sub 는 있으나 모임 멤버 행이 사라진 경우(탈퇴/추방 등) 표시 이름의 안전 기본값.
 // actorId 자체가 null 이면 actor 를 노출하지 않지만(그때는 actor=null), sub 는 있는데 nickname 만 못 찾으면
@@ -63,7 +64,13 @@ export interface MarkReadInput {
 // 있어(별도 소유권 검사 없음) list/unreadCount/markRead 세 경로가 동일한 격리 규칙을 공유하고 드리프트가 없다.
 @Injectable()
 export class NotificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // @MX:NOTE: [AUTO] 뷰어 측 읽기 필터의 숨김 목록 단일 출처(SPEC-SAFETY-001 T-005 / REQ-CPL-002). notification→
+    // safety 단방향(NotificationModule 이 SafetyModule 을 import). listForRecipient 가 뷰어의 hidden(block∪report)
+    // actor 알림을 WHERE 에서 제외하는 데 쓴다. actorId=null(시스템/무행위자) 알림은 nullable notIn 이 자연 통과시킨다.
+    private readonly safety: SafetyService,
+  ) {}
 
   // 수신자당 1행 알림을 배치 삽입한다(fan-out). 수신자 0명이면 DB 왕복 없이 0을 반환한다(빈 createMany 회피).
   async createForRecipients(input: CreateForRecipientsInput): Promise<number> {
@@ -90,10 +97,17 @@ export class NotificationService {
     // cursor(문자열) → BigInt 파싱. 파싱 불가 시 400. 미지정이면 첫 페이지(최신순).
     const cursorId = parseCursor(input.cursor);
 
+    // @MX:NOTE: [AUTO] SPEC-SAFETY-001 REQ-FLT-005 / AC-FLT-5: 뷰어(sub)가 숨긴 actor(block∪report)의 알림을
+    // actorId notIn 으로 제외한다(요청당 1회 조회). actorId 는 nullable 이라 Prisma notIn 이 NULL 행을 포함하므로
+    // (actorId NOT IN (...) OR actorId IS NULL) 시스템·무행위자 알림(actorId=null)은 항상 통과한다(자연 통과).
+    // notIn 이 빈 배열이면 아무 알림도 제외하지 않는다(Prisma no-op — 필터 미적용과 동일).
+    const hiddenIds = await this.safety.getHiddenUserIds(sub);
+
     const rows = await this.prisma.notification.findMany({
       where: {
         recipientId: sub,
         ...(cursorId === undefined ? {} : { id: { lt: cursorId } }),
+        actorId: { notIn: hiddenIds },
       },
       orderBy: { id: 'desc' },
       take: input.limit,

@@ -68,6 +68,9 @@ model Moim {
   // SPEC-NOTIFICATIONS-001 M1: 인앱 알림 역참조(additive). moim 테이블 자체는 무변경 — notification 만 신규
   // CREATE. 모임 삭제 시 그 모임 컨텍스트의 알림도 Cascade 로 함께 정리된다(고아 알림 방지).
   notifications Notification[]
+  // SPEC-SAFETY-001 M1: 신고 역참조(additive). moim 테이블 자체는 무변경 — report 만 신규 CREATE.
+  // 모임 삭제 시 그 모임 컨텍스트의 신고도 Cascade 로 함께 정리된다(고아 신고 방지, report.moim_id FK).
+  reports       Report[]
 
   @@map("moim")
 }
@@ -375,4 +378,59 @@ model Notification {
   // 미읽음 카운트 / mark-all: (recipientId, readAt)로 recipientId=sub AND readAt=null 필터를 커버한다.
   @@index([recipientId, readAt])
   @@map("notification")
+}
+
+// SPEC-SAFETY-001 M1 차단(REQ-BLK-001/003, REQ-FLT-006). 전역(모임 무관) 1-way 차단 — 매칭 키는 userId(sub)만이며
+// (게스트·명명 계정 동일 취급, REQ-BLK-003) 차단자 화면에서만 대상 UGC 를 숨긴다. 복합 PK (blockerId, blockedUserId)
+// 가 "차단자당 대상당 한 행" 불변식을 DB 레벨에서 강제한다 — createBlock 은 P2002 을 멱등(200)으로 흡수한다.
+// 양쪽 user 컬럼은 코드베이스 컨벤션대로 FK 없는 TEXT soft-ref(profile 삭제/게스트 무관 — 고아 정리는 SPEC-ACCOUNT-001
+// deleteAccount 가 prisma 직접 접근으로 담당, 순환 의존 회피). RLS enable + 정책 없음(default deny, 마이그레이션 수동 SQL).
+model Block {
+  // 차단자 sub(= profile.id). 가드-검증 sub 만 들어온다(WHERE 내장 인가 — mass-assignment 차단).
+  blockerId     String   @map("blocker_id")
+  // 차단 대상 sub(= profile.id). FK 없음(soft-ref).
+  blockedUserId String   @map("blocked_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // getHiddenUserIds(sub) 정방향 조회(blockerId=sub → blockedUserId)를 커버한다.
+  @@index([blockerId])
+  // getBlockersOf(userIds) 역방향 조회(blockedUserId in → blockerId 집합, REQ-FLT-006 발신 push 필터)를 커버한다.
+  @@index([blockedUserId])
+  // 차단자당 대상당 한 행 불변식(멱등 — 중복 차단 방지).
+  @@id([blockerId, blockedUserId])
+  @@map("block")
+}
+
+// SPEC-SAFETY-001 M1 신고(REQ-RPT-001/004/005, REQ-STO-001). 단일 PK 콘텐츠 4종만 참조한다(chat_message/poll/
+// expense/settlement_request — 복합 PK 콘텐츠는 단일 id 참조 불가라 400 거부, REQ-RPT-004). 신고는 차단과 독립이며
+// (신고 ≠ 차단, REQ-RPT-002) createReport 는 report 행만 만들고 block 은 만들지 않는다. 신고자 측 숨김의 진실
+// 공급원이다(getHiddenUserIds 의 report 항 = reporterId=sub → targetUserId).
+// contentId 는 TEXT 통일 저장 — chat_message(BigInt PK) 필터 시에만 BigInt 캐스팅한다(REQ-RPT-005). content_type 은
+// Prisma enum 이 아닌 String 컬럼(poll.kind/notification.type 컨벤션 — CREATE TYPE 마찰 회피), 허용값은 마이그레이션
+// 수동 SQL 의 CHECK 제약으로 강제한다. reporter/target user 컬럼은 FK 없는 TEXT soft-ref, moim_id 만 FK CASCADE.
+// RLS enable + 정책 없음(default deny, 마이그레이션 수동 SQL) — 운영자 수동 DB 조회는 postgres 롤 경유(RLS 미적용).
+model Report {
+  id           String   @id @default(uuid())
+  // 신고자 sub(= profile.id). 가드-검증 sub 만 들어온다(WHERE 내장 인가 — mass-assignment 차단). FK 없음(soft-ref).
+  reporterId   String   @map("reporter_id")
+  // 신고 대상(피신고 콘텐츠 작성자) sub. FK 없음(soft-ref).
+  targetUserId String   @map("target_user_id")
+  // 신고 컨텍스트 모임 id. moim 삭제 시 신고도 Cascade 로 정리된다(report_moim_id_fkey).
+  moimId       String   @map("moim_id")
+  // 신고 사유(자유 텍스트). 빈 값은 컨트롤러가 400 으로 거른다(ValidationPipe 부재 보완).
+  reason       String
+  // 신고 콘텐츠 타입(String 컬럼). 허용값 = chat_message|poll|expense|settlement_request(마이그레이션 CHECK 제약).
+  contentType  String   @map("content_type")
+  // 신고 콘텐츠 id(TEXT 통일). chat_message(BigInt PK)는 필터 시 BigInt 캐스팅(REQ-RPT-005).
+  contentId    String   @map("content_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  moim         Moim     @relation(fields: [moimId], references: [id], onDelete: Cascade)
+
+  // getHiddenUserIds(sub)의 신고 항 정방향 조회(reporterId=sub → targetUserId)를 커버한다.
+  @@index([reporterId])
+  // 대상 유저별 신고 조회(운영자 수동 검토, REQ-STO-001)를 커버한다.
+  @@index([targetUserId])
+  // 모임별 신고 조회를 커버한다.
+  @@index([moimId])
+  @@map("report")
 }

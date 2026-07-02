@@ -11,11 +11,16 @@
 
 import { useCallback, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Crown, Pencil, User, UserMinus, Users } from "lucide-react";
+import { Ban, Crown, Pencil, User, UserMinus, Users } from "lucide-react";
 
 import { type MoimMember } from "@/lib/moim/api";
 import { useMemberChannel } from "@/lib/moim/useMemberChannel";
-import { kickMemberAction, transferOwnerAction, updateMaxMembersAction } from "./member-actions";
+import { blockAction } from "@/lib/safety/actions";
+import {
+  kickMemberAction,
+  transferOwnerAction,
+  updateMaxMembersAction,
+} from "./member-actions";
 
 // ─────────────────────────────────────────────
 // 역할 배지 (page.tsx 의 RoleBadge 와 동일)
@@ -112,6 +117,7 @@ function ConfirmDialog({
 type DialogState =
   | { type: "kick"; member: MoimMember }
   | { type: "transfer"; member: MoimMember }
+  | { type: "block"; member: MoimMember }
   | null;
 
 // ─────────────────────────────────────────────
@@ -186,8 +192,15 @@ export function MembersSection({
           setActionError(result.error);
           return; // 다이얼로그 유지, 오류 표시
         }
-      } else {
+      } else if (dialog.type === "transfer") {
         const result = await transferOwnerAction(moimId, dialog.member.userId);
+        if (result?.error) {
+          setActionError(result.error);
+          return;
+        }
+      } else {
+        // block — 차단은 전역이나 revalidatePath 로 상세 뷰(채팅/투표/지출 필터)를 갱신한다.
+        const result = await blockAction(moimId, dialog.member.userId);
         if (result?.error) {
           setActionError(result.error);
           return;
@@ -304,6 +317,9 @@ export function MembersSection({
             // owner 컨트롤 노출 조건: 현재 사용자가 owner이고, 대상 멤버가 owner가 아니며, 자기 자신이 아닌 경우
             const showControls =
               isOwner && member.role !== "owner" && member.userId !== currentUserId;
+            // 차단 버튼 노출 조건: 자기 자신만 제외한 모든 멤버(owner 여부·내 role 무관 — SPEC-SAFETY-001 REQ-BLK-001).
+            // owner 전용 showControls 와 독립적으로 배치한다(일반 멤버도 타 멤버를 차단할 수 있어야 함).
+            const showBlock = member.userId !== currentUserId;
             const initial = member.nickname.charAt(0).toUpperCase() || "?";
 
             return (
@@ -322,29 +338,45 @@ export function MembersSection({
                 </span>
                 {/* 역할 배지 */}
                 <RoleBadge role={member.role} />
-                {/* owner 전용 컨트롤: 방장 위임 + 강퇴 */}
-                {showControls ? (
+                {/* 행별 액션: owner 전용(방장 위임·강퇴) + 전 멤버 공통(차단). 둘 다 없으면 렌더 안 함. */}
+                {showControls || showBlock ? (
                   <div className="flex items-center gap-1">
-                    {/* 방장 위임 버튼 */}
-                    <button
-                      type="button"
-                      aria-label={`${member.nickname}님에게 방장 위임`}
-                      title="방장 위임"
-                      onClick={() => setDialog({ type: "transfer", member })}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      <Crown size={15} />
-                    </button>
-                    {/* 강퇴 버튼 */}
-                    <button
-                      type="button"
-                      aria-label={`${member.nickname}님 강퇴`}
-                      title="강퇴"
-                      onClick={() => setDialog({ type: "kick", member })}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
-                    >
-                      <UserMinus size={15} />
-                    </button>
+                    {/* owner 전용: 방장 위임 */}
+                    {showControls ? (
+                      <button
+                        type="button"
+                        aria-label={`${member.nickname}님에게 방장 위임`}
+                        title="방장 위임"
+                        onClick={() => setDialog({ type: "transfer", member })}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Crown size={15} />
+                      </button>
+                    ) : null}
+                    {/* owner 전용: 강퇴 */}
+                    {showControls ? (
+                      <button
+                        type="button"
+                        aria-label={`${member.nickname}님 강퇴`}
+                        title="강퇴"
+                        onClick={() => setDialog({ type: "kick", member })}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
+                      >
+                        <UserMinus size={15} />
+                      </button>
+                    ) : null}
+                    {/* 전 멤버 공통: 차단(본인 제외). owner 여부와 무관하게 노출된다. */}
+                    {showBlock ? (
+                      <button
+                        type="button"
+                        aria-label={`${member.nickname}님 차단`}
+                        title="차단"
+                        onClick={() => setDialog({ type: "block", member })}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Ban size={15} />
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </li>
@@ -382,6 +414,19 @@ export function MembersSection({
           title={`방장 권한을 ${dialog.member.nickname}님에게 위임할까요?`}
           description="위임하면 현재 사용자는 일반 멤버가 됩니다."
           confirmLabel="위임"
+          isPending={isPending}
+          onCancel={closeDialog}
+          onConfirm={handleConfirm}
+        />
+      ) : null}
+
+      {/* 차단 confirm 다이얼로그 — 차단은 내 화면에서만 상대 UGC 를 숨긴다(멤버 목록엔 그대로 노출). */}
+      {dialog?.type === "block" ? (
+        <ConfirmDialog
+          title={`${dialog.member.nickname}님을 차단할까요?`}
+          description="차단하면 내 화면에서만 이 멤버의 메시지·투표·지출·일정·알림이 숨겨집니다. 언제든 프로필에서 해제할 수 있어요."
+          confirmLabel="차단"
+          destructive
           isPending={isPending}
           onCancel={closeDialog}
           onConfirm={handleConfirm}

@@ -7,6 +7,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ScheduleEvent, ScheduleSlot } from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SafetyService } from '../safety/safety.service';
 import {
   MOIM_SCHEDULE_CONFIRMED,
   MOIM_SCHEDULE_DATES_CHANGED,
@@ -41,6 +42,10 @@ export class ScheduleService {
     // SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행기(전역 EventEmitterModule.forRoot()). setSchedule(create)/
     // updateDates/updateWindow/confirmSchedule 성공 후 moim.schedule.* 를 발행한다 — NotificationListener 가 구독.
     private readonly events: EventEmitter2,
+    // @MX:NOTE: [AUTO] 뷰어 측 읽기 필터의 숨김 목록 단일 출처(SPEC-SAFETY-001 T-007 / REQ-CPL-002). schedule→
+    // safety 단방향(ScheduleModule 이 SafetyModule 을 import). getSchedule 이 히트맵 응답의 슬롯 중 뷰어가 숨긴
+    // (block∪report) userId 슬롯을 응답 매핑 시점에 제외하는 데 쓴다. dates/window 협업 편집은 작성자 추적 부재로 필터 불가.
+    private readonly safety: SafetyService,
   ) {}
 
   // 일정 조율 도메인 이벤트 best-effort 발행 헬퍼(SPEC-NOTIFICATIONS-001 M2). 리스너 예외가 이미 성립한
@@ -121,10 +126,27 @@ export class ScheduleService {
     moimId: string,
   ): Promise<ScheduleEventWithSlots | null> {
     await this.moim.assertMember(sub, moimId);
-    return this.prisma.scheduleEvent.findUnique({
+    const event = await this.prisma.scheduleEvent.findUnique({
       where: { moimId },
       include: { slots: true },
     });
+    // 세션 미설정이면 필터할 슬롯이 없으므로 숨김 목록을 조회하지 않고 null 을 반환한다(불필요한 DB 왕복 회피).
+    if (!event) {
+      return null;
+    }
+
+    // SPEC-SAFETY-001 REQ-FLT-004 / AC-FLT-4: 슬롯은 include 로 이벤트에 중첩 로드되므로 top-level where 가 아니라
+    // 응답 매핑 시점에 뷰어(sub)가 숨긴(block∪report) userId 슬롯을 제외한다(요청당 1회 조회). hidden 이 비면 no-op.
+    // dates/window 등 이벤트 메타는 협업 편집이라 작성자 추적이 없어 필터하지 않는다(한계 — 원본 그대로 유지).
+    const hiddenIds = await this.safety.getHiddenUserIds(sub);
+    if (hiddenIds.length === 0) {
+      return event;
+    }
+    const hidden = new Set(hiddenIds);
+    return {
+      ...event,
+      slots: event.slots.filter((slot) => !hidden.has(slot.userId)),
+    };
   }
 
   // 내 가능 슬롯 통째 교체(멤버). 그리드에서 칠한 셀 전체를 매번 받아 deleteMany+createMany 로 교체한다.

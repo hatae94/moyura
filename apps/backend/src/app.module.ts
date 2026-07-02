@@ -14,6 +14,7 @@ import { PollModule } from './poll/poll.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfileModule } from './profile/profile.module';
 import { PushModule } from './push/push.module';
+import { SafetyModule } from './safety/safety.module';
 import { ScheduleModule } from './schedule/schedule.module';
 
 @Module({
@@ -45,6 +46,10 @@ import { ScheduleModule } from './schedule/schedule.module';
     // SPEC-NOTIFICATIONS-001 M1: 인앱 알림. NotificationListener 가 invite 가 export 한 moim.member.joined 계약에만
     // 단방향 의존한다(@OnEvent 구독). invite/moim 도메인은 notification 의 존재를 인식하지 않는다(느슨한 결합 HARD).
     NotificationModule,
+    // SPEC-SAFETY-001 M2: 신고·차단(UGC 모더레이션). SafetyController 로 신고·차단 API 를 노출하고 SafetyService 를
+    // export 한다. 소비 도메인(chat/poll/expense/schedule/notification/push)이 SafetyModule 을 import 해 뷰어 측
+    // 필터를 주입받는다(safety→도메인 import 금지 — 단방향, REQ-CPL-002). PushModule 뒤에 등록한다.
+    SafetyModule,
   ],
   controllers: [AppController],
   providers: [AppService],

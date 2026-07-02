@@ -5,11 +5,14 @@ import type {
   Notification,
 } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { SafetyService } from '../safety/safety.service';
 import { NotificationService } from './notification.service';
 
-// NotificationService 단위 테스트(SPEC-NOTIFICATIONS-001 M3). 인메모리 fake Prisma 로 검증한다:
+// NotificationService 단위 테스트(SPEC-NOTIFICATIONS-001 M3 + SPEC-SAFETY-001 T-005). 인메모리 fake Prisma +
+// stub SafetyService(getHiddenUserIds) 로 검증한다:
 //   - listForRecipient: recipientId=sub 필터 + keyset(id lt, desc, take limit) + nextCursor(가득/부족) +
 //     (moimId, actorId) 배치 해석(모임명/닉네임) + 대상 부재 시 graceful fallback.
+//   - listForRecipient: 뷰어가 숨긴 actor(block∪report)의 알림 제외(actorId notIn) + actorId=null 자연 통과(REQ-FLT-005).
 //   - unreadCount: recipientId=sub AND readAt=null 카운트.
 //   - markRead: recipientId=sub AND readAt=null (+ ids in) 만 갱신, updated 수 반환, 멱등.
 //   - 인가 격리: 모든 쿼리가 recipientId=sub 로 필터되어 남의 알림을 반환/갱신하지 않는다.
@@ -19,7 +22,12 @@ const NOW = new Date('2026-07-02T00:00:00.000Z');
 
 // ── fake Prisma 인자 형태(no-unsafe 회피용 명시 타입) ──────────────────────────
 interface NotifFindManyArg {
-  where: { recipientId: string; id?: { lt: bigint } };
+  where: {
+    recipientId: string;
+    id?: { lt: bigint };
+    // SPEC-SAFETY-001 T-005: 뷰어가 숨긴 actor 제외(actorId notIn). null actor 는 통과.
+    actorId?: { notIn: string[] };
+  };
   orderBy: { id: 'desc' };
   take: number;
 }
@@ -41,6 +49,8 @@ interface Store {
   notifications: Notification[];
   moims: Moim[];
   members: MoimMember[];
+  // SPEC-SAFETY-001 T-005: 뷰어(sub)가 숨긴 userId 집합(block∪report). getHiddenUserIds 스텁이 읽는다(기본 빈 배열).
+  hidden: string[];
 }
 
 interface Mocks {
@@ -49,6 +59,8 @@ interface Mocks {
   updateMany: jest.Mock<Promise<{ count: number }>, [NotifUpdateManyArg]>;
   moimFindMany: jest.Mock<Promise<Moim[]>, [MoimFindManyArg]>;
   memberFindMany: jest.Mock<Promise<MoimMember[]>, [MemberFindManyArg]>;
+  // SPEC-SAFETY-001 T-005: getHiddenUserIds 스파이(뷰어 필터 호출 검증).
+  getHiddenUserIds: jest.Mock<Promise<string[]>, [string]>;
 }
 
 function notif(
@@ -103,6 +115,7 @@ function makeService(
     notifications: seed.notifications,
     moims: seed.moims ?? [],
     members: seed.members ?? [],
+    hidden: seed.hidden ?? [],
   };
 
   const findMany = jest.fn<Promise<Notification[]>, [NotifFindManyArg]>(
@@ -113,6 +126,14 @@ function makeService(
       const lt = arg.where.id?.lt;
       if (lt !== undefined) {
         rows = rows.filter((n) => n.id < lt);
+      }
+      // SPEC-SAFETY-001 T-005: actorId notIn 필터. Prisma 는 nullable 컬럼의 notIn 에서 NULL 행을 포함하므로
+      // (actorId NOT IN (...) OR actorId IS NULL), actorId=null 알림은 항상 통과한다(시스템/무행위자 알림 보존).
+      const notIn = arg.where.actorId?.notIn;
+      if (notIn !== undefined) {
+        rows = rows.filter(
+          (n) => n.actorId === null || !notIn.includes(n.actorId),
+        );
       }
       rows = [...rows].sort(byIdDesc);
       return Promise.resolve(rows.slice(0, arg.take));
@@ -164,11 +185,24 @@ function makeService(
     moimMember: { findMany: memberFindMany },
   } as unknown as PrismaService;
 
-  const service = new NotificationService(prisma);
+  // getHiddenUserIds(sub) 스텁 — store.hidden 을 반환한다(뷰어별 숨김 목록, 요청당 1회 조회 계약 재현).
+  const getHiddenUserIds = jest.fn<Promise<string[]>, [string]>(() =>
+    Promise.resolve(store.hidden),
+  );
+  const safety = { getHiddenUserIds } as unknown as SafetyService;
+
+  const service = new NotificationService(prisma, safety);
   return {
     service,
     store,
-    mocks: { findMany, count, updateMany, moimFindMany, memberFindMany },
+    mocks: {
+      findMany,
+      count,
+      updateMany,
+      moimFindMany,
+      memberFindMany,
+      getHiddenUserIds,
+    },
   };
 }
 
@@ -189,9 +223,9 @@ describe('NotificationService (M3 읽기 API)', () => {
     // 최신순(3,2) 2개 + 아직 더 있음 → nextCursor = 마지막(2).
     expect(page.items.map((i) => i.id)).toEqual([3n, 2n]);
     expect(page.nextCursor).toBe('2');
-    // 쿼리는 recipientId=sub + desc + take 로 나간다.
+    // 쿼리는 recipientId=sub + actorId notIn(빈 hidden) + desc + take 로 나간다.
     expect(mocks.findMany).toHaveBeenCalledWith({
-      where: { recipientId: 'sub-A' },
+      where: { recipientId: 'sub-A', actorId: { notIn: [] } },
       orderBy: { id: 'desc' },
       take: 2,
     });
@@ -215,7 +249,7 @@ describe('NotificationService (M3 읽기 API)', () => {
     expect(page.items.map((i) => i.id)).toEqual([2n, 1n]);
     expect(page.nextCursor).toBeNull();
     expect(mocks.findMany).toHaveBeenCalledWith({
-      where: { recipientId: 'sub-A', id: { lt: 3n } },
+      where: { recipientId: 'sub-A', id: { lt: 3n }, actorId: { notIn: [] } },
       orderBy: { id: 'desc' },
       take: 20,
     });
@@ -330,6 +364,61 @@ describe('NotificationService (M3 읽기 API)', () => {
       id: 'sub-gone',
       nickname: '알 수 없음',
     });
+  });
+
+  // ── T-005(SAFETY): listForRecipient 뷰어 측 필터 — 숨긴 actor 알림 제외 + null actor 통과 ──
+
+  it('listForRecipient: 뷰어가 숨긴 actor(block∪report) 알림을 제외한다(actorId notIn)', async () => {
+    const { service, mocks } = makeService({
+      notifications: [
+        notif({ id: 1n, recipientId: 'sub-A', actorId: 'userB' }), // 숨김 대상
+        notif({ id: 2n, recipientId: 'sub-A', actorId: 'userC' }),
+      ],
+      hidden: ['userB'],
+    });
+
+    const page = await service.listForRecipient('sub-A', { limit: 20 });
+
+    // userB actor 알림(1)은 제외되고 userC actor 알림(2)만 남는다.
+    expect(page.items.map((i) => i.id)).toEqual([2n]);
+    // hidden 목록은 뷰어 sub 로 1회 조회된다(요청당 1회 — N+1 회피 계약).
+    expect(mocks.getHiddenUserIds).toHaveBeenCalledWith('sub-A');
+    // 쿼리 where 에 actorId notIn(숨김 목록)이 반영된다.
+    expect(mocks.findMany).toHaveBeenCalledWith({
+      where: { recipientId: 'sub-A', actorId: { notIn: ['userB'] } },
+      orderBy: { id: 'desc' },
+      take: 20,
+    });
+  });
+
+  it('listForRecipient: actorId=null 알림(시스템/무행위자)은 숨김 필터를 자연 통과한다(AC-FLT-5)', async () => {
+    const { service } = makeService({
+      notifications: [
+        notif({ id: 1n, recipientId: 'sub-A', actorId: 'userB' }), // 숨김 대상 — 제외
+        notif({ id: 2n, recipientId: 'sub-A', actorId: null }), // 시스템 — 유지
+      ],
+      hidden: ['userB'],
+    });
+
+    const page = await service.listForRecipient('sub-A', { limit: 20 });
+
+    // 숨김 actor(1) 제외, actorId=null 시스템 알림(2) 유지(nullable notIn 은 NULL 을 포함).
+    expect(page.items.map((i) => i.id)).toEqual([2n]);
+    expect(page.items[0].actor).toBeNull();
+  });
+
+  it('listForRecipient: hidden 목록이 비면 모든 알림이 보인다(notIn 빈 배열 = no-op)', async () => {
+    const { service } = makeService({
+      notifications: [
+        notif({ id: 1n, recipientId: 'sub-A', actorId: 'userB' }),
+        notif({ id: 2n, recipientId: 'sub-A', actorId: null }),
+      ],
+      // hidden 미지정 → 빈 배열.
+    });
+
+    const page = await service.listForRecipient('sub-A', { limit: 20 });
+
+    expect(page.items.map((i) => i.id)).toEqual([2n, 1n]);
   });
 
   // ── 인가 격리: 남의 알림 미노출 ────────────────────────────────────────────

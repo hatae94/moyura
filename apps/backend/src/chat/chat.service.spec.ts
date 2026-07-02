@@ -3,18 +3,20 @@ import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ChatMessage } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { SafetyService } from '../safety/safety.service';
 import {
   CHAT_MESSAGE_CREATED,
   type ChatMessageCreatedPayload,
 } from './chat-events';
 import { ChatService } from './chat.service';
 
-// ChatService 단위 테스트(SPEC-CHAT-001 T-003/004/005). 인메모리 fake prisma + stub MoimService(assertMember)
-// + spy EventEmitter2로 다음을 검증한다:
+// ChatService 단위 테스트(SPEC-CHAT-001 T-003/004/005 + SPEC-SAFETY-001 T-005). 인메모리 fake prisma +
+// stub MoimService(assertMember) + spy EventEmitter2 + stub SafetyService(getHiddenUserIds)로 다음을 검증한다:
 //   - sendMessage: 멤버 전송 시 insert + 저장 메시지 반환 + chat.message.created 발행(REQ-CHAT-001 / AC-1).
 //   - sendMessage: 비멤버/없는 모임은 403(404→403 변환)으로 거부하고 insert/emit 둘 다 없음(REQ-CHAT-005 / AC-3).
 //   - getHistory: keyset 내림차순(최신순) + cursor 이전 K개 + nextCursor(REQ-CHAT-003 / AC-2).
-// MoimService.assertMember는 MOIM-001에서 검증된 단일 출처라 여기서는 재구현하지 않고 스텁한다(reuse 계약).
+//   - getHistory: 뷰어가 숨긴 senderId(block∪report)를 서버 WHERE(notIn)로 제외 + 페이지 크기 보존(REQ-FLT-001 / AC-FLT-1).
+// MoimService.assertMember·SafetyService.getHiddenUserIds는 각 SPEC에서 검증된 단일 출처라 여기서는 스텁한다(reuse 계약).
 
 const NOW = new Date('2026-06-14T00:00:00.000Z');
 
@@ -25,12 +27,15 @@ describe('ChatService', () => {
   let existingMoims: Set<string>;
   let store: ChatMessage[];
   let idSeq: bigint;
+  // 뷰어(sub)별 숨김 userId 집합(block∪report). getHiddenUserIds 스텁이 이 맵에서 읽는다. 기본 빈 배열.
+  let hiddenBySub: Map<string, string[]>;
 
   function reset(): void {
     members = new Map();
     existingMoims = new Set();
     store = [];
     idSeq = 0n;
+    hiddenBySub = new Map();
   }
 
   function setMember(moimId: string, sub: string): void {
@@ -97,19 +102,27 @@ describe('ChatService', () => {
           return Promise.resolve(created);
         },
       ),
-      // keyset desc: where moimId (+ id < cursor) order by id desc take limit.
+      // keyset desc: where moimId (+ id < cursor) (+ senderId notIn hidden) order by id desc take limit.
+      // notIn 은 WHERE 에서 hidden 발신자를 제거한 뒤 take 를 적용하므로(= DB 가 take 이전에 필터) 반환 페이지
+      // 크기가 보존된다(over-fetch/trim 을 DB 가 수행). notIn 이 빈 배열이면 아무도 제외하지 않는다(Prisma no-op).
       findMany: jest.fn(
         (arg: {
-          where: { moimId: string; id?: { lt: bigint } };
+          where: {
+            moimId: string;
+            id?: { lt: bigint };
+            senderId?: { notIn: string[] };
+          };
           orderBy: { id: 'desc' };
           take: number;
         }) => {
           const cursorLt = arg.where.id?.lt;
+          const notIn = arg.where.senderId?.notIn ?? [];
           const rows = store
             .filter(
               (m) =>
                 m.moimId === arg.where.moimId &&
-                (cursorLt === undefined || m.id < cursorLt),
+                (cursorLt === undefined || m.id < cursorLt) &&
+                !notIn.includes(m.senderId),
             )
             .sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
             .slice(0, arg.take);
@@ -118,6 +131,18 @@ describe('ChatService', () => {
       ),
     };
     return { chatMessage } as unknown as PrismaService;
+  }
+
+  // getHiddenUserIds(sub) 를 스텁한 SafetyService(뷰어별 숨김 목록 반환 — 요청당 1회 조회 계약 재현).
+  function makeSafetyService(): {
+    safety: SafetyService;
+    getHiddenUserIds: jest.Mock<Promise<string[]>, [string]>;
+  } {
+    const getHiddenUserIds = jest.fn<Promise<string[]>, [string]>(
+      (sub: string) => Promise.resolve(hiddenBySub.get(sub) ?? []),
+    );
+    const safety = { getHiddenUserIds } as unknown as SafetyService;
+    return { safety, getHiddenUserIds };
   }
 
   // chat.message.created 발행을 캡처하는 spy EventEmitter2.
@@ -135,10 +160,17 @@ describe('ChatService', () => {
   function makeService(): {
     service: ChatService;
     emit: jest.Mock<boolean, [string, ChatMessageCreatedPayload]>;
+    getHiddenUserIds: jest.Mock<Promise<string[]>, [string]>;
   } {
     const { emitter, emit } = makeEmitter();
-    const service = new ChatService(makePrisma(), makeMoimService(), emitter);
-    return { service, emit };
+    const { safety, getHiddenUserIds } = makeSafetyService();
+    const service = new ChatService(
+      makePrisma(),
+      makeMoimService(),
+      emitter,
+      safety,
+    );
+    return { service, emit, getHiddenUserIds };
   }
 
   beforeEach(() => {
@@ -299,6 +331,130 @@ describe('ChatService', () => {
           limit: 10,
         }),
       ).rejects.toMatchObject({ status: 400 });
+    });
+  });
+
+  // ── T-005(SAFETY): getHistory 뷰어 측 필터 — 숨긴 발신자 메시지 제외 + 페이지 크기 보존 ──
+  describe('getHistory() 뷰어 측 필터 (REQ-FLT-001 / AC-FLT-1)', () => {
+    it('뷰어가 숨긴 발신자(block∪report)의 메시지를 서버 WHERE(notIn)로 제외한다', async () => {
+      const { service, getHiddenUserIds } = makeService();
+      setMember('moim-A', 'viewer');
+      // viewer 가 userB 를 차단/신고 → hidden 목록에 userB.
+      hiddenBySub.set('viewer', ['userB']);
+      // userB 와 다른 멤버 메시지가 섞여 있다.
+      seedMessage({
+        id: 1n,
+        moimId: 'moim-A',
+        senderId: 'userA',
+        content: 'a1',
+      });
+      seedMessage({
+        id: 2n,
+        moimId: 'moim-A',
+        senderId: 'userB',
+        content: 'b1',
+      });
+      seedMessage({
+        id: 3n,
+        moimId: 'moim-A',
+        senderId: 'userA',
+        content: 'a2',
+      });
+
+      const page = await service.getHistory('viewer', 'moim-A', { limit: 10 });
+
+      // userB(2n) 는 제외되고 userA 메시지만 남는다(내림차순).
+      expect(page.messages.map((m) => m.id)).toEqual([3n, 1n]);
+      expect(page.messages.every((m) => m.senderId !== 'userB')).toBe(true);
+      // hidden 목록은 뷰어 sub 로 1회 조회된다(요청당 1회 — N+1 회피 계약).
+      expect(getHiddenUserIds).toHaveBeenCalledWith('viewer');
+    });
+
+    it('숨긴 발신자가 있어도 over-fetch/trim(WHERE notIn+take)으로 페이지 크기를 보존한다(E-1)', async () => {
+      const { service } = makeService();
+      setMember('moim-A', 'viewer');
+      hiddenBySub.set('viewer', ['userB']);
+      // 14개 메시지 중 3개(2,5,8)가 userB → 가시 11개. take=10 → 정확히 10개 반환(페이지 축소 없음).
+      for (let i = 1; i <= 14; i += 1) {
+        seedMessage({
+          id: BigInt(i),
+          moimId: 'moim-A',
+          senderId: i === 2 || i === 5 || i === 8 ? 'userB' : 'userA',
+          content: `m-${i}`,
+        });
+      }
+
+      const page = await service.getHistory('viewer', 'moim-A', { limit: 10 });
+
+      // 가시 메시지가 충분(11개)하므로 정확히 limit(10)개 반환 + userB 미포함.
+      expect(page.messages).toHaveLength(10);
+      expect(page.messages.every((m) => m.senderId !== 'userB')).toBe(true);
+      // 커서는 반환분 마지막(가장 오래된 가시) id 여야 한다(더 오래된 가시 페이지 남음).
+      expect(page.nextCursor).toBe(page.messages[9].id.toString());
+    });
+
+    it('필터 후 가시 메시지가 limit 미만이면 반환 < limit + nextCursor=null(M3-2)', async () => {
+      const { service } = makeService();
+      setMember('moim-A', 'viewer');
+      hiddenBySub.set('viewer', ['userB']);
+      // 5개 중 3개가 userB → 가시 2개. take=10 → 2개 반환, 더 없음 → nextCursor null.
+      seedMessage({
+        id: 1n,
+        moimId: 'moim-A',
+        senderId: 'userA',
+        content: 'a1',
+      });
+      seedMessage({
+        id: 2n,
+        moimId: 'moim-A',
+        senderId: 'userB',
+        content: 'b1',
+      });
+      seedMessage({
+        id: 3n,
+        moimId: 'moim-A',
+        senderId: 'userB',
+        content: 'b2',
+      });
+      seedMessage({
+        id: 4n,
+        moimId: 'moim-A',
+        senderId: 'userB',
+        content: 'b3',
+      });
+      seedMessage({
+        id: 5n,
+        moimId: 'moim-A',
+        senderId: 'userA',
+        content: 'a2',
+      });
+
+      const page = await service.getHistory('viewer', 'moim-A', { limit: 10 });
+
+      expect(page.messages.map((m) => m.id)).toEqual([5n, 1n]);
+      expect(page.nextCursor).toBeNull();
+    });
+
+    it('hidden 목록이 비면 아무도 제외하지 않는다(notIn 빈 배열 = no-op)', async () => {
+      const { service } = makeService();
+      setMember('moim-A', 'viewer');
+      // hiddenBySub 미설정 → 빈 배열.
+      seedMessage({
+        id: 1n,
+        moimId: 'moim-A',
+        senderId: 'userA',
+        content: 'a1',
+      });
+      seedMessage({
+        id: 2n,
+        moimId: 'moim-A',
+        senderId: 'userB',
+        content: 'b1',
+      });
+
+      const page = await service.getHistory('viewer', 'moim-A', { limit: 10 });
+
+      expect(page.messages.map((m) => m.id)).toEqual([2n, 1n]);
     });
   });
 });

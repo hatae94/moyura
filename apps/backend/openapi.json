@@ -847,6 +847,148 @@
         ]
       }
     },
+    "/reports": {
+      "post": {
+        "operationId": "SafetyController_createReport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "신고 저장 결과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "content_type 화이트리스트 외 또는 빈 reason — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/blocks": {
+      "post": {
+        "operationId": "SafetyController_createBlock",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBlockDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "차단 생성 결과(멱등 — 이미 존재해도 201)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "자기 차단 또는 blockedUserId 누락 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "safety"
+        ]
+      },
+      "get": {
+        "operationId": "SafetyController_listBlocks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "내가 차단한 목록(block 행만)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockListResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/blocks/{blockedUserId}": {
+      "delete": {
+        "operationId": "SafetyController_unblock",
+        "parameters": [
+          {
+            "name": "blockedUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "차단 해제 완료(없는 행도 멱등 204)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "safety"
+        ]
+      }
+    },
     "/moims/{id}/polls": {
       "post": {
         "operationId": "PollController_create",
@@ -1384,6 +1526,60 @@
         ]
       }
     },
+    "/moims/{id}/settlements/request": {
+      "post": {
+        "operationId": "SettlementController_request",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestSettlementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "정산 요청 생성(채권자 → 채무자)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettlementRequestResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "금액/채무자 검증 실패(비멤버 채무자·자기 요청·비정수 금액) — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "멤버 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "settlements"
+        ]
+      }
+    },
     "/moims/{id}/settlements/{settlementId}": {
       "delete": {
         "operationId": "SettlementController_removeById",
@@ -1426,6 +1622,313 @@
         ],
         "tags": [
           "settlements"
+        ]
+      }
+    },
+    "/moims/{id}/schedule": {
+      "put": {
+        "operationId": "ScheduleController_set",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetScheduleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "일정 조율 세션 설정/재설정",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "날짜/시간 범위/슬롯 단위 검증 실패 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "schedule"
+        ]
+      },
+      "get": {
+        "operationId": "ScheduleController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "일정 조율 세션(미설정이면 null)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "멤버 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "schedule"
+        ]
+      },
+      "delete": {
+        "operationId": "ScheduleController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "일정 조율 세션 삭제(초기화)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/moims/{id}/schedule/me": {
+      "put": {
+        "operationId": "ScheduleController_setMine",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAvailabilityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "내 가능 슬롯 교체 저장"
+          },
+          "400": {
+            "description": "미설정/확정됨/범위 밖 슬롯 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "멤버 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/moims/{id}/schedule/dates": {
+      "put": {
+        "operationId": "ScheduleController_setDates",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "후보 날짜 편집(멤버 누구나)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "미설정/확정됨/날짜 형식 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "멤버 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/moims/{id}/schedule/window": {
+      "put": {
+        "operationId": "ScheduleController_setWindow",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "시간대 넓히기(멤버 누구나)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "미설정/확정됨/좁히기/격자 어긋남 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "멤버 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/moims/{id}/schedule/confirm": {
+      "post": {
+        "operationId": "ScheduleController_confirm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmScheduleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "일정 확정(moim.startsAt 갱신)"
+          },
+          "400": {
+            "description": "미설정/후보 밖 날짜/범위 밖 시각 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          },
+          "403": {
+            "description": "owner 아님(또는 모임 미존재) — 403"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "schedule"
         ]
       }
     },
@@ -1489,6 +1992,126 @@
         ],
         "tags": [
           "devices"
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "NotificationController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "keyset 내림차순(최신순) 알림 목록 + nextCursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationListResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 cursor — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "notification"
+        ]
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "operationId": "NotificationController_unreadCount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "수신자의 미읽음 알림 개수",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "notification"
+        ]
+      }
+    },
+    "/notifications/read": {
+      "post": {
+        "operationId": "NotificationController_markRead",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "읽음 처리 결과(실제 갱신된 행 수)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ids/all 둘 다 없거나 ids 형식 불량 — 400"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "notification"
         ]
       }
     }
@@ -1927,6 +2550,157 @@
         "required": [
           "messages",
           "nextCursor"
+        ]
+      },
+      "CreateReportDto": {
+        "type": "object",
+        "properties": {
+          "targetUserId": {
+            "type": "string",
+            "description": "신고 대상(피신고 콘텐츠 작성자) sub(profile.id).",
+            "example": "user-b"
+          },
+          "moimId": {
+            "type": "string",
+            "description": "신고 컨텍스트 모임 id.",
+            "example": "moim-a"
+          },
+          "reason": {
+            "type": "string",
+            "description": "신고 사유(trim 후 비어 있을 수 없음 — 빈 값은 400).",
+            "example": "스팸"
+          },
+          "contentType": {
+            "type": "string",
+            "description": "신고 콘텐츠 타입. 단일 PK 4종만 허용(복합 PK 콘텐츠는 400, REQ-RPT-004).",
+            "enum": [
+              "chat_message",
+              "poll",
+              "expense",
+              "settlement_request"
+            ],
+            "example": "chat_message"
+          },
+          "contentId": {
+            "type": "string",
+            "description": "신고 콘텐츠 id(TEXT 통일). chat_message(BigInt PK)는 필터 시 BigInt 캐스팅(REQ-RPT-005).",
+            "example": "42"
+          }
+        },
+        "required": [
+          "targetUserId",
+          "moimId",
+          "reason",
+          "contentType",
+          "contentId"
+        ]
+      },
+      "ReportResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "신고 id(uuid)",
+            "example": "uuid"
+          },
+          "reporterId": {
+            "type": "string",
+            "description": "신고자 sub(가드-검증 sub)",
+            "example": "user-a"
+          },
+          "targetUserId": {
+            "type": "string",
+            "description": "신고 대상 sub",
+            "example": "user-b"
+          },
+          "moimId": {
+            "type": "string",
+            "description": "신고 컨텍스트 모임 id",
+            "example": "moim-a"
+          },
+          "reason": {
+            "type": "string",
+            "description": "신고 사유",
+            "example": "스팸"
+          },
+          "contentType": {
+            "type": "string",
+            "description": "신고 콘텐츠 타입(단일 PK 4종)",
+            "example": "chat_message"
+          },
+          "contentId": {
+            "type": "string",
+            "description": "신고 콘텐츠 id(TEXT)",
+            "example": "42"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "생성 시각(ISO-8601)",
+            "example": "2026-07-02T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "reporterId",
+          "targetUserId",
+          "moimId",
+          "reason",
+          "contentType",
+          "contentId",
+          "createdAt"
+        ]
+      },
+      "CreateBlockDto": {
+        "type": "object",
+        "properties": {
+          "blockedUserId": {
+            "type": "string",
+            "description": "차단 대상 sub(profile.id). 자기 자신(sub)이면 400. 이미 차단돼 있으면 멱등 성공(200).",
+            "example": "user-b"
+          }
+        },
+        "required": [
+          "blockedUserId"
+        ]
+      },
+      "BlockResponseDto": {
+        "type": "object",
+        "properties": {
+          "blockerId": {
+            "type": "string",
+            "description": "차단자 sub(가드-검증 sub)",
+            "example": "user-a"
+          },
+          "blockedUserId": {
+            "type": "string",
+            "description": "차단 대상 sub",
+            "example": "user-b"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "생성 시각(ISO-8601)",
+            "example": "2026-07-02T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "blockerId",
+          "blockedUserId",
+          "createdAt"
+        ]
+      },
+      "BlockListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "내가 차단한 목록(block 행만)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlockResponseDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "CreatePollDto": {
@@ -2480,6 +3254,260 @@
           "settledAt"
         ]
       },
+      "RequestSettlementDto": {
+        "type": "object",
+        "properties": {
+          "debtorId": {
+            "type": "string",
+            "description": "채무자 멤버 sub(돈을 낼 사람)"
+          },
+          "amount": {
+            "type": "number",
+            "description": "정산 요청 금액(KRW 정수)",
+            "example": 4000
+          }
+        },
+        "required": [
+          "debtorId",
+          "amount"
+        ]
+      },
+      "SettlementRequestResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "정산 요청 id"
+          },
+          "moimId": {
+            "type": "string",
+            "description": "모임 id"
+          },
+          "requesterId": {
+            "type": "string",
+            "description": "요청자 sub(채권자)"
+          },
+          "debtorId": {
+            "type": "string",
+            "description": "채무자 sub"
+          },
+          "amount": {
+            "type": "number",
+            "description": "요청 금액(KRW 정수)"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "요청 생성 시각(ISO-8601)"
+          }
+        },
+        "required": [
+          "id",
+          "moimId",
+          "requesterId",
+          "debtorId",
+          "amount",
+          "createdAt"
+        ]
+      },
+      "SetScheduleDto": {
+        "type": "object",
+        "properties": {
+          "dates": {
+            "description": "후보 날짜 배열(ISO date \"YYYY-MM-DD\"). 최소 1개, 임의 다수.",
+            "example": [
+              "2026-07-05",
+              "2026-07-06",
+              "2026-07-12"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startMinute": {
+            "type": "number",
+            "description": "하루 시작 시각(후보일 00:00 기준 분, 0~1440).",
+            "example": 1080
+          },
+          "endMinute": {
+            "type": "number",
+            "description": "하루 종료 시각(후보일 00:00 기준 분). startMinute 초과 + 자정 넘김 시 1440 초과 가능(예: 익일 02:00 = 1560).",
+            "example": 1440
+          },
+          "slotMinutes": {
+            "type": "number",
+            "description": "슬롯 단위(분). 15/30/60 중 하나. 생략 시 30.",
+            "example": 30,
+            "default": 30
+          }
+        },
+        "required": [
+          "dates",
+          "startMinute",
+          "endMinute"
+        ]
+      },
+      "ScheduleSlotDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "가능 멤버 sub(= profile.id)",
+            "example": "uuid"
+          },
+          "date": {
+            "type": "string",
+            "description": "슬롯 날짜(ISO date)",
+            "example": "2026-07-05"
+          },
+          "startMinute": {
+            "type": "number",
+            "description": "슬롯 시작(후보일 00:00 기준 분, >=1440 이면 다음날)",
+            "example": 1080
+          }
+        },
+        "required": [
+          "userId",
+          "date",
+          "startMinute"
+        ]
+      },
+      "ScheduleEventDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "uuid"
+          },
+          "moimId": {
+            "type": "string",
+            "example": "uuid"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "생성자 sub",
+            "example": "uuid"
+          },
+          "dates": {
+            "description": "후보 날짜 배열",
+            "example": [
+              "2026-07-05",
+              "2026-07-06"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startMinute": {
+            "type": "number",
+            "description": "하루 시작(분)",
+            "example": 1080
+          },
+          "endMinute": {
+            "type": "number",
+            "description": "하루 종료(분, >1440=자정 넘김)",
+            "example": 1440
+          },
+          "slotMinutes": {
+            "type": "number",
+            "description": "슬롯 단위(분)",
+            "example": 30
+          },
+          "confirmedAt": {
+            "type": "string",
+            "description": "확정 시각(ISO datetime, nullable). 있으면 moim.startsAt 이 확정되어 그리드가 읽기 전용.",
+            "example": "2026-07-01T12:00:00.000Z",
+            "nullable": true
+          },
+          "slots": {
+            "description": "전체 멤버 가능 슬롯",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleSlotDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "moimId",
+          "createdBy",
+          "dates",
+          "startMinute",
+          "endMinute",
+          "slotMinutes",
+          "slots"
+        ]
+      },
+      "ScheduleResponseDto": {
+        "type": "object",
+        "properties": {
+          "schedule": {
+            "description": "일정 조율 세션(미설정이면 null)",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleEventDto"
+              }
+            ]
+          }
+        }
+      },
+      "SetAvailabilityDto": {
+        "type": "object",
+        "properties": {
+          "slots": {
+            "type": "array",
+            "description": "가능 슬롯 배열. 각 항목 { date, startMinute }. 세션의 dates·시간 범위·슬롯 격자에 정렬되어야 한다(미정렬 → 400).",
+            "example": [
+              {
+                "date": "2026-07-05",
+                "startMinute": 1080
+              },
+              {
+                "date": "2026-07-05",
+                "startMinute": 1110
+              }
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "example": "2026-07-05"
+                },
+                "startMinute": {
+                  "type": "number",
+                  "example": 1080
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "slots"
+        ]
+      },
+      "ConfirmScheduleDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "확정할 날짜(ISO date \"YYYY-MM-DD\"). 세션 dates 중 하나여야 한다.",
+            "example": "2026-07-05"
+          },
+          "startMinute": {
+            "type": "number",
+            "description": "확정할 시작 시각(후보일 00:00 기준 분). 세션 시간 범위·격자에 정렬. >1440 이면 다음날 새벽(자정 넘김).",
+            "example": 1080
+          }
+        },
+        "required": [
+          "date",
+          "startMinute"
+        ]
+      },
       "RegisterDeviceDto": {
         "type": "object",
         "properties": {
@@ -2501,6 +3529,158 @@
         "required": [
           "token",
           "platform"
+        ]
+      },
+      "NotificationActorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "유발자 sub(= profile.id)",
+            "example": "uuid"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "모임별 표시 이름(해석 실패 시 기본값)",
+            "example": "홍길동"
+          }
+        },
+        "required": [
+          "id",
+          "nickname"
+        ]
+      },
+      "NotificationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "알림 id(BigInt → 문자열, keyset 커서)",
+            "example": "42"
+          },
+          "type": {
+            "type": "string",
+            "description": "알림 종류(예: member.joined)",
+            "example": "member.joined"
+          },
+          "moimId": {
+            "type": "string",
+            "description": "컨텍스트 모임 id",
+            "example": "uuid"
+          },
+          "moimName": {
+            "type": "string",
+            "description": "모임명(모임이 삭제됐으면 null)",
+            "nullable": true,
+            "example": "금요일 저녁 모임"
+          },
+          "actor": {
+            "description": "유발자(무행위자 알림이면 null)",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationActorDto"
+              }
+            ]
+          },
+          "data": {
+            "type": "object",
+            "description": "타입별 미리보기 + 딥링크 타깃(자유 형식 JSON)",
+            "example": {
+              "pollId": "uuid",
+              "question": "점심 뭐 먹지?"
+            }
+          },
+          "readAt": {
+            "type": "string",
+            "description": "읽음 시각(ISO-8601, 안읽음이면 null)",
+            "nullable": true,
+            "example": "2026-07-01T12:00:00.000Z"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "생성 시각(ISO-8601)",
+            "example": "2026-07-01T12:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "moimId",
+          "moimName",
+          "data",
+          "readAt",
+          "createdAt"
+        ]
+      },
+      "NotificationListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "알림 목록(최신순)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "다음 페이지 커서(없으면 null)",
+            "nullable": true,
+            "example": "17"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "UnreadCountResponseDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number",
+            "description": "미읽음 알림 개수",
+            "example": 3
+          }
+        },
+        "required": [
+          "count"
+        ]
+      },
+      "MarkReadDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "읽음 처리할 알림 id 배열(BigInt 문자열). all 과 배타 — 지정 시 비어 있으면 400.",
+            "example": [
+              "42",
+              "41"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "all": {
+            "type": "boolean",
+            "description": "전체 미읽음 읽음 처리(ids 미지정 시 true 여야 함).",
+            "example": true
+          }
+        }
+      },
+      "MarkReadResponseDto": {
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "number",
+            "description": "읽음 처리된 알림 수",
+            "example": 5
+          }
+        },
+        "required": [
+          "updated"
         ]
       }
     }

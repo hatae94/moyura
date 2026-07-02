@@ -13,6 +13,7 @@ import type {
 } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { SafetyService } from '../safety/safety.service';
 import { MOIM_POLL_CLOSED, MOIM_POLL_CREATED } from './poll-events';
 import { PollService } from './poll.service';
 
@@ -47,6 +48,8 @@ describe('PollService', () => {
   let idSeq: number;
   // SPEC-NOTIFICATIONS-001 M2: EventEmitter2.emit 스텁(발행 검증용, per-test 초기화).
   let emit: jest.Mock;
+  // SPEC-SAFETY-001 T-005: 뷰어(sub)별 숨김 userId 집합(block∪report). getHiddenUserIds 스텁이 읽는다. 기본 빈 배열.
+  let hiddenBySub: Map<string, string[]>;
 
   function reset(): void {
     members = new Map();
@@ -58,6 +61,7 @@ describe('PollService', () => {
       vote: new Map(),
     };
     idSeq = 0;
+    hiddenBySub = new Map();
   }
 
   function nextId(prefix: string): string {
@@ -214,18 +218,28 @@ describe('PollService', () => {
       findUnique: jest.fn((arg: { where: { id: string } }) =>
         Promise.resolve(tables.poll.get(arg.where.id) ?? null),
       ),
+      // SPEC-SAFETY-001 T-005: where 에 createdBy notIn(뷰어가 숨긴 생성자 poll 제외)이 선택적으로 붙는다.
+      // notIn 이 빈 배열이면 아무 poll 도 제외하지 않는다(Prisma no-op — 필터 미적용과 동일).
       findMany: jest.fn(
-        (arg: { where: { moimId: string }; include?: { options?: boolean } }) =>
-          Promise.resolve(
+        (arg: {
+          where: { moimId: string; createdBy?: { notIn: string[] } };
+          include?: { options?: boolean };
+        }) => {
+          const notIn = arg.where.createdBy?.notIn ?? [];
+          return Promise.resolve(
             [...tables.poll.values()]
-              .filter((p) => p.moimId === arg.where.moimId)
+              .filter(
+                (p) =>
+                  p.moimId === arg.where.moimId && !notIn.includes(p.createdBy),
+              )
               .map((p) => ({
                 ...p,
                 options: [...tables.option.values()].filter(
                   (o) => o.pollId === p.id,
                 ),
               })),
-          ),
+          );
+        },
       ),
       // update({ where: { id }, data: { closesAt } }) — closePoll 이 now 로 설정할 때 사용.
       update: jest.fn(
@@ -361,10 +375,41 @@ describe('PollService', () => {
     } as unknown as PrismaService;
   }
 
+  // getHiddenUserIds(sub) 를 스텁한 SafetyService(뷰어별 숨김 목록 반환 — 요청당 1회 조회 계약 재현).
+  function makeSafetyService(): {
+    safety: SafetyService;
+    getHiddenUserIds: jest.Mock<Promise<string[]>, [string]>;
+  } {
+    const getHiddenUserIds = jest.fn<Promise<string[]>, [string]>(
+      (sub: string) => Promise.resolve(hiddenBySub.get(sub) ?? []),
+    );
+    const safety = { getHiddenUserIds } as unknown as SafetyService;
+    return { safety, getHiddenUserIds };
+  }
+
   function makeService(): PollService {
-    return new PollService(makePrisma(), makeMoimService(), {
-      emit,
-    } as unknown as EventEmitter2);
+    const { safety } = makeSafetyService();
+    return new PollService(
+      makePrisma(),
+      makeMoimService(),
+      { emit } as unknown as EventEmitter2,
+      safety,
+    );
+  }
+
+  // getHiddenUserIds 스파이가 필요한 테스트용(뷰어 필터 호출 검증).
+  function makeServiceWithSafety(): {
+    service: PollService;
+    getHiddenUserIds: jest.Mock<Promise<string[]>, [string]>;
+  } {
+    const { safety, getHiddenUserIds } = makeSafetyService();
+    const service = new PollService(
+      makePrisma(),
+      makeMoimService(),
+      { emit } as unknown as EventEmitter2,
+      safety,
+    );
+    return { service, getHiddenUserIds };
   }
 
   beforeEach(() => {
@@ -712,6 +757,68 @@ describe('PollService', () => {
       await expect(
         service.listPolls('stranger', 'moim-A'),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  // ── T-005(SAFETY): listPolls 뷰어 측 필터 — 숨긴 생성자 poll 제외 + 표 집계 불변 ──
+  describe('listPolls() 뷰어 측 필터 (REQ-FLT-002 / AC-FLT-2)', () => {
+    it('뷰어가 숨긴 생성자(block∪report)의 poll 을 목록에서 제외한다', async () => {
+      const { service, getHiddenUserIds } = makeServiceWithSafety();
+      setMember('moim-A', 'viewer');
+      // viewer 가 userB 를 차단/신고 → hidden 목록에 userB.
+      hiddenBySub.set('viewer', ['userB']);
+      // userB 가 만든 poll P1 + 다른 멤버(userA)가 만든 poll P2.
+      seedPoll('moim-A', 'B의 투표', ['x', 'y'], false, 'userB');
+      seedPoll('moim-A', 'A의 투표', ['x', 'y'], false, 'userA');
+
+      const polls = await service.listPolls('viewer', 'moim-A');
+
+      // userB 의 poll 은 목록에서 제외되고 userA 의 poll 만 남는다.
+      expect(polls.map((p) => p.question)).toEqual(['A의 투표']);
+      expect(polls.every((p) => p.createdBy !== 'userB')).toBe(true);
+      // hidden 목록은 뷰어 sub 로 1회 조회된다(요청당 1회 — N+1 회피 계약).
+      expect(getHiddenUserIds).toHaveBeenCalledWith('viewer');
+    });
+
+    it('숨김 대상이 다른 poll 에 던진 표는 그 poll 집계에 그대로 포함된다(익명 집계 불변)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'viewer');
+      hiddenBySub.set('viewer', ['userB']);
+      // userA 가 만든 poll(뷰어에게 보임)에 userB 가 표를 던졌다 — 집계는 B 표를 포함해 불변이어야 한다.
+      const { poll, options } = seedPoll(
+        'moim-A',
+        'A의 투표',
+        ['옵션1', '옵션2'],
+        false,
+        'userA',
+      );
+      seedVote(poll.id, options[0].id, 'userB'); // 숨김 대상의 표
+      seedVote(poll.id, options[0].id, 'viewer');
+
+      const polls = await service.listPolls('viewer', 'moim-A');
+
+      expect(polls).toHaveLength(1);
+      const optionMap = new Map(
+        polls[0].options.map((o) => [o.label, o.voteCount]),
+      );
+      // 옵션1 은 userB + viewer = 2표. userB 가 숨김 대상이어도 집계에서 빠지지 않는다(익명 표 집계 불변).
+      expect(optionMap.get('옵션1')).toBe(2);
+      expect(optionMap.get('옵션2')).toBe(0);
+    });
+
+    it('hidden 목록이 비면 모든 poll 이 보인다(notIn 빈 배열 = no-op)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'viewer');
+      // hiddenBySub 미설정 → 빈 배열.
+      seedPoll('moim-A', 'B의 투표', ['x', 'y'], false, 'userB');
+      seedPoll('moim-A', 'A의 투표', ['x', 'y'], false, 'userA');
+
+      const polls = await service.listPolls('viewer', 'moim-A');
+
+      expect(polls.map((p) => p.question).sort()).toEqual([
+        'A의 투표',
+        'B의 투표',
+      ]);
     });
   });
 

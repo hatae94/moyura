@@ -14,12 +14,13 @@ import type {
 } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { SafetyService } from '../safety/safety.service';
 import {
   MOIM_EXPENSE_ADDED,
   MOIM_SETTLEMENT_COMPLETED,
   MOIM_SETTLEMENT_REQUESTED,
 } from './expense-events';
-import { ExpenseService } from './expense.service';
+import { BLOCKED_MEMBER_LABEL, ExpenseService } from './expense.service';
 
 // ExpenseService 단위 테스트(SPEC-MOIM-EXPENSE-001). 인메모리 fake Prisma + stub MoimService 로 검증한다:
 //   - createExpense: equal/custom/ratio 분배 + 합=amount 불변식 + 검증 실패 → 400/403.
@@ -58,6 +59,10 @@ describe('ExpenseService', () => {
   let owners: Map<string, string>;
   // SPEC-NOTIFICATIONS-001 M2: EventEmitter2.emit 스텁(발행 검증용, per-test 초기화).
   let emit: jest.Mock;
+  // SPEC-SAFETY-001 T-006: 뷰어(sub)가 숨긴 userId 목록(block∪report). 테스트별로 세팅해 마스킹을 검증한다.
+  let hiddenUserIds: string[];
+  // getHiddenUserIds 스텁(호출 검증용).
+  let getHiddenUserIds: jest.Mock;
 
   function reset(): void {
     tables = {
@@ -71,6 +76,9 @@ describe('ExpenseService', () => {
     idSeq = 0;
     owners = new Map();
     emit = jest.fn();
+    hiddenUserIds = [];
+    // fake Prisma 컨벤션대로 Promise.resolve 로 비동기 반환한다(sync return 금지).
+    getHiddenUserIds = jest.fn(() => Promise.resolve(hiddenUserIds));
   }
 
   function nextId(prefix: string): string {
@@ -476,10 +484,22 @@ describe('ExpenseService', () => {
     } as unknown as PrismaService;
   }
 
+  // SPEC-SAFETY-001 T-006: 뷰어 측 숨김 목록 단일 출처 스텁. getHiddenUserIds 만 사용한다(getBlockersOf 는 push 경로 전용).
+  function makeSafetyService(): SafetyService {
+    return {
+      getHiddenUserIds,
+    } as unknown as SafetyService;
+  }
+
   function makeService(): ExpenseService {
-    return new ExpenseService(makePrisma(), makeMoimService(), {
-      emit,
-    } as unknown as EventEmitter2);
+    return new ExpenseService(
+      makePrisma(),
+      makeMoimService(),
+      {
+        emit,
+      } as unknown as EventEmitter2,
+      makeSafetyService(),
+    );
   }
 
   beforeEach(() => {
@@ -1474,6 +1494,140 @@ describe('ExpenseService', () => {
         service.requestSettlement('owner', 'moim-A', 'user-B', 1.5),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(emit).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── SPEC-SAFETY-001 T-006: 지출 표시 목록 작성자 마스킹(REQ-FLT-003 / AC-FLT-3) ────────────────
+  // 계약(M3-8~M3-11, E-2): 계산=전체 원본(balance/transactions/total 불변), 표시=행 유지 + 차단 대상
+  // 작성자만 '차단한 멤버' 마스킹. [WARN] 마스킹은 계산 입력이 아니라 표시 반환 직전에만 적용한다.
+  //
+  // 선행 확인 결과(task T-006 "선행 확인: listExpenses 반환 shape 에 settlement_request 행 포함 여부"):
+  //   listExpenses 반환 shape = { expenses: ExpenseWithShares[], summary, settlement } 이며
+  //   settlement_request 행은 표시 목록에 포함되지 않는다(SettlementRequest 테이블은 requestSettlement
+  //   create 전용, 읽기 경로 없음). 따라서 REQ-FLT-003 의 "요청자 마스킹"은 이 표면에서 마스킹할 행이
+  //   존재하지 않아 vacuously 충족된다 — 아래 마지막 테스트로 이 불변식을 명시 고정한다.
+  describe('listExpenses() — 차단 대상 작성자 마스킹(SPEC-SAFETY-001 REQ-FLT-003 / AC-FLT-3)', () => {
+    it('hidden creator 의 expense 행은 제거되지 않고 createdBy 만 마스킹된다', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+      addMember('moim-A', 'user-C');
+      // E1: 작성자=user-B(차단 대상), E2: 작성자=user-C(정상). createdBy 는 시드 후 명시 세팅한다.
+      const e1 = seedExpense('moim-A', 'owner', 5000, '식비', []);
+      tables.expense.set(e1.id, {
+        ...tables.expense.get(e1.id),
+        createdBy: 'user-B',
+      });
+      const e2 = seedExpense('moim-A', 'owner', 3000, '교통', []);
+
+      hiddenUserIds = ['user-B'];
+
+      const result = await service.listExpenses('owner', 'moim-A');
+
+      // 행 유지: 두 행 모두 남아 있다(제거 아님).
+      expect(result.expenses).toHaveLength(2);
+      const maskedE1 = result.expenses.find((e) => e.id === e1.id);
+      const plainE2 = result.expenses.find((e) => e.id === e2.id);
+      // 차단 대상 작성자만 마스킹.
+      expect(maskedE1?.createdBy).toBe(BLOCKED_MEMBER_LABEL);
+      // 정상 작성자는 원본 유지.
+      expect(plainE2?.createdBy).toBe('owner');
+      // getHiddenUserIds 는 요청당 1회만 조회한다(N+1 회피).
+      expect(getHiddenUserIds).toHaveBeenCalledTimes(1);
+      expect(getHiddenUserIds).toHaveBeenCalledWith('owner');
+    });
+
+    it('마스킹은 정산 계산(balance/transactions/total)을 오염시키지 않는다 — 계산=전체 원본', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner', 50000);
+      addMember('moim-A', 'user-B');
+      // user-B 가 10000 지불하고 owner/user-B 균등 분배 → user-B 채권자, owner 채무자.
+      // 작성자(createdBy)=user-B 로 만들어 마스킹 대상이면서 동시에 payer 로 계산에 참여한다.
+      const e1 = seedExpense('moim-A', 'user-B', 10000, '식비', [
+        { userId: 'owner', shareAmount: 5000 },
+        { userId: 'user-B', shareAmount: 5000 },
+      ]);
+      tables.expense.set(e1.id, {
+        ...tables.expense.get(e1.id),
+        createdBy: 'user-B',
+      });
+
+      hiddenUserIds = ['user-B'];
+
+      const result = await service.listExpenses('owner', 'moim-A');
+
+      // total 은 마스킹과 무관하게 전체 원본 기준.
+      expect(result.summary.total).toBe(10000);
+      // balance: user-B 는 payer 이므로 payerUserId(마스킹 안 되는 필드)로 계산 — +5000 채권자.
+      const userBBalance = result.settlement.balances.find(
+        (b) => b.userId === 'user-B',
+      );
+      const ownerBalance = result.settlement.balances.find(
+        (b) => b.userId === 'owner',
+      );
+      expect(userBBalance?.balance).toBe(5000);
+      expect(ownerBalance?.balance).toBe(-5000);
+      // 최소 거래도 원본 기준(owner → user-B 5000).
+      expect(result.settlement.transactions).toHaveLength(1);
+      const tx = result.settlement.transactions[0];
+      expect(tx.from).toBe('owner');
+      expect(tx.to).toBe('user-B');
+      expect(tx.amount).toBe(5000);
+      // 표시 행의 createdBy 는 마스킹.
+      expect(result.expenses[0].createdBy).toBe(BLOCKED_MEMBER_LABEL);
+    });
+
+    it('∑ 정합: 마스킹 후에도 표시 expense 항목 금액 합 == summary.total(금액 불변)', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+      addMember('moim-A', 'user-C');
+      const e1 = seedExpense('moim-A', 'owner', 5000, '식비', []);
+      tables.expense.set(e1.id, {
+        ...tables.expense.get(e1.id),
+        createdBy: 'user-B',
+      });
+      seedExpense('moim-A', 'owner', 3000, '교통', []);
+
+      hiddenUserIds = ['user-B'];
+
+      const result = await service.listExpenses('owner', 'moim-A');
+
+      const shownSum = result.expenses.reduce((acc, e) => acc + e.amount, 0);
+      expect(shownSum).toBe(result.summary.total);
+      expect(shownSum).toBe(8000);
+    });
+
+    it('차단 없음(hiddenIds=[]) 시 createdBy 마스킹 없이 원본 그대로 반환한다', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+      const e1 = seedExpense('moim-A', 'owner', 5000, '식비', []);
+      tables.expense.set(e1.id, {
+        ...tables.expense.get(e1.id),
+        createdBy: 'user-B',
+      });
+
+      // hiddenUserIds 기본값 [] 유지.
+      const result = await service.listExpenses('owner', 'moim-A');
+
+      expect(result.expenses[0].createdBy).toBe('user-B');
+    });
+
+    it('선행 확인 고정: listExpenses 표시 목록은 settlement_request 행을 포함하지 않는다(요청자 마스킹 대상 부재)', async () => {
+      const service = makeService();
+      seedMoim('moim-A', 'owner');
+      addMember('moim-A', 'user-B');
+      // 정산 요청을 생성해도 listExpenses 표시 목록(expenses)에는 나타나지 않는다.
+      await service.requestSettlement('owner', 'moim-A', 'user-B', 4000);
+      expect(tables.settlementRequest.size).toBe(1);
+
+      hiddenUserIds = ['user-B'];
+      const result = await service.listExpenses('owner', 'moim-A');
+
+      // 표시 목록에 settlement_request 행이 섞이지 않는다 — expenses 는 모두 Expense 행이다.
+      // (settlement_request 는 이 표면에서 렌더되지 않으므로 요청자 마스킹은 vacuous.)
+      expect(result.expenses).toHaveLength(0);
     });
   });
 });
