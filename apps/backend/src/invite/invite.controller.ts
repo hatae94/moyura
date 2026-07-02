@@ -110,7 +110,8 @@ export class InvitePublicController {
   // GET /invites/:token — 초대 유효성 확인(공개, 비인증). 200 or 404/410.
   @Get()
   @ApiOkResponse({
-    description: '유효한 초대 — moimId + 모임 요약(name·memberCount·maxMembers) 반환',
+    description:
+      '유효한 초대 — moimId + 모임 요약(name·memberCount·maxMembers) 반환',
     type: InviteValidityDto,
   })
   @ApiNotFoundResponse({ description: '미지 토큰 — 404' })
