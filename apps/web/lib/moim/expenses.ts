@@ -74,7 +74,6 @@ export interface ExpenseInput {
 // 카테고리 프리셋(백엔드 정의)
 // ─────────────────────────────────────────────
 export const EXPENSE_CATEGORIES = ["식비", "교통", "숙박", "입장", "준비물", "기타"] as const;
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
 // ─────────────────────────────────────────────
 // API 헬퍼

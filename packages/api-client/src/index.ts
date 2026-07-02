@@ -4,14 +4,16 @@
 import type { paths, components } from './schema';
 
 // 백엔드가 노출하는 헬스 응답 DTO(HealthResponseDto)의 타입 별칭.
-export type HealthResponse = components['schemas']['HealthResponseDto'];
+// 내부 전용 — getHealth() 반환 타입으로만 쓰이며 외부로 export 하지 않는다.
+type HealthResponse = components['schemas']['HealthResponseDto'];
 
 // 보호 라우트 /me 가 반환하는 profile DTO(ProfileResponseDto)의 타입 별칭(SPEC-AUTH-001 R-C1).
 // SPEC-MOBILE-004 T-001: name(string | null) 필드를 포함한다 — 웹 온보딩 가드의 권위 있는 출처.
 export type ProfileResponse = components['schemas']['ProfileResponseDto'];
 
 // PATCH /me 요청 바디(UpdateNameDto) 타입 별칭(SPEC-MOBILE-004 T-002/T-003).
-export type UpdateNameRequest = components['schemas']['UpdateNameDto'];
+// 내부 전용 — patchMe() body 타입으로만 쓰이며 외부로 export 하지 않는다.
+type UpdateNameRequest = components['schemas']['UpdateNameDto'];
 
 // GET /moims·POST /moims 가 반환하는 모임 DTO(MoimResponseDto)의 타입 별칭(SPEC-MOIM-003 REQ-MOIM3-006).
 // SPEC-MOIM-004 REQ-MOIM4-003: startsAt(string | null) + location(string | null) 을 포함한다(재생성 반영).
@@ -27,9 +29,6 @@ export type CreateMoimRequest = components['schemas']['CreateMoimDto'];
 // POST /moims/:id/polls 요청 바디(CreatePollDto): question(필수) + options(string[], 유효 ≥2) + multiSelect?(기본 false)
 // + SPEC-MOIM-007 closesAt?(ISO-8601, 마감 시각 — 생략 시 마감 없음, 무효 ISO 는 백엔드 400).
 export type CreatePollRequest = components['schemas']['CreatePollDto'];
-// POST /moims/:id/polls/:pollId/vote 요청 바디(VoteDto): optionId(필수). 단일=교체/다중=토글은 백엔드가 분기.
-// SPEC-MOIM-007: 마감된 poll 에 투표하면 백엔드가 409(ApiError) — web 액션이 일반화 오류로 처리.
-export type VoteRequest = components['schemas']['VoteDto'];
 // GET/POST poll 응답(PollResponseDto): id/question/createdBy/createdAt + multiSelect + options[{id,label,voteCount}]
 // + myVotes(string[] — 호출자가 고른 optionId 목록, 미투표 빈 배열). MOIM-005 의 단일 myVote 는 myVotes 로 대체됨.
 // SPEC-MOIM-007: closesAt(string|null — 마감 시각) + isClosed(boolean — 서버 계산 마감 여부, 차단/배지 판정 권위) 추가.

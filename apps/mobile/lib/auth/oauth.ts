@@ -25,15 +25,7 @@
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 
-import { SUPABASE_URL } from "../env";
-import {
-  isOAuthAuthorizeUrl,
-  rewriteAuthorizeRedirect,
-  buildWebCallbackUrl,
-} from "./oauth-bridge";
-
-/** 지원 소셜 provider — 웹 signInWithOAuthAction 과 동일 문자열 집합(R-F2). */
-export type SocialProvider = "google" | "apple" | "kakao";
+import { rewriteAuthorizeRedirect } from "./oauth-bridge";
 
 /**
  * deep link 복귀 결과.
@@ -100,17 +92,6 @@ export async function launchSocialOAuth(
 // Google 한정으로 완성한다. launchSocialOAuth / buildReturnUrl 시그니처는 변경하지 않는다.
 
 /**
- * 네비게이션 URL 이 시스템 브라우저로 브리지해야 할 GoTrue authorize URL 인지 판별한다(R-O1).
- * 가드를 거친 SUPABASE_URL 을 호스트 기준으로 사용한다(env 미설정 시 부팅 가드가 throw).
- *
- * @param navUrl WebView 가 로드하려는 네비게이션 URL
- * @returns 인터셉트(임베디드 로드 차단) 대상이면 true
- */
-export function shouldBridgeOAuth(navUrl: string): boolean {
-  return isOAuthAuthorizeUrl(navUrl, SUPABASE_URL);
-}
-
-/**
  * 인터셉트한 authorize URL 을 시스템 브라우저로 열어 Google OAuth 를 시작한다(R-O1 → R-O2).
  * authorize URL 의 redirect_to 를 deep-link 복귀 URL(moyura://auth-callback)로 재작성한 뒤
  * 기존 launchSocialOAuth 에 전달한다 — 이것이 OD-5(브라우저 쿠키 half-auth) 회피의 핵심이다.
@@ -123,16 +104,4 @@ export async function bridgeGoogleOAuth(
 ): Promise<OAuthLaunchResult> {
   const rewritten = rewriteAuthorizeRedirect(interceptedAuthorizeUrl, buildReturnUrl());
   return launchSocialOAuth(rewritten);
-}
-
-/**
- * deep-link 복귀 URL 에서 WebView 가 로드할 웹 콜백 URL(${WEB_URL}/auth/callback?code=...&next=/me)을
- * 조립한다(R-O3). code 가 없거나 파싱 불가하면 null — 호출부가 미인증 유지(R-O4)로 처리한다.
- *
- * @param returnUrl {kind:"authenticated"} 의 returnUrl
- * @param webUrl 셸이 호스팅하는 웹 URL(WEB_URL)
- * @returns 웹 콜백 URL 문자열, code 없거나 파싱 실패면 null
- */
-export function resolveWebCallbackUrl(returnUrl: string, webUrl: string): string | null {
-  return buildWebCallbackUrl(returnUrl, webUrl);
 }
