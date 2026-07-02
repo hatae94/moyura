@@ -9,6 +9,7 @@ import { createApiClient, type MoimResponse } from "@moyura/api-client";
 import { API_BASE_URL } from "@/lib/env";
 import { requireNamedSession } from "@/lib/auth/require-named-session";
 
+import { HomeActionDock } from "./home-action-dock";
 import { HomeTab } from "./HomeTab";
 
 /** Supabase user 메타데이터/이메일에서 표시 이름을 도출한다(Figma HomeTab 로직 적응). */
@@ -50,11 +51,14 @@ export default async function HomePage() {
   }
 
   return (
-    <HomeTab
-      displayName={displayName}
-      avatarInitial={avatarInitial}
-      greeting={greeting}
-      moims={moims}
-    />
+    <>
+      <HomeTab
+        displayName={displayName}
+        avatarInitial={avatarInitial}
+        greeting={greeting}
+        moims={moims}
+      />
+      <HomeActionDock />
+    </>
   );
 }

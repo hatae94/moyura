@@ -5,11 +5,12 @@
 // 없음, §5 그레이스풀 degrade), /home/{id} 링크로 상세 이동한다. status 필터 칩은 데이터 출처가 없어 제거한다
 // (status 필터 미구현 — Exclusions). 인사말/표시이름/아바타 이니셜은 서버에서 도출해 prop 으로 받는다.
 //
-// 클라이언트 컴포넌트로 유지하는 이유: CreateMeetupButton(비기능 CTA) 등 셸 일관성. 필터 useState 는 제거됐다.
+// 셸 일관성을 위해 클라이언트 컴포넌트로 둔다(필터 useState 는 제거됨). 새 모임 만들기 CTA 는 홈 우측 하단
+// FAB(HomeActionDock)로 이전됐다.
 "use client";
 
 import Link from "next/link";
-import { Calendar, ChevronRight, MapPin, Plus } from "lucide-react";
+import { Calendar, ChevronRight, MapPin } from "lucide-react";
 
 import type { MoimResponse } from "@moyura/api-client";
 
@@ -83,30 +84,6 @@ function MeetupCard({ moim }: { moim: MoimResponse }) {
   );
 }
 
-/** 새 모임 만들기 CTA 카드 — /moims/new 생성 폼으로 이동(SPEC-MOIM-004 REQ-MOIM4-005, 기능형 Link). */
-function CreateMeetupButton() {
-  return (
-    <Link
-      href="/moims/new"
-      // 인스타 무드의 핵심 그라데이션 CTA — 진입 페이드업 + press scale + plus 회전 마이크로 인터랙션.
-      className="group animate-fade-in-up relative flex w-full items-center justify-between overflow-hidden rounded-3xl bg-gradient-brand p-5 text-white shadow-xl shadow-primary/25 transition-transform duration-200 active:scale-[0.98]"
-    >
-      {/* 은은한 광택 — 우상단 하이라이트(유리 질감). */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15 blur-xl"
-      />
-      <span className="relative flex flex-col text-left">
-        <span className="text-lg font-extrabold">새 모임 만들기</span>
-        <span className="text-sm text-white/85">일정·장소·투표를 한곳에서</span>
-      </span>
-      <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 backdrop-blur transition-transform duration-300 group-hover:rotate-90">
-        <Plus size={22} />
-      </span>
-    </Link>
-  );
-}
-
 export function HomeTab({ displayName, avatarInitial, greeting, moims }: HomeTabProps) {
   return (
     // 문서 스크롤: flex-1 로 셸을 채우고(짧은 콘텐츠도 화면을 채움) 콘텐츠가 길면 흐름대로 자라 문서가 스크롤된다.
@@ -135,11 +112,11 @@ export function HomeTab({ displayName, avatarInitial, greeting, moims }: HomeTab
         </div>
       </header>
 
-      {/* 콘텐츠 영역: CTA → 카드 리스트 / 빈 상태. 문서 스크롤이라 overflow-y-auto 제거(흐름대로 자람).
-          flex-1 유지로 빈 상태가 화면을 채워 중앙 정렬을 유지한다. (status 필터 칩 제거 — Exclusions.) */}
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-6 pt-4">
-        <CreateMeetupButton />
-
+      {/* 콘텐츠 영역: 카드 리스트 / 빈 상태. 문서 스크롤이라 overflow-y-auto 제거(흐름대로 자람).
+          flex-1 유지로 빈 상태가 화면을 채워 중앙 정렬을 유지한다. (status 필터 칩 제거 — Exclusions.)
+          pb-24: 우측 하단 speed dial FAB(HomeActionDock)에 스크롤 끝 마지막 카드가 가리지 않도록 하단
+          여백을 확보한다(모임 상세 page.tsx 와 동일 회피 값). */}
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-24 pt-4">
         {moims.length > 0 ? (
           // stagger-children: 각 카드가 순차 페이드업 진입(인스타 피드 로딩 감각).
           <div className="stagger-children flex flex-col gap-3">
@@ -154,7 +131,7 @@ export function HomeTab({ displayName, avatarInitial, greeting, moims }: HomeTab
             </div>
             <div className="flex flex-col gap-1">
               <p className="text-lg font-bold text-foreground">아직 모임이 없어요</p>
-              <p className="text-sm text-muted-foreground">위 버튼으로 첫 모임을 만들어보세요</p>
+              <p className="text-sm text-muted-foreground">우측 하단 버튼으로 첫 모임을 만들어보세요</p>
             </div>
           </div>
         )}

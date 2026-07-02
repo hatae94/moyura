@@ -1,8 +1,7 @@
-// /explore (SPEC-MOBILE-003 R-WB2) — 받은 초대 링크/토큰으로 모임에 참여하는 진입점.
+// /explore (SPEC-MOBILE-003 R-WB2) — 향후 모임 탐색 기능을 위한 자리(현재 준비 중 안내).
 //
-// 인라인 입력 폼은 통합 진입 페이지(/invite)로 일원화됐다 — 여기서는 그 페이지로 이동하는 버튼만 둔다.
-// 통합 페이지가 디바운스 자동 검증·모임 미리보기를 제공한다(탐색 탭·로그인 화면 공통).
-import Link from "next/link";
+// 초대 링크/토큰 참여 진입점은 홈 탭 우측 하단 FAB(HomeActionDock 의 "초대 링크 참여")로 이전됐다.
+// 참여 기능 자체(/invite: 디바운스 자동 검증·모임 미리보기)는 그대로 유지된다 — 여기서는 진입점을 두지 않는다.
 
 export default function ExplorePage() {
   return (
@@ -15,15 +14,9 @@ export default function ExplorePage() {
       <div className="animate-fade-in-up flex flex-col gap-2">
         <h2 className="text-2xl font-extrabold text-foreground">탐색</h2>
         <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-          받은 초대 링크로 모임에 참여할 수 있어요.
+          곧 관심 있는 모임을 둘러볼 수 있어요.
         </p>
       </div>
-      <Link
-        href="/invite"
-        className="bg-gradient-brand animate-fade-in-up w-full max-w-sm rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] [animation-delay:0.08s]"
-      >
-        초대 링크로 참여
-      </Link>
     </div>
   );
 }
