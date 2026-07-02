@@ -40,6 +40,11 @@ export const envSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
   // SUPABASE_JWT_SECRET: 레거시 HS256 폴백 전용(R-A4). JWKS-primary 운영 시 미설정 가능 → optional 유지.
   SUPABASE_JWT_SECRET: z.string().optional(),
+  // SUPABASE_SERVICE_ROLE_KEY: 회원 탈퇴 시 auth 계정 삭제(admin API) 전용(SPEC-ACCOUNT-001 T-03). OPTIONAL —
+  // FIREBASE_CREDENTIALS 선례처럼 부팅/통합 테스트를 fail-fast 시키지 않는다(키 없이도 부팅 가능). 부재 시
+  // 계정 삭제만 비활성이며, 실제 삭제 시점에 SupabaseAdminClient 가 명시적 500 으로 fail-closed 한다(부분 삭제 방지).
+  // 고위험 자격증명(유출 시 전 계정 삭제 가능) — env/secret 로만 주입하고 커밋 금지(스키마는 문자열만 검증).
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
   // --- FCM 발송(SPEC-CHAT-002 T-004) ---
   // FIREBASE_CREDENTIALS: firebase-admin 서비스 계정 키 JSON(문자열). OPTIONAL — 의도적으로 fail-fast하지 않는다.

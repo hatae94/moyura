@@ -65,6 +65,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
       nickname: '호스트',
       role: 'owner',
       joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+      withdrawnAt: null,
     });
     for (const m of extraMembers) {
       tables.member.set(memberKey(moimId, m.userId), {
@@ -73,6 +74,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
         nickname: m.nickname,
         role: 'member',
         joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+        withdrawnAt: null,
       });
     }
   }
@@ -138,6 +140,7 @@ describe('/moims (통합 — 가드 배선 + 멤버십 인가 401/403/404)', () 
                     nickname: arg.data.nickname,
                     role: arg.data.role,
                     joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+                    withdrawnAt: null,
                   };
                   tables.member.set(
                     memberKey(created.moimId, created.userId),

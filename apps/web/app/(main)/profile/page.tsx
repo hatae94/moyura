@@ -11,6 +11,7 @@ import { requireNamedSession } from "@/lib/auth/require-named-session";
 import { API_BASE_URL } from "@/lib/env";
 import { type BlockItem, listBlocks } from "@/lib/safety/api";
 
+import { AccountDeletion } from "./account-deletion";
 import { BlockedMembersSection } from "./blocked-members-section";
 import { ProfileForm } from "./profile-form";
 
@@ -91,6 +92,9 @@ export default async function ProfilePage() {
           로그아웃
         </button>
       </form>
+
+      {/* 회원 탈퇴 — 로그아웃 아래 배치. 파괴적·불가역 확인 게이트를 거친 뒤에만 서버 액션을 호출한다(AC-5-1/5-2). */}
+      <AccountDeletion />
     </main>
   );
 }

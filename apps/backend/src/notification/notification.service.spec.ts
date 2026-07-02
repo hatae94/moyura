@@ -98,6 +98,7 @@ function member(moimId: string, userId: string, nickname: string): MoimMember {
     nickname,
     role: 'member',
     joinedAt: NOW,
+    withdrawnAt: null,
   };
 }
 

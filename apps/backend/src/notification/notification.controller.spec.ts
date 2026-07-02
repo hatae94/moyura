@@ -86,7 +86,14 @@ function moim(id: string, name: string): Moim {
 }
 
 function member(moimId: string, userId: string, nickname: string): MoimMember {
-  return { moimId, userId, nickname, role: 'member', joinedAt: NOW };
+  return {
+    moimId,
+    userId,
+    nickname,
+    role: 'member',
+    joinedAt: NOW,
+    withdrawnAt: null,
+  };
 }
 
 function byIdDesc(a: Notification, b: Notification): number {

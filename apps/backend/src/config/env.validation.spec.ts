@@ -112,6 +112,23 @@ describe('validateEnv (AC-B1 / AC-B2)', () => {
     const env = validateEnv({ ...baseValidEnv, FIREBASE_CREDENTIALS: creds });
     expect(env.FIREBASE_CREDENTIALS).toBe(creds);
   });
+
+  // --- SPEC-ACCOUNT-001 T-03: SUPABASE_SERVICE_ROLE_KEY optional (fail-closed 소비) ---
+  // service-role 키는 선택적이다. 부재 시 부팅/통합 테스트가 그대로 통과해야 하며(계정 삭제만 비활성),
+  // 실제 삭제 시점에 SupabaseAdminClient 가 명시적 500 으로 fail-closed 한다(env 는 문자열만 검증).
+  it('SUPABASE_SERVICE_ROLE_KEY 누락 시에도 검증을 통과하고 undefined가 된다 (optional)', () => {
+    const env = validateEnv(baseValidEnv);
+    expect(env.SUPABASE_SERVICE_ROLE_KEY).toBeUndefined();
+  });
+
+  it('SUPABASE_SERVICE_ROLE_KEY가 있으면 그대로 보존한다 (계정 삭제 활성)', () => {
+    const key = 'service-role-key';
+    const env = validateEnv({
+      ...baseValidEnv,
+      SUPABASE_SERVICE_ROLE_KEY: key,
+    });
+    expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe(key);
+  });
 });
 
 describe('isOriginAllowed (AC-F1 / AC-F3)', () => {

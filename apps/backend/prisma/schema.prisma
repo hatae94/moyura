@@ -31,6 +31,20 @@ model Profile {
   @@map("profile")
 }
 
+// SPEC-ACCOUNT-001 REQ-ACCOUNT-003 계정 소멸 툼스톤(부활 차단의 진실 공급원).
+// deleteAccount 오케스트레이션이 profile 행을 삭제한 뒤, 잔존 JWT(유예 창 ≤1h)가 GET /me(upsertBySub)로
+// profile을 재생성하지 못하도록 이 테이블의 sub 존재 여부로 부활을 차단한다(REQ-ACCOUNT-003).
+// sub = 삭제된 Supabase auth user id(= 구 profile.id)를 PK로 직접 저장한다 — FK 없음(profile 행은 이미 삭제됨).
+// auth 재가입 시 Supabase가 새 sub를 발급하므로 구 sub 툼스톤과 충돌하지 않는다(R-7).
+// RLS: ENABLE ROW LEVEL SECURITY + 정책 없음(default deny) — Prisma는 postgres 롤로 우회(마이그레이션 수동 SQL).
+model WithdrawnAccount {
+  // 삭제된 sub(= 구 profile.id). PK만으로 존재 여부를 조회한다(부활 차단 게이트).
+  sub         String   @id
+  withdrawnAt DateTime @default(now()) @map("withdrawn_at")
+
+  @@map("withdrawn_account")
+}
+
 // SPEC-MOIM-001 모임 도메인(REQ-MOIM-004~008). 모임 라이프사이클의 루트 엔티티.
 // name 최소 컬럼만 둔다(설명/이미지/카테고리는 비범위). 삭제 시 멤버십을 Cascade로 정리한다(R-5).
 model Moim {
@@ -184,6 +198,12 @@ model MoimMember {
   // "owner" | "member". owner는 탈퇴 불가(REQ-MOIM-008), 삭제는 owner 전용(REQ-MOIM-003).
   role     String   @default("member")
   joinedAt DateTime @default(now()) @map("joined_at")
+  // SPEC-ACCOUNT-001 REQ-ACCOUNT-002: 탈퇴 마킹(additive nullable). NULL = 활성 멤버.
+  // 탈퇴 시 멤버 행은 원장 무결성 보존을 위해 삭제하지 않고 nickname='탈퇴한 사용자'로 익명화하되
+  // 이 컬럼을 now()로 세팅해 "유령 멤버"로 표식한다. 정원 count(withdrawnAt:null 필터)와
+  // 소유권 이양 대상 선정(withdrawnAt:null만 활성)이 이 마커를 소비한다(유령 이양 금지, R-4b/R-6).
+  // 기존 row 는 모두 NULL(비파괴 additive) — 복합 PK/인덱스/FK 불변.
+  withdrawnAt DateTime? @map("withdrawn_at")
   moim     Moim     @relation(fields: [moimId], references: [id], onDelete: Cascade)
 
   @@id([moimId, userId])

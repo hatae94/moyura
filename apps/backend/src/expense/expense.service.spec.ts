@@ -112,6 +112,7 @@ describe('ExpenseService', () => {
       nickname: '호스트',
       role: 'owner',
       joinedAt: NOW,
+      withdrawnAt: null,
     });
   }
 
@@ -123,6 +124,7 @@ describe('ExpenseService', () => {
       nickname: `참가자 ${userId}`,
       role: 'member',
       joinedAt: NOW,
+      withdrawnAt: null,
     });
   }
 

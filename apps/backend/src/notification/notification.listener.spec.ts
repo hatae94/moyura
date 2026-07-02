@@ -38,6 +38,7 @@ function member(userId: string): MoimMember {
     nickname: userId,
     role: userId === 'sub-owner' ? 'owner' : 'member',
     joinedAt: new Date('2026-07-01T00:00:00.000Z'),
+    withdrawnAt: null,
   };
 }
 

@@ -194,6 +194,8 @@ describe('InviteService', () => {
             nickname: arg.data.nickname,
             role: arg.data.role,
             joinedAt: NOW,
+            // SPEC-ACCOUNT-001 T-08: 신규 가입 멤버는 활성(withdrawnAt=null) — Prisma 기본값과 동일.
+            withdrawnAt: null,
           };
           tables.member.set(memberKey(created.moimId, created.userId), created);
           return Promise.resolve(created);
@@ -213,12 +215,21 @@ describe('InviteService', () => {
       moimMember: {
         ...moimMember,
         // SPEC-MOIM-012: 현재 멤버 수 반환(accept cap 검사용).
-        count: jest.fn((arg: { where: { moimId: string } }) =>
-          Promise.resolve(
-            [...tables.member.values()].filter(
-              (m) => m.moimId === arg.where.moimId,
-            ).length,
-          ),
+        // SPEC-ACCOUNT-001 T-08: where에 withdrawnAt:null 이 있으면 유령(탈퇴 마킹) 멤버를 카운트에서 제외한다
+        // — 실제 Prisma 의미(정원=활성 멤버)를 fake 가 정확히 모델링해 회귀 테스트가 false-green 되지 않게 한다.
+        // 활성 판정: withdrawnAt 이 실제 Date(탈퇴 마킹)일 때만 제외. 필드 미지정(undefined) 시드는 NULL(활성)로 간주해
+        // 기존 테스트(withdrawnAt 생략 = 활성)와 호환된다 — 실제 DB에서 컬럼이 NULL 인 상태와 동일 의미.
+        count: jest.fn(
+          (arg: { where: { moimId: string; withdrawnAt?: null } }) =>
+            Promise.resolve(
+              [...tables.member.values()].filter(
+                (m) =>
+                  m.moimId === arg.where.moimId &&
+                  (arg.where.withdrawnAt === undefined ||
+                    m.withdrawnAt === null ||
+                    m.withdrawnAt === undefined),
+              ).length,
+            ),
         ),
       },
       moim,
@@ -279,6 +290,7 @@ describe('InviteService', () => {
         nickname: 'm1',
         role: 'owner',
         joinedAt: NOW,
+        withdrawnAt: null,
       });
       tables.member.set(memberKey('moim-A', 'm2'), {
         moimId: 'moim-A',
@@ -286,6 +298,7 @@ describe('InviteService', () => {
         nickname: 'm2',
         role: 'member',
         joinedAt: NOW,
+        withdrawnAt: null,
       });
       seedInvite({ moimId: 'moim-A', token: 'valid-token' });
 
@@ -731,6 +744,7 @@ describe('InviteService', () => {
         nickname: 'm1',
         role: 'member',
         joinedAt: NOW,
+        withdrawnAt: null,
       });
       tables.member.set(memberKey('moim-A', 'member-2'), {
         moimId: 'moim-A',
@@ -738,6 +752,7 @@ describe('InviteService', () => {
         nickname: 'm2',
         role: 'owner',
         joinedAt: NOW,
+        withdrawnAt: null,
       });
 
       const result = await service.accept('guest-1', 'cap-ok', '게스트1');
@@ -757,6 +772,7 @@ describe('InviteService', () => {
         nickname: 'm1',
         role: 'member',
         joinedAt: NOW,
+        withdrawnAt: null,
       });
       tables.member.set(memberKey('moim-A', 'member-2'), {
         moimId: 'moim-A',
@@ -764,6 +780,7 @@ describe('InviteService', () => {
         nickname: 'm2',
         role: 'owner',
         joinedAt: NOW,
+        withdrawnAt: null,
       });
 
       await expect(
@@ -785,6 +802,7 @@ describe('InviteService', () => {
         nickname: '게스트1',
         role: 'member',
         joinedAt: NOW,
+        withdrawnAt: null,
       });
 
       // 이미 멤버이므로 멱등 early return → cap 검사 안 함 → 200
@@ -805,6 +823,65 @@ describe('InviteService', () => {
       const result = await service.accept('guest-1', 'no-moim', '게스트1');
 
       expect(result.moimId).toBe('moim-B');
+    });
+
+    // ── SPEC-ACCOUNT-001 T-08: 정원 필터 회귀 — 탈퇴(유령) 멤버는 정원에 카운트되지 않는다(R-6, gap B-6) ──
+    it('탈퇴 마킹(withdrawnAt≠null) 멤버는 정원에서 제외된다 — 활성 N + 유령 M 상태에서 count가 활성 N만 반환', async () => {
+      const { service } = makeService();
+      // 정원 2. 활성 멤버 1명 + 유령(탈퇴 마킹) 멤버 2명 = 물리 행 3개지만 활성은 1명뿐.
+      // 필터 없으면 count=3 ≥ 2 → 409(정원 초과)로 가입 거부(버그). 필터 있으면 활성=1 < 2 → 가입 성공.
+      seedMoim('moim-A', 2);
+      seedInvite({ moimId: 'moim-A', token: 'ghost-cap' });
+      tables.member.set(memberKey('moim-A', 'active-1'), {
+        moimId: 'moim-A',
+        userId: 'active-1',
+        nickname: 'm1',
+        role: 'owner',
+        joinedAt: NOW,
+        withdrawnAt: null,
+      });
+      tables.member.set(memberKey('moim-A', 'ghost-1'), {
+        moimId: 'moim-A',
+        userId: 'ghost-1',
+        nickname: '탈퇴한 사용자',
+        role: 'member',
+        joinedAt: NOW,
+        withdrawnAt: NOW,
+      });
+      tables.member.set(memberKey('moim-A', 'ghost-2'), {
+        moimId: 'moim-A',
+        userId: 'ghost-2',
+        nickname: '탈퇴한 사용자',
+        role: 'member',
+        joinedAt: NOW,
+        withdrawnAt: NOW,
+      });
+
+      // 활성 1명 < 정원 2 → 유령을 제외하면 가입 가능해야 한다(정원=활성 멤버 의미 유지).
+      const result = await service.accept('guest-1', 'ghost-cap', '게스트1');
+
+      expect(result.moimId).toBe('moim-A');
+      expect(tables.member.has(memberKey('moim-A', 'guest-1'))).toBe(true);
+    });
+
+    it('탈퇴 멤버로 물리 행이 정원과 같아도 활성이 정원 미만이면 가입 성공(count는 활성만 집계)', async () => {
+      const { service } = makeService();
+      // 정원 1. 활성 0명 + 유령 1명 = 물리 1행. 필터 없으면 count=1 ≥ 1 → 409(버그). 필터 있으면 활성=0 < 1 → 성공.
+      seedMoim('moim-A', 1);
+      seedInvite({ moimId: 'moim-A', token: 'ghost-only' });
+      tables.member.set(memberKey('moim-A', 'ghost-1'), {
+        moimId: 'moim-A',
+        userId: 'ghost-1',
+        nickname: '탈퇴한 사용자',
+        role: 'member',
+        joinedAt: NOW,
+        withdrawnAt: NOW,
+      });
+
+      const result = await service.accept('guest-1', 'ghost-only', '게스트1');
+
+      expect(result.moimId).toBe('moim-A');
+      expect(tables.member.has(memberKey('moim-A', 'guest-1'))).toBe(true);
     });
   });
 
