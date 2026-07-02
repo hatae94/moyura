@@ -18,7 +18,7 @@
 // sourceUri 교체(setSourceUri)만으로 네비게이트한다(리마운트 아님). SafeAreaView 래핑은 무조건적
 // (조건부 아님)이라 WebView 인스턴스를 보존한다 — 래퍼 추가가 자식을 리마운트하지 않는다.
 import { forwardRef, useCallback, useRef } from "react";
-import { Animated, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { Animated, Platform, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import WebView from "react-native-webview";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import type {
@@ -167,8 +167,12 @@ export const WebViewShell = forwardRef<WebView, WebViewShellProps>(function WebV
         // ── R-NF1(M1): 호스트 perf 프롭(보안/쿠키/브리지 프롭과 무충돌 — additive only). ──
         // Android: GPU 합성으로 스크롤 jank 해소(하드웨어 레이어).
         androidLayerType="hardware"
-        // iOS: 네이티브 감속 곡선 일치(웹 기본 fast 대신 normal — 네이티브 스크롤 체감).
-        decelerationRate="normal"
+        // iOS 전용: 네이티브 감속 곡선 일치(웹 기본 fast 대신 normal — 네이티브 스크롤 체감).
+        // [Android 크래시 회귀] decelerationRate 는 iOS 전용 prop 이지만 New Architecture 에서 Android
+        // RNCWebView 가 이를 Double 로 코드젠한다(RNCWebViewNativeComponent.ts). iOS 는 "normal" 문자열을
+        // 숫자로 변환해 넘기지만 Android 엔 변환 로직이 없어, 문자열을 그대로 넘기면 Fabric preallocateView
+        // 단계에서 String→Double ClassCastException 으로 크래시한다. Android 엔 undefined 로 미전달한다.
+        decelerationRate={Platform.OS === "ios" ? "normal" : undefined}
         // Android: 글로우/바운스 오버스크롤 제거(앱 같은 정적 느낌).
         overScrollMode="never"
         // 웹 캐시(localStorage/sessionStorage) 보장 — 웹 SPA 캐시 전략 동작 전제.

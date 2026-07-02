@@ -40,19 +40,10 @@ export default (_ctx: ConfigContext): ExpoConfig => ({
     googleServicesFile: process.env.GOOGLE_SERVICES_PLIST,
   },
   android: {
-    adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
-      foregroundImage: "./assets/android-icon-foreground.png",
-      backgroundImage: "./assets/android-icon-background.png",
-      monochromeImage: "./assets/android-icon-monochrome.png",
-    },
     predictiveBackGestureEnabled: false,
     package: BUNDLE_ID,
     // Firebase(FCM) — EAS file env(GOOGLE_SERVICES_JSON, environment 별 dev/prod)에서 주입(미설정 시 생략).
     googleServicesFile: process.env.GOOGLE_SERVICES_JSON,
-  },
-  web: {
-    favicon: "./assets/favicon.png",
   },
   plugins: [
     "expo-secure-store",
