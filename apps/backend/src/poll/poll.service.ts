@@ -9,6 +9,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Poll, PollOption } from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SafetyService } from '../safety/safety.service';
 import {
   MOIM_POLL_CLOSED,
   MOIM_POLL_CREATED,
@@ -60,6 +61,10 @@ export class PollService {
     // SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행기(전역 EventEmitterModule.forRoot()). createPoll/closePoll
     // 성공 후 moim.poll.created/moim.poll.closed 를 발행한다 — NotificationListener 가 구독(느슨한 결합).
     private readonly events: EventEmitter2,
+    // @MX:NOTE: [AUTO] 뷰어 측 읽기 필터의 숨김 목록 단일 출처(SPEC-SAFETY-001 T-005 / REQ-CPL-002). poll→safety
+    // 단방향(PollModule 이 SafetyModule 을 import). listPolls 가 뷰어의 hidden(block∪report) 생성자 poll 을 목록에서
+    // 제외하는 데 쓴다 — 표 집계(aggregatePolls)에는 적용하지 않는다(익명 집계 불변).
+    private readonly safety: SafetyService,
   ) {}
 
   // 투표 도메인 이벤트 best-effort 발행 헬퍼(SPEC-NOTIFICATIONS-001 M2). 리스너 예외가 이미 성립한 영속
@@ -296,7 +301,15 @@ export class PollService {
     // 멤버십 인가(비멤버에게 투표 내용 비노출).
     await this.moim.assertMember(sub, moimId);
 
-    const polls = await this.prisma.poll.findMany({ where: { moimId } });
+    // @MX:NOTE: [AUTO] SPEC-SAFETY-001 REQ-FLT-002 / AC-FLT-2: 뷰어(sub)가 숨긴 생성자(block∪report)의 poll 을
+    // createdBy notIn 으로 목록에서 제외한다(요청당 1회 조회). 필터는 오직 poll.findMany(목록 노출)에만 적용하며
+    // aggregatePolls 의 표 집계(pollVote)에는 적용하지 않는다 — 숨김 대상이 다른(보이는) poll 에 던진 표는 그대로
+    // 집계에 남아 익명 집계 수치가 불변이다(AC-FLT-2). notIn 이 빈 배열이면 아무 poll 도 제외하지 않는다(no-op).
+    const hiddenIds = await this.safety.getHiddenUserIds(sub);
+
+    const polls = await this.prisma.poll.findMany({
+      where: { moimId, createdBy: { notIn: hiddenIds } },
+    });
     if (polls.length === 0) {
       return [];
     }

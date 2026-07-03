@@ -171,12 +171,19 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       findUnique: jest.fn((arg: { where: { id: string } }) =>
         Promise.resolve(tables.poll.get(arg.where.id) ?? null),
       ),
-      findMany: jest.fn((arg: { where: { moimId: string } }) =>
-        Promise.resolve(
-          [...tables.poll.values()].filter(
-            (p) => p.moimId === arg.where.moimId,
-          ),
-        ),
+      // SPEC-SAFETY-001 T-005: listPolls 가 createdBy notIn(뷰어 숨김 목록)을 붙인다. 통합 테스트는 숨김 0.
+      findMany: jest.fn(
+        (arg: {
+          where: { moimId: string; createdBy?: { notIn: string[] } };
+        }) => {
+          const notIn = arg.where.createdBy?.notIn ?? [];
+          return Promise.resolve(
+            [...tables.poll.values()].filter(
+              (p) =>
+                p.moimId === arg.where.moimId && !notIn.includes(p.createdBy),
+            ),
+          );
+        },
       ),
     };
     const pollOptionDelegate = {
@@ -310,6 +317,10 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
       poll: pollDelegate,
       pollOption: pollOptionDelegate,
       pollVote: pollVoteDelegate,
+      // SPEC-SAFETY-001 T-005: PollModule 이 SafetyModule 을 import 하므로 listPolls 가 SafetyService.
+      // getHiddenUserIds(block∪report)를 호출한다. 통합 테스트는 차단/신고 시드가 없으니 빈 목록을 반환한다.
+      block: { findMany: jest.fn(() => Promise.resolve([])) },
+      report: { findMany: jest.fn(() => Promise.resolve([])) },
       onModuleInit: jest.fn(),
       onModuleDestroy: jest.fn(),
       pingDatabase: jest.fn().mockResolvedValue(true),

@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ChatMessage } from '../generated/prisma/client';
 import { MoimService } from '../moim/moim.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SafetyService } from '../safety/safety.service';
 import {
   CHAT_MESSAGE_CREATED,
   type ChatMessageCreatedPayload,
@@ -34,6 +35,10 @@ export class ChatService {
     // (acceptance 엣지). 그래서 chat은 NotFoundException(404)을 ForbiddenException(403)으로 변환한다.
     private readonly moim: MoimService,
     private readonly events: EventEmitter2,
+    // @MX:NOTE: [AUTO] 뷰어 측 읽기 필터의 숨김 목록 단일 출처(SPEC-SAFETY-001 T-005 / REQ-CPL-002). safety→chat
+    // 역방향 import 는 없고 chat→safety 단방향만 허용된다(ChatModule 이 SafetyModule 을 import). getHistory 가
+    // 뷰어의 hidden(block∪report) 발신자를 WHERE 에서 제외하는 데 쓴다.
+    private readonly safety: SafetyService,
   ) {}
 
   // @MX:ANCHOR: [AUTO] 채팅 메시지 전송의 단일 진입점(REQ-CHAT-001/005 / AC-1,3). 컨트롤러(T-006)와
@@ -90,9 +95,19 @@ export class ChatService {
     // cursor(문자열) → BigInt 파싱. 파싱 불가 시 400(잘못된 커서). 미지정이면 첫 페이지(최신순).
     const cursorId = parseCursor(input.cursor);
 
+    // @MX:NOTE: [AUTO] SPEC-SAFETY-001 REQ-FLT-001 / AC-FLT-1: 뷰어(sub)가 숨긴 발신자(block∪report)를 요청당 1회
+    // 조회해 senderId notIn 으로 서버에서 제외한다. notIn 은 WHERE 에서 take 이전에 적용되므로(DB 가 take 이전 필터)
+    // 가시 메시지가 충분하면 페이지 크기(limit)가 보존된다 — over-fetch/trim 을 DB 가 수행(별도 app trim 불필요, R-1).
+    // senderId 는 UUID 문자열이라 BigInt 캐스팅이 필요 없다(BigInt 캐스팅은 content_id 가 chat 일 때만, REQ-RPT-005).
+    // 실시간 신규 메시지의 동시 필터는 클라이언트(T-009 handleIncoming)가 담당한다(양경로 — 서버는 히스토리만).
+    const hiddenIds = await this.safety.getHiddenUserIds(sub);
+
     const messages = await this.prisma.chatMessage.findMany({
-      where:
-        cursorId === undefined ? { moimId } : { moimId, id: { lt: cursorId } },
+      where: {
+        moimId,
+        ...(cursorId === undefined ? {} : { id: { lt: cursorId } }),
+        senderId: { notIn: hiddenIds },
+      },
       orderBy: { id: 'desc' },
       take: input.limit,
     });

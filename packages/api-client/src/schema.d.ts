@@ -228,6 +228,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SafetyController_createReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SafetyController_listBlocks"];
+        put?: never;
+        post: operations["SafetyController_createBlock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/blocks/{blockedUserId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["SafetyController_unblock"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/moims/{id}/polls": {
         parameters: {
             query?: never;
@@ -324,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/moims/{id}/settlements/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SettlementController_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/moims/{id}/settlements/{settlementId}": {
         parameters: {
             query?: never;
@@ -335,6 +399,86 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["SettlementController_removeById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ScheduleController_get"];
+        put: operations["ScheduleController_set"];
+        post?: never;
+        delete: operations["ScheduleController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ScheduleController_setMine"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ScheduleController_setDates"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule/window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ScheduleController_setWindow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ScheduleController_confirm"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -367,6 +511,54 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["DeviceTokenController_unregister"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NotificationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NotificationController_unreadCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationController_markRead"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -656,6 +848,104 @@ export interface components {
              * @example 37
              */
             nextCursor: string | null;
+        };
+        CreateReportDto: {
+            /**
+             * @description 신고 대상(피신고 콘텐츠 작성자) sub(profile.id).
+             * @example user-b
+             */
+            targetUserId: string;
+            /**
+             * @description 신고 컨텍스트 모임 id.
+             * @example moim-a
+             */
+            moimId: string;
+            /**
+             * @description 신고 사유(trim 후 비어 있을 수 없음 — 빈 값은 400).
+             * @example 스팸
+             */
+            reason: string;
+            /**
+             * @description 신고 콘텐츠 타입. 단일 PK 4종만 허용(복합 PK 콘텐츠는 400, REQ-RPT-004).
+             * @example chat_message
+             * @enum {string}
+             */
+            contentType: "chat_message" | "poll" | "expense" | "settlement_request";
+            /**
+             * @description 신고 콘텐츠 id(TEXT 통일). chat_message(BigInt PK)는 필터 시 BigInt 캐스팅(REQ-RPT-005).
+             * @example 42
+             */
+            contentId: string;
+        };
+        ReportResponseDto: {
+            /**
+             * @description 신고 id(uuid)
+             * @example uuid
+             */
+            id: string;
+            /**
+             * @description 신고자 sub(가드-검증 sub)
+             * @example user-a
+             */
+            reporterId: string;
+            /**
+             * @description 신고 대상 sub
+             * @example user-b
+             */
+            targetUserId: string;
+            /**
+             * @description 신고 컨텍스트 모임 id
+             * @example moim-a
+             */
+            moimId: string;
+            /**
+             * @description 신고 사유
+             * @example 스팸
+             */
+            reason: string;
+            /**
+             * @description 신고 콘텐츠 타입(단일 PK 4종)
+             * @example chat_message
+             */
+            contentType: string;
+            /**
+             * @description 신고 콘텐츠 id(TEXT)
+             * @example 42
+             */
+            contentId: string;
+            /**
+             * @description 생성 시각(ISO-8601)
+             * @example 2026-07-02T00:00:00.000Z
+             */
+            createdAt: string;
+        };
+        CreateBlockDto: {
+            /**
+             * @description 차단 대상 sub(profile.id). 자기 자신(sub)이면 400. 이미 차단돼 있으면 멱등 성공(200).
+             * @example user-b
+             */
+            blockedUserId: string;
+        };
+        BlockResponseDto: {
+            /**
+             * @description 차단자 sub(가드-검증 sub)
+             * @example user-a
+             */
+            blockerId: string;
+            /**
+             * @description 차단 대상 sub
+             * @example user-b
+             */
+            blockedUserId: string;
+            /**
+             * @description 생성 시각(ISO-8601)
+             * @example 2026-07-02T00:00:00.000Z
+             */
+            createdAt: string;
+        };
+        BlockListResponseDto: {
+            /** @description 내가 차단한 목록(block 행만) */
+            items: components["schemas"]["BlockResponseDto"][];
         };
         CreatePollDto: {
             /**
@@ -953,6 +1243,151 @@ export interface components {
             /** @description 정산 완료 시각(ISO-8601) */
             settledAt: string;
         };
+        RequestSettlementDto: {
+            /** @description 채무자 멤버 sub(돈을 낼 사람) */
+            debtorId: string;
+            /**
+             * @description 정산 요청 금액(KRW 정수)
+             * @example 4000
+             */
+            amount: number;
+        };
+        SettlementRequestResponseDto: {
+            /** @description 정산 요청 id */
+            id: string;
+            /** @description 모임 id */
+            moimId: string;
+            /** @description 요청자 sub(채권자) */
+            requesterId: string;
+            /** @description 채무자 sub */
+            debtorId: string;
+            /** @description 요청 금액(KRW 정수) */
+            amount: number;
+            /** @description 요청 생성 시각(ISO-8601) */
+            createdAt: string;
+        };
+        SetScheduleDto: {
+            /**
+             * @description 후보 날짜 배열(ISO date "YYYY-MM-DD"). 최소 1개, 임의 다수.
+             * @example [
+             *       "2026-07-05",
+             *       "2026-07-06",
+             *       "2026-07-12"
+             *     ]
+             */
+            dates: string[];
+            /**
+             * @description 하루 시작 시각(후보일 00:00 기준 분, 0~1440).
+             * @example 1080
+             */
+            startMinute: number;
+            /**
+             * @description 하루 종료 시각(후보일 00:00 기준 분). startMinute 초과 + 자정 넘김 시 1440 초과 가능(예: 익일 02:00 = 1560).
+             * @example 1440
+             */
+            endMinute: number;
+            /**
+             * @description 슬롯 단위(분). 15/30/60 중 하나. 생략 시 30.
+             * @default 30
+             * @example 30
+             */
+            slotMinutes: number;
+        };
+        ScheduleSlotDto: {
+            /**
+             * @description 가능 멤버 sub(= profile.id)
+             * @example uuid
+             */
+            userId: string;
+            /**
+             * @description 슬롯 날짜(ISO date)
+             * @example 2026-07-05
+             */
+            date: string;
+            /**
+             * @description 슬롯 시작(후보일 00:00 기준 분, >=1440 이면 다음날)
+             * @example 1080
+             */
+            startMinute: number;
+        };
+        ScheduleEventDto: {
+            /** @example uuid */
+            id: string;
+            /** @example uuid */
+            moimId: string;
+            /**
+             * @description 생성자 sub
+             * @example uuid
+             */
+            createdBy: string;
+            /**
+             * @description 후보 날짜 배열
+             * @example [
+             *       "2026-07-05",
+             *       "2026-07-06"
+             *     ]
+             */
+            dates: string[];
+            /**
+             * @description 하루 시작(분)
+             * @example 1080
+             */
+            startMinute: number;
+            /**
+             * @description 하루 종료(분, >1440=자정 넘김)
+             * @example 1440
+             */
+            endMinute: number;
+            /**
+             * @description 슬롯 단위(분)
+             * @example 30
+             */
+            slotMinutes: number;
+            /**
+             * @description 확정 시각(ISO datetime, nullable). 있으면 moim.startsAt 이 확정되어 그리드가 읽기 전용.
+             * @example 2026-07-01T12:00:00.000Z
+             */
+            confirmedAt?: string | null;
+            /** @description 전체 멤버 가능 슬롯 */
+            slots: components["schemas"]["ScheduleSlotDto"][];
+        };
+        ScheduleResponseDto: {
+            /** @description 일정 조율 세션(미설정이면 null) */
+            schedule?: components["schemas"]["ScheduleEventDto"] | null;
+        };
+        SetAvailabilityDto: {
+            /**
+             * @description 가능 슬롯 배열. 각 항목 { date, startMinute }. 세션의 dates·시간 범위·슬롯 격자에 정렬되어야 한다(미정렬 → 400).
+             * @example [
+             *       {
+             *         "date": "2026-07-05",
+             *         "startMinute": 1080
+             *       },
+             *       {
+             *         "date": "2026-07-05",
+             *         "startMinute": 1110
+             *       }
+             *     ]
+             */
+            slots: {
+                /** @example 2026-07-05 */
+                date?: string;
+                /** @example 1080 */
+                startMinute?: number;
+            }[];
+        };
+        ConfirmScheduleDto: {
+            /**
+             * @description 확정할 날짜(ISO date "YYYY-MM-DD"). 세션 dates 중 하나여야 한다.
+             * @example 2026-07-05
+             */
+            date: string;
+            /**
+             * @description 확정할 시작 시각(후보일 00:00 기준 분). 세션 시간 범위·격자에 정렬. >1440 이면 다음날 새벽(자정 넘김).
+             * @example 1080
+             */
+            startMinute: number;
+        };
         RegisterDeviceDto: {
             /**
              * @description FCM/Expo 디바이스 push 토큰(비어 있을 수 없음)
@@ -965,6 +1400,98 @@ export interface components {
              * @enum {string}
              */
             platform: "android" | "ios";
+        };
+        NotificationActorDto: {
+            /**
+             * @description 유발자 sub(= profile.id)
+             * @example uuid
+             */
+            id: string;
+            /**
+             * @description 모임별 표시 이름(해석 실패 시 기본값)
+             * @example 홍길동
+             */
+            nickname: string;
+        };
+        NotificationDto: {
+            /**
+             * @description 알림 id(BigInt → 문자열, keyset 커서)
+             * @example 42
+             */
+            id: string;
+            /**
+             * @description 알림 종류(예: member.joined)
+             * @example member.joined
+             */
+            type: string;
+            /**
+             * @description 컨텍스트 모임 id
+             * @example uuid
+             */
+            moimId: string;
+            /**
+             * @description 모임명(모임이 삭제됐으면 null)
+             * @example 금요일 저녁 모임
+             */
+            moimName: string | null;
+            /** @description 유발자(무행위자 알림이면 null) */
+            actor?: components["schemas"]["NotificationActorDto"] | null;
+            /**
+             * @description 타입별 미리보기 + 딥링크 타깃(자유 형식 JSON)
+             * @example {
+             *       "pollId": "uuid",
+             *       "question": "점심 뭐 먹지?"
+             *     }
+             */
+            data: Record<string, never>;
+            /**
+             * @description 읽음 시각(ISO-8601, 안읽음이면 null)
+             * @example 2026-07-01T12:00:00.000Z
+             */
+            readAt: string | null;
+            /**
+             * @description 생성 시각(ISO-8601)
+             * @example 2026-07-01T12:00:00.000Z
+             */
+            createdAt: string;
+        };
+        NotificationListResponseDto: {
+            /** @description 알림 목록(최신순) */
+            items: components["schemas"]["NotificationDto"][];
+            /**
+             * @description 다음 페이지 커서(없으면 null)
+             * @example 17
+             */
+            nextCursor: string | null;
+        };
+        UnreadCountResponseDto: {
+            /**
+             * @description 미읽음 알림 개수
+             * @example 3
+             */
+            count: number;
+        };
+        MarkReadDto: {
+            /**
+             * @description 읽음 처리할 알림 id 배열(BigInt 문자열). all 과 배타 — 지정 시 비어 있으면 400.
+             * @example [
+             *       "42",
+             *       "41"
+             *     ]
+             */
+            ids?: string[];
+            /**
+             * @description 전체 미읽음 읽음 처리(ids 미지정 시 true 여야 함).
+             * @example true
+             */
+            all?: boolean;
+        };
+        MarkReadResponseDto: {
+            /**
+             * @description 읽음 처리된 알림 수
+             * @example 5
+             */
+            updated: number;
         };
     };
     responses: never;
@@ -1763,6 +2290,136 @@ export interface operations {
             };
         };
     };
+    SafetyController_createReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReportDto"];
+            };
+        };
+        responses: {
+            /** @description 신고 저장 결과 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponseDto"];
+                };
+            };
+            /** @description content_type 화이트리스트 외 또는 빈 reason — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SafetyController_listBlocks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 내가 차단한 목록(block 행만) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockListResponseDto"];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SafetyController_createBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBlockDto"];
+            };
+        };
+        responses: {
+            /** @description 차단 생성 결과(멱등 — 이미 존재해도 201) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockResponseDto"];
+                };
+            };
+            /** @description 자기 차단 또는 blockedUserId 누락 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SafetyController_unblock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blockedUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 차단 해제 완료(없는 행도 멱등 204) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PollController_list: {
         parameters: {
             query?: never;
@@ -2221,6 +2878,53 @@ export interface operations {
             };
         };
     };
+    SettlementController_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestSettlementDto"];
+            };
+        };
+        responses: {
+            /** @description 정산 요청 생성(채권자 → 채무자) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementRequestResponseDto"];
+                };
+            };
+            /** @description 금액/채무자 검증 실패(비멤버 채무자·자기 요청·비정수 금액) — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     SettlementController_removeById: {
         parameters: {
             query?: never;
@@ -2256,6 +2960,299 @@ export interface operations {
             };
             /** @description 타-모임 또는 미존재 settlementId — 404 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 일정 조율 세션(미설정이면 null) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponseDto"];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetScheduleDto"];
+            };
+        };
+        responses: {
+            /** @description 일정 조율 세션 설정/재설정 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponseDto"];
+                };
+            };
+            /** @description 날짜/시간 범위/슬롯 단위 검증 실패 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 일정 조율 세션 삭제(초기화) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_setMine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAvailabilityDto"];
+            };
+        };
+        responses: {
+            /** @description 내 가능 슬롯 교체 저장 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 미설정/확정됨/범위 밖 슬롯 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_setDates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 후보 날짜 편집(멤버 누구나) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponseDto"];
+                };
+            };
+            /** @description 미설정/확정됨/날짜 형식 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_setWindow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 시간대 넓히기(멤버 누구나) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponseDto"];
+                };
+            };
+            /** @description 미설정/확정됨/좁히기/격자 어긋남 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmScheduleDto"];
+            };
+        };
+        responses: {
+            /** @description 일정 확정(moim.startsAt 갱신) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 미설정/후보 밖 날짜/범위 밖 시각 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2305,6 +3302,108 @@ export interface operations {
         responses: {
             /** @description 디바이스 토큰 해제(소유자 한정, orphan token 방지) */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationController_list: {
+        parameters: {
+            query: {
+                cursor: string;
+                limit: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description keyset 내림차순(최신순) 알림 목록 + nextCursor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationListResponseDto"];
+                };
+            };
+            /** @description 잘못된 cursor — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationController_unreadCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 수신자의 미읽음 알림 개수 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCountResponseDto"];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReadDto"];
+            };
+        };
+        responses: {
+            /** @description 읽음 처리 결과(실제 갱신된 행 수) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponseDto"];
+                };
+            };
+            /** @description ids/all 둘 다 없거나 ids 형식 불량 — 400 */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

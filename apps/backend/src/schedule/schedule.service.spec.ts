@@ -7,6 +7,7 @@ import type {
 } from '../generated/prisma/client';
 import type { MoimService } from '../moim/moim.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { SafetyService } from '../safety/safety.service';
 import {
   MOIM_SCHEDULE_CONFIRMED,
   MOIM_SCHEDULE_DATES_CHANGED,
@@ -44,11 +45,15 @@ describe('ScheduleService', () => {
   let service: ScheduleService;
   // SPEC-NOTIFICATIONS-001 M2: EventEmitter2.emit 스텁(발행 검증용, per-test 초기화).
   let emit: jest.Mock;
+  // SPEC-SAFETY-001 T-007: 뷰어(sub)가 숨긴 userId 집합(block∪report). getHiddenUserIds 스텁이 읽는다.
+  let hidden: string[];
+  let getHiddenUserIds: jest.Mock<Promise<string[]>, [string]>;
 
   function reset(): void {
     tables = { event: new Map(), slot: new Map(), moim: new Map() };
     owners = new Map();
     members = new Set();
+    hidden = [];
   }
 
   function slotsFor(eventId: string): ScheduleSlot[] {
@@ -196,9 +201,17 @@ describe('ScheduleService', () => {
   beforeEach(() => {
     reset();
     emit = jest.fn();
-    service = new ScheduleService(prisma, moim, {
-      emit,
-    } as unknown as EventEmitter2);
+    // SPEC-SAFETY-001 T-007: getHiddenUserIds 스텁 — hidden 배열을 반환한다(뷰어별 숨김, 요청당 1회 조회 계약 재현).
+    getHiddenUserIds = jest.fn<Promise<string[]>, [string]>(() =>
+      Promise.resolve(hidden),
+    );
+    const safety = { getHiddenUserIds } as unknown as SafetyService;
+    service = new ScheduleService(
+      prisma,
+      moim,
+      { emit } as unknown as EventEmitter2,
+      safety,
+    );
     owners.set(MOIM_ID, 'owner');
     members.add(`${MOIM_ID}:owner`);
     members.add(`${MOIM_ID}:m2`);
@@ -538,6 +551,75 @@ describe('ScheduleService', () => {
       await expect(
         service.deleteSchedule('owner', MOIM_ID),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  // ── getSchedule 뷰어 필터 (SPEC-SAFETY-001 T-007) ────────────────────────────
+  // REQ-FLT-004 / AC-FLT-4: 히트맵 응답의 event.slots 에서 차단·신고 대상(hidden) userId 슬롯을 제외한다.
+  // 슬롯은 include:{slots:true} 로 이벤트에 중첩 로드되므로 top-level where 가 아니라 응답 매핑 시점에 필터한다.
+  // dates/window 협업 편집 필드는 작성자 추적이 없어 필터 불가(한계) — 값이 원본 그대로 유지되는지도 검증한다.
+  describe('getSchedule 뷰어 필터 (SPEC-SAFETY-001 T-007)', () => {
+    async function seedWithSlots(): Promise<void> {
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
+      const ev = tables.event.get(MOIM_ID);
+      // owner / m2 / blocked-user 슬롯을 시드한다(blocked-user 는 hidden 대상).
+      for (const [uid, min] of [
+        ['owner', 1080],
+        ['m2', 1110],
+        ['blocked-user', 1140],
+      ] as const) {
+        tables.slot.set(slotKey(ev.id, uid, '2026-07-04', min), {
+          scheduleEventId: ev.id,
+          userId: uid,
+          date: '2026-07-04',
+          startMinute: min,
+          createdAt: NOW,
+        });
+      }
+    }
+
+    it('hidden userId 슬롯을 응답에서 제외한다(다른 멤버 슬롯은 유지)', async () => {
+      await seedWithSlots();
+      hidden = ['blocked-user'];
+      const result = await service.getSchedule('owner', MOIM_ID);
+      const userIds = result.slots.map((s) => s.userId);
+      expect(userIds).toEqual(expect.arrayContaining(['owner', 'm2']));
+      expect(userIds).not.toContain('blocked-user');
+      expect(result.slots).toHaveLength(2);
+      // 뷰어 sub 로 숨김 목록을 요청당 1회 조회한다.
+      expect(getHiddenUserIds).toHaveBeenCalledWith('owner');
+    });
+
+    it('dates/window 협업 편집 필드는 필터하지 않는다(한계 — 원본 불변)', async () => {
+      await seedWithSlots();
+      hidden = ['blocked-user'];
+      const result = await service.getSchedule('owner', MOIM_ID);
+      // 슬롯만 제외될 뿐 이벤트 메타(dates/window/격자)는 원본 그대로여야 한다.
+      expect(result.dates).toEqual(['2026-07-04']);
+      expect(result.startMinute).toBe(1080);
+      expect(result.endMinute).toBe(1440);
+      expect(result.slotMinutes).toBe(30);
+    });
+
+    it('hidden 이 비어 있으면 모든 슬롯을 통과시킨다(no-op)', async () => {
+      await seedWithSlots();
+      hidden = [];
+      const result = await service.getSchedule('owner', MOIM_ID);
+      expect(result.slots).toHaveLength(3);
+    });
+
+    it('세션 미설정이면 null 을 반환한다(슬롯 없음 — 숨김 조회 생략)', async () => {
+      const result = await service.getSchedule('owner', MOIM_ID);
+      expect(result).toBeNull();
+      // 이벤트가 없으면 필터할 슬롯도 없으므로 숨김 목록을 조회하지 않는다(불필요한 왕복 회피).
+      expect(getHiddenUserIds).not.toHaveBeenCalled();
     });
   });
 

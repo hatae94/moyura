@@ -34,7 +34,12 @@ import type {
 const NOW = new Date('2026-07-02T00:00:00.000Z');
 
 interface NotifFindManyArg {
-  where: { recipientId: string; id?: { lt: bigint } };
+  where: {
+    recipientId: string;
+    id?: { lt: bigint };
+    // SPEC-SAFETY-001 T-005: 뷰어가 숨긴 actor 제외(actorId notIn). null actor 는 통과.
+    actorId?: { notIn: string[] };
+  };
   orderBy: { id: 'desc' };
   take: number;
 }
@@ -117,6 +122,13 @@ describe('/notifications (통합 — 가드 배선 + recipientId==sub 인가 격
           if (lt !== undefined) {
             rows = rows.filter((n) => n.id < lt);
           }
+          // SPEC-SAFETY-001 T-005: actorId notIn 필터. nullable notIn 은 NULL(시스템/무행위자) 행을 통과시킨다.
+          const notIn = arg.where.actorId?.notIn;
+          if (notIn !== undefined) {
+            rows = rows.filter(
+              (n) => n.actorId === null || !notIn.includes(n.actorId),
+            );
+          }
           rows = [...rows].sort(byIdDesc);
           return Promise.resolve(rows.slice(0, arg.take));
         }),
@@ -162,6 +174,10 @@ describe('/notifications (통합 — 가드 배선 + recipientId==sub 인가 격
           ),
         ),
       },
+      // SPEC-SAFETY-001 T-005: NotificationModule 이 SafetyModule 을 import 하므로 listForRecipient 가 SafetyService.
+      // getHiddenUserIds(block∪report)를 호출한다. 이 통합 테스트는 차단/신고 시드가 없으니 빈 목록을 반환한다.
+      block: { findMany: jest.fn(() => Promise.resolve([])) },
+      report: { findMany: jest.fn(() => Promise.resolve([])) },
       // 헬스/라이프사이클은 no-op(실제 DB 연결 없음).
       onModuleInit: jest.fn(),
       onModuleDestroy: jest.fn(),

@@ -13,6 +13,10 @@ import { API_BASE_URL } from "@/lib/env";
 import { kickMember, transferOwner, updateMaxMembers } from "@/lib/moim/members";
 import { createClient } from "@/lib/supabase/server";
 
+// 차단 Server Action(SPEC-SAFETY-001 T-009)은 lib/safety/actions.ts 가 단일 출처다. "use server" 모듈은
+// async 함수만 export 할 수 있어(re-export 는 모듈을 무효화) 여기서 재노출하지 않는다 — 멤버 섹션(클라이언트)이
+// blockAction 을 @/lib/safety/actions 에서 직접 import 한다(클라이언트→Server Action import 는 정상).
+
 /** 강퇴/위임 공통 결과 상태 — ok 또는 일반화 오류. */
 export type MemberActionState = { ok?: boolean; error?: string } | undefined;
 

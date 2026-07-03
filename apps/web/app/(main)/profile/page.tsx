@@ -4,14 +4,32 @@
 // 가드를 상속하지만, 페이지에서도 직접 호출해 {session, profile}(이름 보장)을 얻는다(me/page.tsx 패턴).
 // 이메일은 Supabase 세션(session.user.email, read-only), 표시 이름은 GET /me 의 Profile.name(수정 가능).
 // 모바일 "마이" 탭이 ${WEB_URL}/profile 을 WebView 로 호스팅하므로, 본 페이지가 양 표면(웹·앱)을 커버한다.
+import { createApiClient } from "@moyura/api-client";
+
 import { signOutAction } from "@/lib/auth/actions";
 import { requireNamedSession } from "@/lib/auth/require-named-session";
+import { API_BASE_URL } from "@/lib/env";
+import { type BlockItem, listBlocks } from "@/lib/safety/api";
 
+import { BlockedMembersSection } from "./blocked-members-section";
 import { ProfileForm } from "./profile-form";
 
 export default async function ProfilePage() {
   // 세션 + 이름 온보딩 가드(미충족 시 내부에서 /login 또는 /onboarding 으로 redirect).
   const { session, profile } = await requireNamedSession();
+
+  // "차단한 멤버" 섹션 데이터(GET /blocks — block 행만). 조회 실패는 섹션만 빈 목록으로 폴백하고 나머지
+  // 프로필은 정상 렌더한다(차단 목록 조회 실패가 프로필 전체를 막지 않도록 격리 — 비차단 UX).
+  let blocks: BlockItem[] = [];
+  try {
+    const api = createApiClient({
+      baseUrl: API_BASE_URL,
+      getToken: () => session.access_token,
+    });
+    blocks = await listBlocks(api);
+  } catch (err) {
+    console.error("ProfilePage: GET /blocks 실패 — 차단 목록 빈 상태로 폴백", err);
+  }
 
   const email = session.user.email ?? "—";
   const joined = profile.createdAt
@@ -61,6 +79,9 @@ export default async function ProfilePage() {
         {/* 개인정보 수정 — 표시 이름 */}
         <ProfileForm initialName={profile.name ?? ""} />
       </section>
+
+      {/* 차단한 멤버 섹션 — 조회(GET /blocks) + 해제(DELETE /blocks/:id). 전용 라우트 없이 프로필 내 배치. */}
+      <BlockedMembersSection blocks={blocks} />
 
       <form action={signOutAction}>
         <button
