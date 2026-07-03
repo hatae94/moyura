@@ -387,3 +387,17 @@ html[data-shell="native"] [data-moim-action-dock],
 html[data-shell="native"] [data-home-action-dock] {
   bottom: calc(1.5rem + env(safe-area-inset-bottom));
 }
+
+/* SPEC-MOBILE-NAV-001 REQ-MOBNAV-030/031: 셸 모드에서 헤더 필요 5페이지(home/[id]·moims/new·
+   chat·schedule·expenses)의 웹 sticky 헤더 크롬(back Link·타이틀·경계선·블러)을 숨겨, 헤더 소유권을
+   WebView 뷰포트 밖(위)의 네이티브 헤더 바에 넘긴다(이중 헤더 방지). data-shell-header 마커는 각 <header>
+   에 부여한다.
+   [주의] display:none 이 아니라 visibility:hidden 을 쓴다 — 헤더 박스를 레이아웃 흐름에 그대로 남겨
+   높이를 보존해야 REQ-MOBNAV-031 커플링이 깨지지 않는다:
+     · schedule 날짜칩 레일의 sticky top-[60px](헤더 높이 60px 하드코딩)이 그대로 정렬됨.
+     · chat h-dvh-fixed flex 컬럼에서 헤더 박스가 유지돼 자식 ul(flex-1) 잔여 높이·내부 스크롤 모델 불변.
+   visibility:hidden 자손은 포커스·클릭 불가라 back Link 잔상 탭도 없다.
+   [device-verify] 네이티브 헤더 + 이 투명 헤더 박스가 겹치는 상단 여백 육안 재검증은 디바이스 게이트(R-9). */
+html[data-shell="native"] [data-shell-header] {
+  visibility: hidden;
+}

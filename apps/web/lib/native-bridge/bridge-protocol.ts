@@ -33,12 +33,26 @@ export const BRIDGE_MESSAGE_TYPES = {
   GOOGLE_SIGNIN_REQUEST: "auth:google-request",
   /** web→native: 초대 수락 페이지 로드 시 초대 무효 판정 → 네이티브 Alert + 라우팅 요청(SPEC-MOIM-011 후속, payload.loggedIn). */
   INVITE_INVALID: "invite:invalid",
+  /** web→native: route 변경마다 웹이 nav 상태({pathname,title,canGoBack})를 보고 → 네이티브 헤더 구동(SPEC-MOBILE-NAV-001, 토큰 없음). */
+  NAV_STATE: "nav:state",
+  /** native→web: 헤더 back chevron 탭 시 웹에 in-app back 위임 신호(SPEC-MOBILE-NAV-001 REQ-MOBNAV-020, payload 없음). */
+  NAV_BACK: "nav:back",
 } as const;
 
 /** 토큰 페이로드 — access/refresh 만(PII 최소화 OD-4). */
 export interface TokenPayload {
   access: string;
   refresh: string;
+}
+
+/**
+ * nav:state 페이로드(SPEC-MOBILE-NAV-001) — 웹이 네이티브로 보고하는 현재 nav 상태(모바일 인라인 등가).
+ * pathname: 현재 웹 route(헤더 필요 페이지 판정 키). title: 컨텍스트 타이틀(모임명 등). canGoBack: in-app back 가능 여부.
+ */
+export interface NavStatePayload {
+  pathname: string;
+  title: string;
+  canGoBack: boolean;
 }
 
 const TOKEN_BEARING_TYPES: ReadonlySet<string> = new Set<string>([
@@ -49,12 +63,16 @@ const TOKEN_BEARING_TYPES: ReadonlySet<string> = new Set<string>([
 const KNOWN_INBOUND_TYPES: ReadonlySet<string> = new Set<string>([
   BRIDGE_MESSAGE_TYPES.RESTORE,
   BRIDGE_MESSAGE_TYPES.REVALIDATE,
+  // SPEC-MOBILE-NAV-001: nav:back 은 네이티브 발신(헤더 back chevron 탭) — 웹이 수신해 in-app back 을 실행한다.
+  BRIDGE_MESSAGE_TYPES.NAV_BACK,
 ]);
 
 /** 네이티브가 웹으로 보내는 메시지(웹이 수신/처리하는 type). 모든 메시지는 인증용 nonce 를 싣는다(R-T8). */
 export type InboundNativeMessage =
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.RESTORE; nonce: string; payload: TokenPayload }
-  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.REVALIDATE; nonce: string; payload: TokenPayload };
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.REVALIDATE; nonce: string; payload: TokenPayload }
+  // nav:back — payload 없는 신호(SPEC-MOBILE-NAV-001 REQ-MOBNAV-020). 웹이 router.back()/폴백을 결정한다.
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.NAV_BACK; nonce: string };
 
 function isValidTokenPayload(value: unknown): value is TokenPayload {
   if (typeof value !== "object" || value === null) {
@@ -143,6 +161,10 @@ export function parseInboundMessage(raw: string): InboundNativeMessage | null {
       payload: { access: c.payload.access, refresh: c.payload.refresh },
     };
   }
+  if (c.type === BRIDGE_MESSAGE_TYPES.NAV_BACK) {
+    // SPEC-MOBILE-NAV-001: nav:back 은 payload 없는 신호 — nonce 만 검증 후 통과(웹이 in-app back 실행).
+    return { version: c.version, type: BRIDGE_MESSAGE_TYPES.NAV_BACK, nonce: c.nonce };
+  }
   return null;
 }
 
@@ -186,5 +208,24 @@ export function serializeInviteInvalidMessage(loggedIn: boolean, nonce: string):
     type: BRIDGE_MESSAGE_TYPES.INVITE_INVALID,
     nonce,
     payload: { loggedIn },
+  });
+}
+
+/**
+ * web→native nav:state 메시지를 직렬화한다(SPEC-MOBILE-NAV-001 REQ-MOBNAV-010/011 — route 변경 시 nav 상태 보고).
+ * 웹이 route 변경마다 자신의 nav 상태({pathname,title,canGoBack})를 네이티브에 보고해 헤더 바를 구동한다
+ * (단일 진실 출처 = 웹). 토큰 없는 명령 신호로 nonce 를 envelope 에 실어 네이티브가 인증한다(R-T8).
+ * additive v1 신규 nav 채널 — 기존 세션 타입/nonce 봉투 불변(UNIFY-001 R-U2 공유 채널 계약과 동일).
+ */
+export function serializeNavState(payload: NavStatePayload, nonce: string): string {
+  return JSON.stringify({
+    version: BRIDGE_VERSION,
+    type: BRIDGE_MESSAGE_TYPES.NAV_STATE,
+    nonce,
+    payload: {
+      pathname: payload.pathname,
+      title: payload.title,
+      canGoBack: payload.canGoBack,
+    },
   });
 }

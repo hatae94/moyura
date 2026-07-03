@@ -20,6 +20,7 @@ import { API_BASE_URL } from "@/lib/env";
 import { getUnreadCount } from "@/lib/notifications/api";
 
 import { BottomTabBar } from "./_components/BottomTabBar";
+import { NavStateReporter } from "./_components/NavStateReporter";
 import { NotificationCountProvider } from "./_components/NotificationCountProvider";
 import { ShellModeEffect } from "./_components/ShellModeEffect";
 import { ShellSessionAnnouncer } from "./_components/ShellSessionAnnouncer";
@@ -78,6 +79,12 @@ export default async function MainLayout({
       {/* F2(D-V3): soft-navigation 으로 (main) 진입 시 인라인 스크립트가 재실행되지 않는 갭을 보강.
           데스크톱은 no-op(전역 미존재). 초기 로드 flash-free 는 위 인라인 스크립트가 담당한다. */}
       <ShellModeEffect />
+      {/* SPEC-MOBILE-NAV-001 M2(REQ-MOBNAV-010): (main) 그룹의 헤더 필요 route(/home/[id]) 및 나머지
+          route 진입/soft-nav 시 nav:state 를 네이티브로 보고한다(셸 모드 한정, 데스크톱 no-op). moims 그룹
+          (chat/schedule/expenses/new)은 (main) 밖이라 moims/layout.tsx 가 리포터를 2차 마운트한다.
+          비-헤더 route(탭 루트·/me)에서도 보고하지만 네이티브 decideHeader 가 헤더를 숨긴다(REQ-MOBNAV-003)
+          — 헤더 페이지를 벗어날 때 헤더를 내리기 위해 오히려 필요한 보고다. 출력 없는 null effect. */}
+      <NavStateReporter />
       {/* F1'(D-V2 재수정): (main) 진입 = 서버 검증 세션. 셸 모드면 쿠키 세션을 네이티브로 핸드오버해
           SecureStore 시딩 + (tabs) 마운트를 유발한다. server-action 로그인은 onAuthStateChange 를
           발생시키지 않으므로 이 mount 경로가 필요하다. 데스크톱은 no-op. */}
