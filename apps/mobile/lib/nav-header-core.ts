@@ -90,11 +90,12 @@ function isHeaderPage(pathname: string): boolean {
  *
  * @param state 웹이 nav:state 로 보고한 {pathname, title, canGoBack}
  * @returns NativeHeaderBar 가 소비할 {headerVisible, showBackChevron, headerTitle}
- * @MX:NOTE: [AUTO] 네이티브 헤더 렌더 결정의 단일 진입점 — NativeHeaderBar(가시성·title)와
- *           BridgedWebView(헤더 오버레이 배치)가 소비할 예정(Phase 3 배선 시 fan_in >= 2 → ANCHOR 승격).
- *           판정 범위가 넓어지면 탭 루트/보류 페이지에 헤더가 오노출되고(REQ-MOBNAV-003 위반),
- *           좁아지면 5페이지 중 일부에서 back affordance 가 누락된다(이 SPEC 의 원 버그 재발).
- *           (파일당 ANCHOR 한도 3 준수 — 현 fan_in=0(테스트만), run 단계 배선 후 승격.)
+ * @MX:NOTE: [AUTO] 네이티브 헤더 렌더 결정의 단일 진입점 — NativeHeaderBar(가시성·chevron·title 렌더)와
+ *           BridgedWebView(헤더 오버레이 gating + WebViewShell edges 이중 top 인셋 조정)가 소비한다
+ *           (Phase 3 배선 완료 — fan_in=2, 테스트 포함). 판정 범위가 넓어지면 탭 루트/보류 페이지에 헤더가
+ *           오노출되고(REQ-MOBNAV-003 위반), 좁아지면 5페이지 중 일부에서 back affordance 가 누락된다
+ *           (이 SPEC 의 원 버그 재발). fan_in < 3 이라 NOTE 유지(ANCHOR 임계 미달) — 3번째 소비자
+ *           추가 시 ANCHOR 승격 검토(파일당 ANCHOR 한도 3 준수).
  */
 export function decideHeader(state: NavState): HeaderDecision {
   const headerVisible = isHeaderPage(state.pathname);
