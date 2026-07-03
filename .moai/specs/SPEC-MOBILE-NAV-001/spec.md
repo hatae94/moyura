@@ -1,9 +1,9 @@
 ---
 id: SPEC-MOBILE-NAV-001
-version: "0.1.0"
-status: draft
+version: "0.2.0"
+status: in-progress
 created: 2026-07-03
-updated: 2026-07-03
+updated: 2026-07-04
 author: hatae
 priority: high
 issue_number: 0
@@ -20,6 +20,8 @@ labels: [mobile, navigation, webview, native-header, bridge]
 ## HISTORY
 
 - 2026-07-03 (v0.1.0): 최초 작성 (draft). 사전 조사 `research.md`(사내 4인 리서치 + deep-research 하니스 21소스 · 100주장 → 18 confirmed / 7 killed) 기반. **딥리서치로 옵션 A(`onShouldStartLoadWithRequest` push 승격) 폐기** — 이 콜백은 SPA soft-nav(Next `<Link>` pushState)에서 발화하지 않음이 확정(주장1 거짓). **단일 지속 WebView + 네이티브 헤더 크롬 오버레이**(브리지 `nav:*` 채널 구동, topology-agnostic) 채택. Plan Review 게이트에서 Open Decision 5건 전부 확정: OD-1(수렴 미포함, UNIFY-001 위임 + 공유 nav 채널 계약 명문화), OD-2(back = nav:back 웹 위임), OD-3(알림 cross-tab back = 웹 히스토리 우선 + 딥링크 첫 진입 시 /home 폴백), OD-4(웹 인터셉트 완전성 SPIKE = Phase 0 필수 선행 게이트), OD-5(iOS 스와이프 백 미포함 — allowsBackForwardNavigationGestures OFF, 헤더 back chevron 단독). 브라운필드 — 기존 동작 보존.
+
+- 2026-07-04 (v0.2.0, status: draft→in-progress): Phase 0-3 로컬 구현 완료(b6eab77·f0de8be) + **Phase 2 배선 갭 수정**(daa128c). 웹 `installNavBackListener`(bridge-client.ts)가 구현 완비였으나 **어떤 컴포넌트도 마운트하지 않아**(핸들러 미등록, useAuthBridge `@MX:WARN` 경계) 헤더 back 무동작이던 갭을 `NavBackListener` 신규 마운트((main)/layout·moims/layout)로 완결. **Android 실기기(S25) 검증**: 하드웨어 백·헤더 ‹ 탭 모두 router.back() 이동, 헤더 페이지(모임 상세·채팅) 렌더 + 탭 루트(/home) 헤더 부재(REQ-MOBNAV-003) 확인. 단 [device-gated] formal 게이트는 iOS 시뮬레이터 유지(메모리 `ios-simulator-only`) — 플랫폼 무관 nav:back 브리지 체인은 Android로 입증됐으나 iOS 전용 AC(WKWebView 제스처·status-bar inset) 미검증 → status `in-progress`(사용자 승인). 상세 progress.md 2026-07-04.
 
 ---
 
