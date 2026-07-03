@@ -1,6 +1,6 @@
 %% Mermaid ER diagram — 수동 갱신 (db.yaml auto-sync 비활성)
 %% 기준: apps/backend/prisma/schema.prisma + 마이그레이션 파일
-%% 최종 갱신: 2026-07-02 (SPEC-NOTIFICATIONS-001 sync — NOTIFICATION + SETTLEMENT_REQUEST 엔티티 추가)
+%% 최종 갱신: 2026-07-03 (SPEC-SAFETY-001/SPEC-ACCOUNT-001 sync — BLOCK + REPORT + WITHDRAWN_ACCOUNT 엔티티 추가, MOIM_MEMBER.withdrawn_at 추가)
 erDiagram
     PROFILE {
         string id PK "Supabase JWT sub (uuid)"
@@ -23,6 +23,7 @@ erDiagram
         string nickname "모임별 표시 이름"
         string role "owner | member (default: member)"
         timestamp joined_at
+        timestamp withdrawn_at "탈퇴 마킹 nullable (SPEC-ACCOUNT-001) — NULL=활성 멤버"
     }
 
     MOIM_INVITE {
@@ -94,6 +95,28 @@ erDiagram
         timestamp created_at
     }
 
+    WITHDRAWN_ACCOUNT {
+        string sub PK "삭제된 Supabase auth user id (= 구 PROFILE.id). FK 없음(soft tombstone)"
+        timestamp withdrawn_at "탈퇴 처리 시각 (SPEC-ACCOUNT-001 REQ-ACCOUNT-003)"
+    }
+
+    BLOCK {
+        string blocker_id PK "차단자 sub (= PROFILE.id). FK 없음(soft-ref)"
+        string blocked_user_id PK "차단 대상 sub. FK 없음(soft-ref)"
+        timestamp created_at
+    }
+
+    REPORT {
+        string id PK "uuid() 자동 생성"
+        string reporter_id "신고자 sub (= PROFILE.id). FK 없음(soft-ref)"
+        string target_user_id "피신고 콘텐츠 작성자 sub. FK 없음(soft-ref)"
+        string moim_id FK "→ MOIM.id onDelete Cascade"
+        string reason "신고 사유(자유 텍스트)"
+        string content_type "chat_message|poll|expense|settlement_request (CHECK 제약)"
+        string content_id "신고 콘텐츠 id (TEXT 통일 — BigInt PK는 필터 시 캐스팅)"
+        timestamp created_at
+    }
+
     MOIM ||--o{ MOIM_MEMBER : "has members (Cascade)"
     MOIM ||--o{ MOIM_INVITE : "has invites (Cascade)"
     MOIM ||--o{ CHAT_MESSAGE : "has messages (Cascade)"
@@ -103,3 +126,4 @@ erDiagram
     POLL_OPTION ||--o{ POLL_VOTE : "voted by (Cascade)"
     MOIM ||--o{ NOTIFICATION : "has notifications (Cascade)"
     MOIM ||--o{ SETTLEMENT_REQUEST : "has settlement requests (Cascade)"
+    MOIM ||--o{ REPORT : "has reports (Cascade — report.moim_id FK)"
