@@ -12,7 +12,7 @@
 // 검증한다 — foreign-origin/미인증(스키마는 맞으나 nonce 불일치) session:restore 를 거부해 세션 고정·
 // 토큰 탈취를 차단한다. 모바일 bridge-protocol.ts 와 동일한 wire 포맷에 합의한다(인라인 등가).
 //
-// 이 모듈은 @supabase/* 나 RN 의존이 없는 순수 타입/직렬화 헬퍼다 — bridge-client.ts 가 사용한다.
+// 이 모듈은 @supabase/* 나 RN 의존이 없는 순수 타입/직렬화 헬퍼다 — bridge-transport/session-bridge/bridge-signals 가 사용한다.
 
 /** 스키마 버전(모바일 BRIDGE_VERSION 과 일치). */
 export const BRIDGE_VERSION = 1 as const;

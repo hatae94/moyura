@@ -19,7 +19,7 @@ import {
   verifyEmailOtpAction,
   type AuthActionState,
 } from "@/lib/auth/actions";
-import { requestNativeGoogleSignIn } from "@/lib/native-bridge/bridge-client";
+import { requestNativeGoogleSignIn } from "@/lib/native-bridge/bridge-signals";
 
 import { InviteLinkEntry } from "./invite-link-entry";
 

@@ -10,7 +10,7 @@
 
 import { useEffect } from "react";
 
-import { notifyNativeSessionCleared } from "./bridge-client";
+import { notifyNativeSessionCleared } from "./bridge-signals";
 
 /**
  * /login 도착 시 네이티브에 session:cleared 를 1회 post 한다(R-R2/OD-10). 일반 브라우저면 no-op(R-T4).

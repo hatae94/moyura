@@ -15,7 +15,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
-import { notifyInviteInvalid } from "@/lib/native-bridge/bridge-client";
+import { notifyInviteInvalid } from "@/lib/native-bridge/bridge-signals";
 
 // 웹(데스크톱) 폴백 라우트. 앱에서는 네이티브가 (tabs)/home, (auth)/login 으로 전환한다.
 const ROUTE_MAIN = "/home";
