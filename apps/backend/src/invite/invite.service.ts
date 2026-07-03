@@ -149,8 +149,11 @@ export class InviteService {
       where: { id: invite.moimId },
     });
     if (moim !== null) {
+      // @MX:NOTE: [AUTO] 정원 count 는 활성 멤버(withdrawnAt: null)만 집계한다(SPEC-ACCOUNT-001 R-6, gap B-6).
+      // 탈퇴자는 원장 무결성 보존을 위해 moim_member 행을 삭제하지 않고 withdrawnAt 을 세팅해 "유령"으로 남기므로,
+      // 이 필터가 없으면 이미 탈퇴한 사용자가 정원을 계속 점유해 활성 멤버가 정원 미만인데도 가입이 거부된다.
       const currentCount = await this.prisma.moimMember.count({
-        where: { moimId: invite.moimId },
+        where: { moimId: invite.moimId, withdrawnAt: null },
       });
       if (currentCount >= moim.maxMembers) {
         throw new ConflictException('모임 정원이 가득 찼습니다');

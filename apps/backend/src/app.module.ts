@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { AccountModule } from './account/account.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChatModule } from './chat/chat.module';
@@ -50,6 +51,10 @@ import { ScheduleModule } from './schedule/schedule.module';
     // export 한다. 소비 도메인(chat/poll/expense/schedule/notification/push)이 SafetyModule 을 import 해 뷰어 측
     // 필터를 주입받는다(safety→도메인 import 금지 — 단방향, REQ-CPL-002). PushModule 뒤에 등록한다.
     SafetyModule,
+    // SPEC-ACCOUNT-001 T-07: 회원 탈퇴(인앱 계정 삭제). DELETE /me/account 를 노출한다. AuthModule(가드) +
+    // MoimModule(소유권 이양/삭제 재사용)에 의존하므로 그 뒤에 등록한다. SafetyModule 은 import 하지 않고
+    // prisma.block/report 를 직접 접근해 고아 행을 정리한다(R-15 비순환). SafetyModule 뒤에 등록한다.
+    AccountModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -2114,6 +2114,28 @@
           "notification"
         ]
       }
+    },
+    "/me/account": {
+      "delete": {
+        "operationId": "AccountController_deleteAccount",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "계정 삭제 완료 — 본문 없음(204)"
+          },
+          "401": {
+            "description": "유효한 Supabase JWT 부재 — 401"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "account"
+        ]
+      }
     }
   },
   "info": {

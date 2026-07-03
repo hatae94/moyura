@@ -239,6 +239,7 @@ describe('MoimController', () => {
           nickname: '호스트',
           role: 'owner',
           joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+          withdrawnAt: null,
         },
       ];
       mocks.listMembers.mockResolvedValueOnce(members);

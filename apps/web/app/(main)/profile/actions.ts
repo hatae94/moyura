@@ -17,7 +17,12 @@ import { createClient } from "@/lib/supabase/server";
 /** 프로필 수정 결과 상태(useActionState 로 소비 — 성공 시 ok, 실패 시 error 로 폼에 머무른다). */
 export type ProfileActionState = { ok?: boolean; error?: string } | undefined;
 
+/** 회원 탈퇴 결과 상태(useActionState 로 소비 — 성공 시 redirect 하므로 실패 error 만 표현한다). */
+export type DeleteAccountState = { error?: string } | undefined;
+
 const GENERIC_ERROR = "프로필을 저장하지 못했습니다. 다시 시도해 주세요.";
+
+const DELETE_ACCOUNT_ERROR = "탈퇴 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 
 /**
  * 표시 이름을 Profile.name 으로 영속한다. 세션 부재 → /login. 빈 값 → 일반화된 오류(머무름).
@@ -55,4 +60,39 @@ export async function updateProfileAction(
 
   revalidatePath("/profile");
   return { ok: true };
+}
+
+/**
+ * 회원 탈퇴(SPEC-ACCOUNT-001 T-09 / REQ-ACCOUNT-004). 확인 단계(account-deletion.tsx)를 거친 뒤에만 호출된다.
+ * 세션 부재 → /login. 세션 access_token 을 Bearer 로 DELETE /me/account 를 호출한다(삭제 대상은 백엔드 가드가
+ * 검증 sub 로만 강제 — body 없음). 성공(204) → 로그아웃 경로 재사용(supabase.auth.signOut() + /login redirect):
+ * 웹은 쿠키 세션이 제거되고, 모바일 WebView 는 기존 session:cleared 브리지가 SecureStore/쿠키를 정리한다.
+ * 실패 → 자격증명·상태 비노출 일반화 오류(R-A9 — 폼에 머무르며 재시도 안내).
+ */
+export async function deleteAccountAction(): Promise<DeleteAccountState> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  try {
+    const api = createApiClient({
+      baseUrl: API_BASE_URL,
+      getToken: () => session.access_token,
+    });
+    // DELETE /me/account — 성공 시 본문 없는 204. 삭제 키는 백엔드 가드-검증 sub 만 사용(body 미전송).
+    await api.request("/me/account", "delete");
+  } catch (err) {
+    const status = err instanceof ApiError ? err.status : "unknown";
+    console.error(`deleteAccountAction: DELETE /me/account 실패 (status ${status})`);
+    return { error: DELETE_ACCOUNT_ERROR };
+  }
+
+  // 성공 → 로그아웃 경로 재사용(signOutAction 미러): 세션 쿠키 제거 후 /login.
+  await supabase.auth.signOut();
+  redirect("/login");
 }

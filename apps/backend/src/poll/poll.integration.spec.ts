@@ -85,6 +85,7 @@ describe('/moims/:id/polls (통합 — 생성/투표/재투표/집계/인가)', 
         nickname: `멤버${idx}`,
         role: idx === 0 ? 'owner' : 'member',
         joinedAt: new Date('2026-06-19T00:00:00.000Z'),
+        withdrawnAt: null,
       });
     });
   }

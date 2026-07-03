@@ -1,5 +1,6 @@
-import type { Profile } from '../generated/prisma/client';
+import type { Profile, WithdrawnAccount } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+import { AccountWithdrawnException } from './account-withdrawn.exception';
 import { ProfileService } from './profile.service';
 
 // prisma.profile.upsert가 받는 인자 형태(테스트 단언용 — 클라이언트 필드 mass-assign 부재 검증).
@@ -7,6 +8,11 @@ interface UpsertArg {
   where: { id: string };
   create: { id: string };
   update: Record<string, never>;
+}
+
+// prisma.withdrawnAccount.findUnique가 받는 인자 형태(T-02 툼스톤 선조회 단언용).
+interface FindTombstoneArg {
+  where: { sub: string };
 }
 
 // prisma.profile.update가 받는 인자 형태(SPEC-MOBILE-004 T-002 updateName 단언용).
@@ -19,10 +25,20 @@ interface UpdateArg {
 describe('ProfileService', () => {
   // prisma.profile.upsert/update 호출 인자를 캡처하는 타입드 스텁.
   // SPEC-MOBILE-004 T-001: upsert 결과에 name(nullable)을 포함한다.
-  function makePrisma(seedName: string | null = null): {
+  // SPEC-ACCOUNT-001 T-02: withdrawnAccount.findUnique 툼스톤 선조회 스텁을 함께 제공한다.
+  //   - tombstone=false(기본): 툼스톤 없음 → 기존 upsert 정상 경로.
+  //   - tombstone=true: 툼스톤 존재 → upsert 미호출 + AccountWithdrawnException.
+  function makePrisma(
+    seedName: string | null = null,
+    tombstone = false,
+  ): {
     prisma: PrismaService;
     upsert: jest.Mock<Promise<Profile>, [UpsertArg]>;
     update: jest.Mock<Promise<Profile>, [UpdateArg]>;
+    findTombstone: jest.Mock<
+      Promise<WithdrawnAccount | null>,
+      [FindTombstoneArg]
+    >;
   } {
     const upsert = jest.fn<Promise<Profile>, [UpsertArg]>((arg) =>
       Promise.resolve({
@@ -39,10 +55,24 @@ describe('ProfileService', () => {
         createdAt: new Date('2026-06-02T00:00:00Z'),
       }),
     );
+    const findTombstone = jest.fn<
+      Promise<WithdrawnAccount | null>,
+      [FindTombstoneArg]
+    >((arg) =>
+      Promise.resolve(
+        tombstone
+          ? {
+              sub: arg.where.sub,
+              withdrawnAt: new Date('2026-07-01T00:00:00Z'),
+            }
+          : null,
+      ),
+    );
     const prisma = {
       profile: { upsert, update },
+      withdrawnAccount: { findUnique: findTombstone },
     } as unknown as PrismaService;
-    return { prisma, upsert, update };
+    return { prisma, upsert, update, findTombstone };
   }
 
   it('검증된 sub를 id로 UPSERT한다 (AC-B3)', async () => {
@@ -124,5 +154,62 @@ describe('ProfileService', () => {
     expect(upsert).toHaveBeenCalledTimes(2);
     expect(upsert.mock.calls[0][0].where).toEqual({ id: 'sub-A' });
     expect(upsert.mock.calls[1][0].where).toEqual({ id: 'sub-A' });
+  });
+
+  // --- SPEC-ACCOUNT-001 T-02: 툼스톤 부활 차단 (AC-3-1) ---
+
+  it('T-02 (AC-3-1): 툼스톤 존재 시 upsert를 호출하지 않고 AccountWithdrawnException을 던진다', async () => {
+    const { prisma, upsert } = makePrisma(null, true);
+    const service = new ProfileService(prisma);
+
+    await expect(service.upsertBySub('sub-withdrawn')).rejects.toBeInstanceOf(
+      AccountWithdrawnException,
+    );
+    // 부활 차단: profile.upsert가 절대 호출되지 않아야 한다(PII 재생성 금지).
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('T-02 (AC-3-1): 툼스톤 선조회는 검증된 sub를 where 키로 사용한다', async () => {
+    const { prisma, findTombstone } = makePrisma(null, true);
+    const service = new ProfileService(prisma);
+
+    await expect(service.upsertBySub('sub-withdrawn')).rejects.toBeInstanceOf(
+      AccountWithdrawnException,
+    );
+    expect(findTombstone).toHaveBeenCalledWith({
+      where: { sub: 'sub-withdrawn' },
+    });
+  });
+
+  it('T-02 (EC-6): 툼스톤 존재 시 재호출해도 upsert 미호출 유지(멱등 차단)', async () => {
+    const { prisma, upsert } = makePrisma(null, true);
+    const service = new ProfileService(prisma);
+
+    await expect(service.upsertBySub('sub-withdrawn')).rejects.toBeInstanceOf(
+      AccountWithdrawnException,
+    );
+    await expect(service.upsertBySub('sub-withdrawn')).rejects.toBeInstanceOf(
+      AccountWithdrawnException,
+    );
+    // 반복 요청에도 profile 행이 생성되지 않는다(부활 차단 멱등).
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('T-02 (AC-3-2): 툼스톤 없는 정상 sub는 기존과 동일하게 upsert된다(회귀)', async () => {
+    const { prisma, upsert, findTombstone } = makePrisma(null, false);
+    const service = new ProfileService(prisma);
+
+    const profile = await service.upsertBySub('sub-normal');
+
+    // 툼스톤 선조회는 정상 플로우를 저해하지 않는다: 선조회 후 upsert 수행.
+    expect(findTombstone).toHaveBeenCalledWith({
+      where: { sub: 'sub-normal' },
+    });
+    expect(upsert).toHaveBeenCalledWith({
+      where: { id: 'sub-normal' },
+      create: { id: 'sub-normal' },
+      update: {},
+    });
+    expect(profile.id).toBe('sub-normal');
   });
 });

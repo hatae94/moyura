@@ -77,6 +77,7 @@ function makeTxClient(tables: Tables, ids: { next: () => string }) {
             nickname: arg.data.nickname,
             role: arg.data.role,
             joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+            withdrawnAt: null,
           };
           tables.member.set(memberKey(created.moimId, created.userId), created);
           return Promise.resolve(created);
@@ -301,6 +302,7 @@ describe('MoimService', () => {
       nickname: '호스트',
       role: 'owner',
       joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+      withdrawnAt: null,
     };
     const member: MoimMember = {
       moimId: 'moim-A',
@@ -308,6 +310,7 @@ describe('MoimService', () => {
       nickname: '참가자1',
       role: 'member',
       joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+      withdrawnAt: null,
     };
     return { moim, owner, member };
   }
@@ -468,6 +471,7 @@ describe('MoimService', () => {
           nickname: 'U',
           role: 'member',
           joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+          withdrawnAt: null,
         },
         {
           moimId: 'moim-B',
@@ -475,6 +479,7 @@ describe('MoimService', () => {
           nickname: 'U',
           role: 'owner',
           joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+          withdrawnAt: null,
         },
         {
           moimId: 'moim-C',
@@ -482,6 +487,7 @@ describe('MoimService', () => {
           nickname: 'other',
           role: 'owner',
           joinedAt: new Date('2026-06-13T00:00:00.000Z'),
+          withdrawnAt: null,
         },
       ];
       const { prisma } = makePrisma({

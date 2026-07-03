@@ -37,6 +37,8 @@ describe('/me (통합 — 가드 배선 + UPSERT 키 출처)', () => {
     where: { id: string };
     data: { name: string };
   } | null = null;
+  // SPEC-ACCOUNT-001 T-02: 툼스톤 처리된 sub 집합(GET /me 부활 차단 → 410 검증용).
+  const tombstones = new Set<string>();
 
   beforeAll(async () => {
     keys = await generateEs256Keys();
@@ -77,6 +79,19 @@ describe('/me (통합 — 가드 배선 + UPSERT 키 출처)', () => {
         ),
         count: jest.fn((arg: { where: { id: string } }) =>
           Promise.resolve(store.has(arg.where.id) ? 1 : 0),
+        ),
+      },
+      // SPEC-ACCOUNT-001 T-02: 툼스톤 선조회 — tombstones 집합에 있으면 계정 소멸 신호.
+      withdrawnAccount: {
+        findUnique: jest.fn((arg: { where: { sub: string } }) =>
+          Promise.resolve(
+            tombstones.has(arg.where.sub)
+              ? {
+                  sub: arg.where.sub,
+                  withdrawnAt: new Date('2026-07-01T00:00:00.000Z'),
+                }
+              : null,
+          ),
         ),
       },
       // onModuleInit/onModuleDestroy는 no-op(실제 DB 연결 없음).
@@ -164,6 +179,28 @@ describe('/me (통합 — 가드 배선 + UPSERT 키 출처)', () => {
     expect(lastUpsertArg?.create).toEqual({ id: verifiedSub });
     // create payload에 클라이언트 필드가 mass-assign되지 않았다.
     expect(Object.keys(lastUpsertArg?.create ?? {})).toEqual(['id']);
+  });
+
+  it('T-02 (AC-3-1/EC-6): 툼스톤 처리된 sub의 GET /me → 410, profile 행 미생성(부활 차단)', async () => {
+    const sub = uniqueSub();
+    tombstones.add(sub);
+    const token = await signEs256(keys.privateKey, { sub });
+
+    // 잔존 토큰으로 GET /me → 계정 소멸 응답(410 Gone).
+    await request(app.getHttpServer())
+      .get('/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(410);
+
+    // 부활 차단: upsert가 실행되지 않아 profile 행이 store에 생성되지 않았다.
+    expect(store.has(sub)).toBe(false);
+
+    // EC-6: 재요청해도 여전히 410 + profile 행 미생성(멱등 차단).
+    await request(app.getHttpServer())
+      .get('/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(410);
+    expect(store.has(sub)).toBe(false);
   });
 
   it('T-002 (AC-4be): PATCH /me 는 토큰 없이 호출 시 401 (가드 실제 배선)', async () => {

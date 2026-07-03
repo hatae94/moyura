@@ -1,9 +1,9 @@
 ---
 id: SPEC-ACCOUNT-001
-version: "0.2.0"
-status: in-progress
+version: "0.1.0"
+status: draft
 created: 2026-07-02
-updated: 2026-07-03
+updated: 2026-07-02
 author: hatae
 priority: critical
 issue_number: 0
@@ -16,7 +16,6 @@ issue_number: 0
 
 ## HISTORY
 
-- 2026-07-03 (v0.2.0): 구현 완료(커밋 `88432e7`, 브랜치 `feature/SPEC-ACCOUNT-001`). 품질 게이트 전 통과 — tsc 0 error, nx lint backend/web clean, jest 635/635 PASS(37 suites), evaluator-active 4차원 PASS(이터레이션 3), TRUST 5 PASS, MX 태그 검증 완료. 단, AC-4-2(iOS 시뮬레이터 WebView 탈퇴 종단 — session:cleared → SecureStore 토큰/sb-* 쿠키 삭제 → 로그인 복귀) 검증이 device-gated 잔여로 status는 in-progress 유지(프로젝트 컨벤션). 계획 대비 발산 항목은 "구현 노트" 섹션에 문서화.
 - 2026-07-02 (v0.1.0): 최초 작성(draft). 인터뷰 1개 라운드(2개 결정) + 계획 검토 승인 반영.
   - 스토어 출시 정책 대응: Apple App Review 5.1.1(v), Google Play 계정 삭제 요건 — 앱 내(웹·모바일 WebView 공유 표면) 계정 삭제 제공.
   - 확정 범위: Supabase auth 계정 + PII(profile 행/이메일 identity/FCM 토큰) 즉시 삭제(유예 없음), 작성 UGC는 "탈퇴한 사용자"로 익명화하되 모임 기록(채팅/일정/정산) 무결성 보존.
@@ -128,37 +127,3 @@ issue_number: 0
 ---
 
 관련: 상세 오케스트레이션 순서·리스크 표·MX 태그 계획은 plan.md, 수락 시나리오는 acceptance.md 참조.
-
----
-
-## 구현 노트 (Implementation Notes)
-
-> 본 섹션은 실제 구현(커밋 `88432e7`, 브랜치 `feature/SPEC-ACCOUNT-001`)과 계획(plan.md, tasks.md) 사이의 주요 발산 사항을 기록한다.
-
-### 1. 마이그레이션 단일 결합 — `20260702200000_add_withdrawn_account`
-
-`WithdrawnAccount` 툼스톤 테이블과 `moim_member.withdrawnAt` 컬럼을 단일 마이그레이션으로 결합 생성했다. 두 변경이 가산적(additive)이라 결합 무결성 문제 없음. dev DB 적용 시 `diff → execute → resolve` 방식으로 처리했다(plan.md의 두 개 별도 마이그레이션 서술과 달라짐).
-
-### 2. `AccountWithdrawnException`(410) — `me.controller.ts` 코드 수정 없음
-
-`profile.service.ts`의 `upsertBySub` 툼스톤 가드에서 `AccountWithdrawnException extends GoneException`(410)을 던지도록 구현했으나, `me.controller.ts` 프로덕션 코드는 수정하지 않았다. NestJS가 `GoneException`을 구조적으로 410 응답으로 변환하므로 컨트롤러 수준의 예외 매핑이 불필요했다(plan의 "me.controller.ts [MODIFY]" 서술은 실 코드와 달라 폐기).
-
-### 3. `transferOwner` — [EXISTING] 재사용 + 활성 멤버 선정 로직 위치 변경
-
-plan §4의 `transferOwner [MODIFY]` 서술(자동 선정 로직 추가 예정)은 실제 구현과 달라 폐기했다. `MoimService.transferOwner(sub, moimId, targetUserId)`는 명시적 target을 받는 기존 시그니처를 그대로 재사용하고, 활성 비-owner 선정 로직(`withdrawnAt: null + joinedAt asc + take 1`)은 `AccountService.deleteAccount` 내부에 위치시켰다(fan_in ANCHOR 미변경, scope discipline 준수).
-
-### 4. SAFETY 선행 확정으로 no-op 가드 폐기 — Prisma 직접 deleteMany
-
-SPEC-SAFETY-001이 선행 배포 확정(§7)됨에 따라 plan 및 REQ-ACCOUNT-001의 "no-op 가드" 분기를 폐기했다. `deleteAccount` 트랜잭션에서 `prisma.block.deleteMany`·`prisma.report.deleteMany`를 직접 호출한다. `SafetyModule`·`BlockService` import 없이 Prisma 직접 접근으로 비순환 계약을 유지했으며(R-15), grep으로 `apps/backend/src/account/**` → SafetyModule/BlockService import 0건 검증 완료.
-
-### 5. `deleteAccountAction` — zero-arg 시그니처
-
-웹 `apps/web/app/(main)/profile/actions.ts`의 `deleteAccountAction`은 인자를 받지 않는 zero-arg 시그니처로 구현했다. Next.js `useActionState` 타입 호환 및 웹 ESLint `no-unused-vars` 경고 회피를 위한 결정이다.
-
-### 6. spec fixture `withdrawnAt: null` 29개 추가
-
-`moim_member` 스키마에 `withdrawnAt` 컬럼이 추가됨에 따라, 전 도메인 spec(jest) fixture의 `MoimMember` 리터럴에 `withdrawnAt: null`을 29개 추가했다. 기계적 추가이며 단언(assertion) 로직은 변경되지 않았다.
-
-### 7. AC-4-2 device-gated 잔여 상세
-
-AC-4-2(iOS 시뮬레이터 WebView 탈퇴 종단)는 session:cleared → SecureStore 토큰 삭제 → sb-* 쿠키 삭제 → 로그인 화면 복귀 전 흐름을 실 기기/시뮬레이터에서 종단 검증해야 한다. 현재 검증 체크리스트 및 진행 상황은 `.moai/specs/SPEC-ACCOUNT-001/progress.md`와 `acceptance.md`에 위치한다. 이 항목이 완료되기 전까지 SPEC status는 `in-progress`를 유지한다.
