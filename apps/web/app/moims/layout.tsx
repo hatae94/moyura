@@ -16,6 +16,7 @@
 // 여전히 두지 않는다 — 리포터는 전역 플래그를 직접 읽어 셸을 판정하므로 (main) 의 부트스트랩에 의존하지 않는다.
 import { requireNamedSession } from "@/lib/auth/require-named-session";
 
+import { NavBackListener } from "@/app/(main)/_components/NavBackListener";
 import { NavStateReporter } from "@/app/(main)/_components/NavStateReporter";
 
 export default async function MoimsLayout({
@@ -32,6 +33,9 @@ export default async function MoimsLayout({
   return (
     <>
       <NavStateReporter />
+      {/* REQ-MOBNAV-020/021: moims/* 는 (main) 밖이라 (main)/layout 의 NavBackListener 가 커버하지 못한다
+          (chat/schedule/expenses/new). 헤더 back 수신측을 이 레이아웃에도 2차 마운트한다(셸 모드 한정, no-op 데스크톱). */}
+      <NavBackListener />
       {children}
     </>
   );
