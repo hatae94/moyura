@@ -22,6 +22,7 @@ import { AuthProvider } from "../lib/auth/AuthContext";
 import { configureGoogleSignIn } from "../lib/auth/google-signin";
 import { GOOGLE_IOS_CLIENT_ID, GOOGLE_WEB_CLIENT_ID } from "../lib/env";
 import { registerNotificationTapHandler } from "../lib/push/notification-handler";
+import { setDeepLinkTarget } from "../lib/push/deep-link-intent";
 
 // R-N3/OD-8: 콜드스타트 핸드셰이크 동안 스플래시를 유지한다 — 모듈 평가 시점에 자동 숨김을 막는다
 // (App.tsx 모듈 평가 시점 호출 보존). 실패해도 throw 하지 않게 흡수(스플래시 미지원/이미 숨김 등).
@@ -72,16 +73,25 @@ function moimIdFromChatUrl(url: string): string | null {
  * (네이티브 크롬은 (tabs) 의 Tabs 가, 인증 화면은 WebView 가 담당 — headerShown:false).
  */
 export default function RootLayout(): React.JSX.Element {
-  // SPEC-CHAT-002 R-PUSH-007: 알림 탭 → 대상 모임 채팅으로 네이티브 이동. 포그라운드/백그라운드 탭과
-  // 콜드스타트(앱 종료 상태에서 탭으로 기동)를 핸들러가 모두 처리한다. 대상 모임은 `?target=chat` 으로
-  // (tabs)/home/[id] 에 넘겨 채팅 화면을 직접 로드한다(detail-push 와 동일한 router.push 패턴 — OD-1 안전).
+  // SPEC-CHAT-002 R-PUSH-007 (SPEC-MOBILE-NAV-001 정합): 알림 탭 → 대상 모임 채팅으로 이동. 포그라운드/
+  // 백그라운드 탭과 콜드스타트(앱 종료 상태에서 탭으로 기동)를 핸들러가 모두 처리한다.
+  //
+  // [FIX] 이전엔 router.push((tabs)/home/[id]?target=chat) 로 detail-push 화면(별도 BridgedWebView)을 띄웠으나,
+  //   그 새 WebView 는 세션 쿠키 미공유라 /moims/{id}/chat 초기 GET 이 /login 으로 바운스 → LogoutBridgeNotifier
+  //   가 session:cleared post → clearWebViewCookies 로 *로그아웃*되는 연쇄 버그가 있었다(device 확정). SPEC-
+  //   MOBILE-NAV-001 이 detail-push 를 폐기하고 단일 WebView 로 전환했으므로, 여기서도 home 탭(세션 쿠키 보유)을
+  //   focus 하고 그 탭의 기존 WebView 를 채팅 URL 로 setSourceUri 하도록 위임한다(deep-link-intent → BridgedWebView).
+  //   기존 WebView 이동이라 리마운트/쿠키 미공유가 없어 바운스·로그아웃 연쇄가 사라진다(OD-1 쿠키 보존).
   useEffect(() => {
     return registerNotificationTapHandler((url) => {
       const moimId = moimIdFromChatUrl(url);
       if (!moimId) {
-        return;
+        return; // 형식 어긋남 — 이동 생략(앱 열기만).
       }
-      router.push(`/(tabs)/home/${encodeURIComponent(moimId)}?target=chat` as never);
+      // home 탭 BridgedWebView 가 소비할 대상 URL 을 저장하고 home 탭을 focus 한다(이미 home 이면 no-op focus).
+      // 세션 확립(isSignedIn) 후에만 소비되므로 미로그인/콜드스타트도 안전하다(BridgedWebView applyDeepLinkTarget).
+      setDeepLinkTarget(url);
+      router.navigate("/(tabs)/home" as never);
     });
   }, []);
 
