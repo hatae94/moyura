@@ -204,6 +204,79 @@ export function installNativeTokenBridge(): () => void {
   return () => window.removeEventListener("message", onMessage);
 }
 
+/**
+ * nav:back 리스너가 in-app back / 폴백을 수행하는 네비게이션 어댑터(SPEC-MOBILE-NAV-001 REQ-MOBNAV-020/021).
+ *
+ * bridge-client.ts 는 순수 비-React 모듈이라 useRouter 훅을 직접 쓸 수 없다. 따라서 Next router 를 소비하는
+ * React 마운트 컴포넌트(별도 파일)가 `router.back`/`router.replace` 를 이 어댑터로 주입한다 — NavStateReporter
+ * 가 usePathname 을 소유하듯, 라우팅 소유권을 호출부에 두고 이 모듈은 브리지 수신/판정만 담당한다.
+ */
+export interface NavBackNavigator {
+  /** in-app 히스토리 back(이전 route 로 복귀 — REQ-MOBNAV-020). Next router.back() 을 위임한다. */
+  back: () => void;
+  /** 딥링크 첫 진입 폴백(히스토리 없음 → /home 로 replace — REQ-MOBNAV-021). Next router.replace() 위임. */
+  replace: (path: string) => void;
+}
+
+/** REQ-MOBNAV-021: 딥링크 첫 진입(in-app 히스토리 부재) 시 폴백할 홈 route. */
+const NAV_BACK_FALLBACK_PATH = "/home";
+
+/**
+ * 셸 모드 한정 — 네이티브 헤더 back chevron 탭 시 네이티브가 보내는 nav:back 을 수신해 in-app back 을
+ * 실행한다(SPEC-MOBILE-NAV-001 REQ-MOBNAV-020/021). 일반 브라우저에서는 no-op(R-T4).
+ *
+ * 판정(단일 진실 출처 = 웹, OD-2/OD-3): 네이티브는 딥링크-첫-진입 vs in-app-히스토리를 알 수 없으므로
+ *   webViewRef.goBack() 대신 nav:back 으로 웹에 위임한다. 웹은 window.history.length 로 판정한다:
+ *     - history.length > 1(in-app 히스토리 존재) → navigate.back()(이전 route 로 복귀 — REQ-MOBNAV-020).
+ *     - history.length <= 1(딥링크 첫 진입: moyura://invite/{token}·알림 cross-tab 직진입) → /home 폴백
+ *       (navigate.replace — REQ-MOBNAV-021). WebView 이탈이나 no-op 은 하지 않는다(fail-safe: 갇힘 방지).
+ *   canGoBack(NavStateReporter 의 history.length > 1)과 동일 판정식이라 헤더 가시성↔back 동작이 정합한다.
+ *
+ * 보안(session:* 와 동일 봉투 재사용 — 약화 금지): nav:back 처리 전 (1) event.origin === 신뢰 origin,
+ *   (2) per-session nonce 상수시간 일치를 verifyInboundMessage 로 강제한다(R-T8/C-1). 통과 못 하면 거부
+ *   (동일 page 임의 스크립트의 nav:back 위조 차단 — router 부작용 미실행). parseInboundMessage 가 nav:back 을
+ *   payload 없는 신호로 파싱하며, unknown-type graceful-ignore 계약을 보존한다.
+ *
+ * @param navigate Next router 를 위임하는 어댑터(back/replace) — React 마운트 컴포넌트가 주입.
+ * @returns 리스너 해제 함수(컴포넌트 unmount cleanup). 브리지 없으면 no-op cleanup.
+ */
+export function installNavBackListener(navigate: NavBackNavigator): () => void {
+  const bridge = getNativeBridge();
+  if (!bridge) {
+    return () => undefined; // 일반 브라우저 — 미설치(순수 웹 무영향, R-T4).
+  }
+
+  const onMessage = (event: MessageEvent): void => {
+    if (typeof event.data !== "string") {
+      return;
+    }
+    const message = parseInboundMessage(event.data);
+    if (!message || message.type !== BRIDGE_MESSAGE_TYPES.NAV_BACK) {
+      return; // nav:back 이외(restore/revalidate/unknown/파싱 실패) — 안전 무시(throw 없음).
+    }
+    // R-T8/C-1: origin + nonce 인증 — 통과 못 하면 router 부작용 미실행(위조 nav:back 거부).
+    if (
+      !verifyInboundMessage({
+        eventOrigin: event.origin,
+        trustedOrigin: getTrustedOrigin(),
+        messageNonce: message.nonce,
+        expectedNonce: getExpectedNonce(),
+      })
+    ) {
+      return; // foreign-origin 또는 미인증(nonce 불일치) — 거부.
+    }
+    // REQ-MOBNAV-020/021: in-app 히스토리 있으면 back, 딥링크 첫 진입이면 /home 폴백(fail-safe).
+    if (window.history.length > 1) {
+      navigate.back();
+    } else {
+      navigate.replace(NAV_BACK_FALLBACK_PATH);
+    }
+  };
+
+  window.addEventListener("message", onMessage);
+  return () => window.removeEventListener("message", onMessage);
+}
+
 // 직전에 announce 한 access_token 을 모듈 스코프에 기억해 중복 발신을 줄인다(F1/F1' 공용).
 // 네이티브 save 분기는 멱등이므로 이는 *정확성*이 아니라 *노이즈 감소*다 — onAuthStateChange announcer 와
 // (main) mount announcer 두 경로가 동일 토큰으로 중복 announce 하는 것을 막는다(예: 갱신 없는 라우트 재방문).

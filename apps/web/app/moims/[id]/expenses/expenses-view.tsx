@@ -537,7 +537,10 @@ export function ExpensesView({
     // 스크롤된다(→ 브라우저 크롬 접힘). moims 그룹은 하단 탭바가 없어 회피 여백이 필요 없다.
     <div className="flex min-h-dvh flex-col bg-background">
       {/* 헤더 — sticky top-0 로 문서 스크롤 중 상단 고정(기존 유지). */}
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
+      <header
+        data-shell-header
+        className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur"
+      >
         <Link
           href={`/home/${moimId}`}
           aria-label="모임 상세로 돌아가기"

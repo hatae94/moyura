@@ -27,7 +27,10 @@ export function CreateMoimForm() {
     // 문서 스크롤: min-h-dvh 로 화면을 채우고 콘텐츠가 길면 흐름대로 자라 문서가 스크롤된다(탭바 없는 풀스크린).
     <div className="flex min-h-dvh flex-col bg-background">
       {/* sticky top-0 z-10 + 반투명 backdrop-blur 로 문서 스크롤 중 헤더 상단 고정(인스타틱 유리 헤더). */}
-      <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 px-5 pb-4 pt-page backdrop-blur-xl">
+      <header
+        data-shell-header
+        className="sticky top-0 z-10 border-b border-border/60 bg-background/80 px-5 pb-4 pt-page backdrop-blur-xl"
+      >
         <h1 className="text-2xl font-extrabold tracking-tight text-foreground">새 모임 만들기</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           모임 이름과 표시 이름을 입력하고, 일정·장소를 추가해 보세요.

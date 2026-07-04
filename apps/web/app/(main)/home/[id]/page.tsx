@@ -103,7 +103,10 @@ export default async function MoimDetailPage({
     <div className="flex flex-1 flex-col bg-background">
       {/* 헤더: 모임 그라데이션 아바타 + 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일.
           sticky top-0 z-30 + 반투명 backdrop-blur 로 문서 스크롤 중 상단 고정(탭바 z-40·모달 z-50 아래). */}
-      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 px-5 pb-4 pt-page backdrop-blur-xl">
+      <header
+        data-shell-header
+        className="sticky top-0 z-30 border-b border-border/60 bg-background/80 px-5 pb-4 pt-page backdrop-blur-xl"
+      >
         <div className="flex items-center gap-3.5">
           {/* 모임 이니셜 그라데이션 아바타 — 홈 카드와 동일 시각 언어로 연속성. */}
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-brand text-2xl font-extrabold text-white shadow-md shadow-primary/20">

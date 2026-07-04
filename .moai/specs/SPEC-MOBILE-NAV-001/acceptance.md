@@ -7,6 +7,8 @@
 >
 > **[HARD] status 정책 (메모리 `mobile-spec-device-gated`)**: [device-gated] AC 는 iOS 시뮬레이터 라이브 검증 완료 전까지 자동 게이트가 전부 PASS 여도 SPEC status 는 **`in-progress` 로 유지**한다. 자동 통과 ≠ completed. Android AC 는 iOS 검증 후 보류 기록(메모리 `ios-simulator-only`).
 > **[HARD] 로컬 우선 분리 (메모리 `verify-locally-before-device-gating`)**: run 단계에서 각 [device-gated] AC 가 실제로 디바이스를 요하는지 재판정한다. Phase 0 SPIKE 와 REQ-MOBNAV-021 폴백 로직 일부는 로컬 검증 가능 여부를 run 단계에서 분리 판정.
+>
+> **[Android 실기기 검증 증거 — 2026-07-04]**: 사용자 지시로 Android 물리 디바이스(S25 SM-S938N)에서 nav:back 종단 검증 완료 — 하드웨어 백·헤더 ‹ 탭 모두 `router.back()` 이동, 헤더 렌더/hide 확인(REQ-MOBNAV-001/003/010/012/020, Phase 2 배선 갭 수정 daa128c 포함). **플랫폼 무관 nav:back 브리지 체인은 입증됨.** 단 위 [HARD] 정책대로 **formal 게이트는 iOS 시뮬레이터** 유지 — iOS 전용 AC(WKWebView 제스처·status-bar inset)는 미검증이라 status `in-progress` 유지(사용자 승인). 상세 progress.md 2026-07-04 참조.
 
 ---
 

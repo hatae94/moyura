@@ -26,7 +26,9 @@ import { urlForRoute, type AppRoute } from "../lib/route-map-core";
 import { useAuth } from "../lib/auth/AuthContext";
 import { useAppLifecycle } from "../hooks/useAppLifecycle";
 import { useAuthBridge } from "../hooks/useAuthBridge";
+import { decideHeader, type NavState } from "../lib/nav-header-core";
 import { WebViewShell } from "./WebViewShell";
+import { NativeHeaderBar } from "./NativeHeaderBar";
 import { WebViewErrorOverlay } from "./WebViewErrorOverlay";
 
 /**
@@ -49,6 +51,26 @@ const SAFE_AREA_EDGES: Record<"(tabs)" | "(auth)", readonly Edge[]> = {
   "(tabs)": ["top", "left", "right"],
   "(auth)": ["top", "bottom", "left", "right"],
 };
+
+// SPEC-MOBILE-NAV-001: (tabs) 에서 네이티브 헤더가 렌더될 때(headerVisible)는 NativeHeaderBar 가 top
+// status-bar 인셋을 소유하므로 WebViewShell edges 에서 top 을 제거해 이중 인셋(헤더+WebView 둘 다 top)을
+// 막는다. 헤더 없는 라우트(탭 루트·보류 페이지)에서는 기존 (tabs) top 인셋을 그대로 유지한다(회귀 0).
+// (auth)/공개 라우트는 헤더가 애초에 없어 이 조정 대상이 아니다(기존 top+bottom 유지).
+const SAFE_AREA_EDGES_TABS_WITH_HEADER: readonly Edge[] = ["left", "right"];
+
+/**
+ * 헤더 가시 여부를 반영한 WebViewShell safe-area edges 를 돌려준다(이중 top 인셋 방지).
+ * (tabs) + 헤더 가시 → top 제거(헤더가 소유), 그 외 → 라우트 컨텍스트 기본 edges.
+ */
+function webViewEdgesFor(
+  routeContext: "(tabs)" | "(auth)",
+  headerVisible: boolean,
+): readonly Edge[] {
+  if (routeContext === "(tabs)" && headerVisible) {
+    return SAFE_AREA_EDGES_TABS_WITH_HEADER;
+  }
+  return SAFE_AREA_EDGES[routeContext];
+}
 
 /**
  * R-T8/OD-11: 컨텐츠 로드 전 per-session nonce 를 페이지에 확립하는 JS 를 만든다(App.tsx 보존).
@@ -95,6 +117,17 @@ export function BridgedWebView({
   // R-NC2: onShouldStartLoadWithRequest 가 currentUrl 을 읽을 수 있도록 navigation URL 을 추적한다.
   const currentUrlRef = useRef<string>(initialSourceUri);
 
+  // SPEC-MOBILE-NAV-001: 웹이 nav:state 로 보고한 최신 nav 상태. NativeHeaderBar 렌더 + WebViewShell edges
+  // 조정 + Android web-back(webCanGoBack) 판정의 단일 소스다. 첫 보고 전 null(헤더 미렌더 — 빈 헤더 방지).
+  const [navState, setNavState] = useState<NavState | null>(null);
+  // REQ-MOBNAV-020/022: injectNavBack 은 useAuthBridge 리턴이라 useAppLifecycle(먼저 호출)에서 forward-
+  // reference 다. ref 로 우회해 안정 콜백(handleWebBack)이 최신 injectNavBack 을 호출하게 한다(useAuthBridge
+  // 내부 nativeGoogleSignInRef 와 동형 패턴 — TDZ/재구독 회피).
+  const injectNavBackRef = useRef<() => void>(() => undefined);
+  const handleWebBack = useCallback((): void => {
+    injectNavBackRef.current();
+  }, []);
+
   // R-N3/R-T2: 콜드스타트에 주입할, SecureStore 에서 로드한 토큰(로드 완료 시 주입).
   const coldStartTokensRef = useRef<SessionTokens | null>(null);
   const tokensLoadedRef = useRef<boolean>(false);
@@ -110,6 +143,10 @@ export function BridgedWebView({
     webViewRef,
     routeContext,
     onResumeRevalidate: (tokens, currentUrl) => injectRevalidate(tokens, currentUrl),
+    // REQ-MOBNAV-022: 웹이 보고한 in-app back 가능 여부 → (tabs) 하드웨어 back 이 web-back 위임 여부 결정.
+    webCanGoBack: navState?.canGoBack ?? false,
+    // REQ-MOBNAV-022: web-back 결정 시 nav:back 위임(헤더 back 과 동일 경로 — injectNavBack via ref).
+    onWebBack: handleWebBack,
   });
 
   // R-N4: 콜드스타트 핸드셰이크 해결(synced/none 수신) → 스플래시 해제 + 타임아웃 취소(App.tsx 보존).
@@ -153,8 +190,9 @@ export function BridgedWebView({
     [router],
   );
 
-  // R-O1~R-O4 보존 + R-T2/R-T5/R-T7/R-R1/R-R3/R-T8/R-T9 + R-NC2/R-AS2: OAuth 브리지 + 토큰 동기화 + 신호 보고.
-  const { onShouldStartLoadWithRequest, onMessage, injectRestore, injectRevalidate } =
+  // R-O1~R-O4 보존 + R-T2/R-T5/R-T7/R-R1/R-R3/R-T8/R-T9 + R-NC2/R-AS2 + NAV-001: OAuth 브리지 + 토큰
+  // 동기화 + 신호 보고 + nav 상태 수신/back 위임.
+  const { onShouldStartLoadWithRequest, onMessage, injectRestore, injectRevalidate, injectNavBack } =
     useAuthBridge({
       onNavigateToCallback: setSourceUri,
       webViewRef,
@@ -169,7 +207,13 @@ export function BridgedWebView({
       onDetailPush,
       // SPEC-MOIM-011 후속: 무효 초대 통지 → 네이티브 Alert + (tabs)/home 또는 (auth)/login 전환.
       onInviteInvalid,
+      // SPEC-MOBILE-NAV-001 REQ-MOBNAV-010: 웹 nav:state 보고 → 헤더 상태 갱신(NativeHeaderBar 구동).
+      onNavState: setNavState,
     });
+
+  // REQ-MOBNAV-020/022: forward-referenced injectNavBack 를 ref 에 동기화한다 — handleWebBack(useAppLifecycle
+  // onWebBack) 과 헤더 back 탭이 이 ref 로 최신 injectNavBack 을 호출한다(안정 콜백 유지 — 재구독 회피).
+  injectNavBackRef.current = injectNavBack;
 
   // R-T2/R-N5: 신뢰 origin 로드 완료 + 토큰 로드 완료 시 1회 session:restore 주입(App.tsx maybeInjectRestore 보존).
   const maybeInjectRestore = useCallback((): void => {
@@ -233,13 +277,29 @@ export function BridgedWebView({
     webViewRef.current?.reload();
   }, [initialSourceUri]);
 
+  // SPEC-MOBILE-NAV-001: 헤더는 (tabs) 컨텍스트 + 웹이 보고한 헤더 필요 5페이지에서만 그린다(topology-
+  // agnostic — 웹 pathname 만 소비). (auth)/공개 라우트에서는 NativeHeaderBar 를 마운트하지 않는다(routeContext
+  // gating 은 여기서 소유). headerVisible 은 WebViewShell edges 조정(이중 top 인셋 방지)에도 쓴다.
+  // decideHeader 는 순수 함수라 여기(edges 조정)와 NativeHeaderBar(렌더) 두 곳에서 동일 navState 로 호출된다.
+  const headerVisible =
+    routeContext === "(tabs)" && navState !== null && decideHeader(navState).headerVisible;
+  const webViewEdges = webViewEdgesFor(routeContext, headerVisible);
+
   return (
     <View style={styles.container}>
+      {/* (tabs) 헤더 오버레이 — WebView 뷰포트 위(문서 흐름 밖). 헤더 필요 5페이지에서만 렌더되며 top
+          status-bar 인셋을 소유한다(NativeHeaderBar 내부 SafeAreaView). back 탭 → nav:back 위임(injectNavBack).
+          NativeHeaderBar 자체가 headerVisible/showBackChevron 을 decideHeader 로 판정하므로 여기서는
+          (tabs) 여부만 gating 한다(headerVisible 미가시 시 컴포넌트가 null 렌더). */}
+      {routeContext === "(tabs)" ? (
+        <NativeHeaderBar navState={navState} onBackPress={handleWebBack} />
+      ) : null}
       <WebViewShell
         ref={webViewRef}
         sourceUri={sourceUri}
         // safe-area 인셋: (tabs)=top(+좌우) / (auth)·invite=top+bottom(+좌우). 하단 탭바 이중 패딩 방지.
-        edges={SAFE_AREA_EDGES[routeContext]}
+        // NAV-001: (tabs) + 헤더 가시 시 top 제거(헤더가 소유 — 이중 인셋 방지, webViewEdgesFor).
+        edges={webViewEdges}
         // R-T9/C-2: WebView 를 신뢰 origin 에 잠근다(비신뢰 origin in-WebView 로드 차단).
         originWhitelist={ORIGIN_WHITELIST}
         // R-T8/OD-11: 컨텐츠 로드 전 per-session nonce 를 페이지에 확립(셸 마커는 WebViewShell 가 항상 선행 주입).

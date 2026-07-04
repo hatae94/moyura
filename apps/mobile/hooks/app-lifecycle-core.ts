@@ -8,25 +8,38 @@
 // SPEC-MOBILE-002 가 채울 자리다 — 여기서는 비워둔다.
 
 /**
- * Android 하드웨어 백 분기 결정(R-U1 + SPEC-MOBILE-003 R-NC4)을 순수 함수로 추출한다.
- * App.tsx 의 onBackPress 분기를 담는다.
+ * Android 하드웨어 백 분기 결정(R-U1 + SPEC-MOBILE-003 R-NC4 + SPEC-MOBILE-NAV-001 REQ-MOBNAV-022)을
+ * 순수 함수로 추출한다. App.tsx 의 onBackPress 분기를 담는다.
  *
- * - `routeContext === "(tabs)"` → `"native-back"` (canGoBack 무관). (tabs) 의 하드웨어 백은
- *   expo-router 네이티브 네비게이션에 위임한다(R-NC4) — WebView 히스토리 back 이 아니다.
- * - routeContext 미지정 또는 `"(auth)"` → 기존 동작 보존((auth)/login WebView back 유지, R-NC4):
+ * - `routeContext === "(tabs)"`:
+ *     · 웹이 in-app back 가능(`webCanGoBack === true`)이라고 보고하면 → `"web-back"`. chat/schedule/
+ *       expenses 는 home/[id] WebView 안 soft-nav 라, native-back 이 상세 전체를 pop 하는 대신 web-history
+ *       경로(nav:back)로 위임한다(REQ-MOBNAV-022). canGoBack(WebView 레벨)과 무관 — webCanGoBack 이
+ *       웹 in-app 히스토리 신호다.
+ *     · 웹이 route root(`webCanGoBack` false/미지정)면 → `"native-back"` (기존 (tabs) 동작, R-NC4).
+ *       expo-router 네이티브 네비게이션에 위임한다.
+ * - routeContext 미지정 또는 `"(auth)"` → 기존 동작 보존((auth)/login WebView back 유지, R-NC4).
+ *   web-back 은 (tabs) 전용이라 webCanGoBack 신호와 무관하게 아래 분기를 탄다:
  *     · 히스토리가 있으면(canGoBack) WebView 를 뒤로 보낸다 → `"goBack"`.
  *     · 히스토리가 없으면 기본 종료 동작을 허용한다 → `"exit"`.
  *
  * @param canGoBack WebView 네비게이션 히스토리 존재 여부(onNavigationStateChange 로 추적)
  * @param routeContext (optional) 현재 라우트 그룹 — "(tabs)" 면 네이티브 back 위임
- * @returns `"native-back"` ((tabs) — expo-router 위임) | `"goBack"` (WebView.goBack + 소비) | `"exit"`
+ * @param webCanGoBack (optional) 웹이 nav:state 로 보고한 in-app back 가능 여부(REQ-MOBNAV-022).
+ *   미지정(기본값)이면 기존 (tabs) native-back 동작을 보존한다 — 회귀 0(Phase 3 배선 전).
+ * @returns `"web-back"` ((tabs) + 웹 in-app 히스토리 — nav:back 위임) | `"native-back"` ((tabs) route
+ *   root — expo-router 위임) | `"goBack"` (WebView.goBack + 소비) | `"exit"`
  */
 export function decideBackPress(
   canGoBack: boolean,
   routeContext?: "(tabs)" | "(auth)",
-): "goBack" | "exit" | "native-back" {
+  webCanGoBack?: boolean,
+): "goBack" | "exit" | "native-back" | "web-back" {
   if (routeContext === "(tabs)") {
-    return "native-back"; // (R-NC4) expo-router 네이티브 back 으로 일원화.
+    if (webCanGoBack === true) {
+      return "web-back"; // (REQ-MOBNAV-022) 웹 in-app 히스토리 → nav:back 위임(상세 전체 pop 회피).
+    }
+    return "native-back"; // (R-NC4) route root — expo-router 네이티브 back 으로 일원화.
   }
   return canGoBack ? "goBack" : "exit";
 }

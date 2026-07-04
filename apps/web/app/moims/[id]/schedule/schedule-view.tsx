@@ -645,7 +645,10 @@ function ScheduleHeader({ moimId, title }: { moimId: string; title: string }) {
   return (
     // z-20: 그리드의 좌측 시간축 라벨(sticky left, z-10)보다 위에 두어, 세로 스크롤 시 시간축이 헤더를
     // 가리지 않게 한다(둘 다 z-10 이던 문제 수정 — DOM 상 나중인 시간축이 헤더 위로 그려졌음).
-    <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
+    <header
+      data-shell-header
+      className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur"
+    >
       <Link
         href={`/home/${moimId}`}
         aria-label="모임 상세로 돌아가기"

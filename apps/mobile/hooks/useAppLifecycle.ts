@@ -41,6 +41,19 @@ export interface UseAppLifecycleArgs {
    * 기존 동작 보존((auth)/login WebView back). decideBackPress 에 그대로 전달된다.
    */
   routeContext?: "(tabs)" | "(auth)";
+  /**
+   * (SPEC-MOBILE-NAV-001 REQ-MOBNAV-022, optional) 웹이 nav:state 로 보고한 in-app back 가능 여부.
+   * `(tabs)` + true 면 Android 하드웨어 백을 native-stack pop(상세 전체 폐기) 대신 web-history 경로
+   * (nav:back)로 위임해 헤더 back 과 정합시킨다. 부재/false 면 기존 (tabs) native-back 동작 보존 —
+   * 회귀 0(nav:state 미보고 시). BridgedWebView 가 navState.canGoBack 을 전달한다.
+   */
+  webCanGoBack?: boolean;
+  /**
+   * (SPEC-MOBILE-NAV-001 REQ-MOBNAV-022, optional) decideBackPress 가 `"web-back"` 을 결정했을 때 호출.
+   * 호출부가 useAuthBridge.injectNavBack 을 연결해 nav:back 을 웹에 위임한다(헤더 back 과 동일 경로).
+   * 부재 시 web-back 분기는 back 을 소비하지 않고 no-op 로 흡수한다(안전 — 갇힘 방지는 웹 폴백이 담당).
+   */
+  onWebBack?: () => void;
 }
 
 /** useAppLifecycle 리턴. */
@@ -70,6 +83,8 @@ export function useAppLifecycle({
   webViewRef,
   onResumeRevalidate,
   routeContext,
+  webCanGoBack,
+  onWebBack,
 }: UseAppLifecycleArgs): UseAppLifecycleResult {
   // R-U1: Android 하드웨어 백 분기용 네비게이션 히스토리.
   const canGoBackRef = useRef<boolean>(false);
@@ -81,20 +96,35 @@ export function useAppLifecycle({
   const handshakeResolvedRef = useRef<boolean>(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // R-U1/R-NC4: Android 하드웨어 백 — routeContext 별 분기(decideBackPress).
-  //   - "(tabs)" → "native-back": 소비하지 않고 false 반환 → expo-router 네이티브 네비게이션 위임.
+  // R-U1/R-NC4/REQ-MOBNAV-022: Android 하드웨어 백 — routeContext + 웹 nav 상태별 분기(decideBackPress).
+  //   - "(tabs)" + 웹 in-app back 가능(webCanGoBack) → "web-back": nav:back 을 웹에 위임(injectNavBack)해
+  //     상세 내부 soft-nav(chat/schedule/expenses) 히스토리를 back 한다. native-stack pop(상세 전체 폐기)
+  //     대신 헤더 back 과 동일 경로로 정합한다(R-4 완화). 소비(return true) — expo-router pop 억제.
+  //   - "(tabs)" + route root(webCanGoBack false/미보고) → "native-back": 소비하지 않고 expo-router 위임(R-NC4).
   //   - 미지정/"(auth)" → 기존 동작 보존: 히스토리 있으면 WebView.goBack()(소비), 없으면 기본 종료.
+  //
+  // @MX:WARN: [AUTO] (tabs) 하드웨어 back 재분기 — 상세 내부 soft-nav 히스토리를 web-back 으로 위임한다.
+  // @MX:REASON: 하드웨어 back 회귀 위험 HIGH(R-4). webCanGoBack 신호가 누락되면(nav:state 미보고) 기존
+  //   native-back 으로 폴백돼 상세 전체가 pop 되지만(회귀 없음, fail-safe), 잘못 true 로 보고되면 route
+  //   root 에서 nav:back 이 발화해 웹이 /home 폴백(REQ-MOBNAV-021)한다 — 웹 history.length 판정과 정합해야
+  //   한다. onWebBack 부재 시 web-back 은 no-op 흡수(back 미소비 위험 회피 위해 return true 유지 — 갇힘
+  //   방지는 웹 폴백 소관). 신호 진실성은 웹 NavStateReporter(canGoBack) 가 단일 출처다.
   useEffect(() => {
     if (Platform.OS !== "android") {
       return;
     }
     const onBackPress = (): boolean => {
-      const decision = decideBackPress(canGoBackRef.current, routeContext);
+      const decision = decideBackPress(canGoBackRef.current, routeContext, webCanGoBack);
+      if (decision === "web-back") {
+        // REQ-MOBNAV-022: 웹 in-app 히스토리 back 을 nav:back 으로 위임한다(헤더 back 과 동일 경로).
+        onWebBack?.();
+        return true; // back 소비 — expo-router native-stack pop 을 억제한다(상세 전체 폐기 회피).
+      }
       if (decision === "goBack") {
         webViewRef.current?.goBack();
         return true;
       }
-      // "native-back"((tabs) — expo-router 위임) | "exit"(히스토리 없음) — 소비하지 않는다.
+      // "native-back"((tabs) route root — expo-router 위임) | "exit"(히스토리 없음) — 소비하지 않는다.
       return false;
     };
     const subscription: NativeEventSubscription = BackHandler.addEventListener(
@@ -102,7 +132,7 @@ export function useAppLifecycle({
       onBackPress,
     );
     return () => subscription.remove();
-  }, [webViewRef, routeContext]);
+  }, [webViewRef, routeContext, webCanGoBack, onWebBack]);
 
   // R-R1: AppState 구독 — active 전이 + 토큰 보유 + debounce 통과 시 resume 재검증을 호출부에 위임.
   useEffect(() => {

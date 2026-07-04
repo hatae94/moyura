@@ -45,6 +45,20 @@ export const BRIDGE_MESSAGE_TYPES = {
    * 토큰을 싣지 않는다(불리언 신호만 — PII 0). additive type 이므로 v1 유지.
    */
   INVITE_INVALID: "invite:invalid",
+  /**
+   * web→native: route 변경마다 웹이 자신의 nav 상태(`{pathname, title, canGoBack}`)를 보고하는 명령
+   * (SPEC-MOBILE-NAV-001 REQ-MOBNAV-010/011). 네이티브 헤더 바(back chevron 가시성 + 타이틀)를 구동한다.
+   * 단일 진실 출처 = 웹 — 네이티브는 이 상태만 소비해 헤더를 그린다. 토큰을 싣지 않는다(PII 0).
+   * additive v1 신규 nav 채널 — 기존 세션 타입/nonce 봉투 불변(UNIFY-001 R-U2 공유 채널 계약과 동일).
+   */
+  NAV_STATE: "nav:state",
+  /**
+   * native→web: 헤더 back chevron 탭 시 네이티브가 웹에 in-app back 을 위임하는 신호(REQ-MOBNAV-020).
+   * 웹이 `router.back()`/`history.back()` 또는 딥링크 첫 진입 시 `/home` 폴백을 결정한다(OD-2/OD-3).
+   * 페이로드 없는 신호 메시지 — 네이티브 발신이므로 네이티브 수신 분기(decideInboundAction)에서는 무시된다.
+   * additive v1 신규 nav 채널 — 기존 세션 타입/nonce 봉투 불변.
+   */
+  NAV_BACK: "nav:back",
 } as const;
 
 /** 토큰 페이로드 — access/refresh 만(userId/프로필 미포함 — PII 최소화 OD-4). */
@@ -59,6 +73,17 @@ export interface InviteInvalidPayload {
 }
 
 /**
+ * nav:state 페이로드(SPEC-MOBILE-NAV-001) — 웹이 보고하는 현재 nav 상태.
+ * pathname: 현재 웹 route(헤더 필요 페이지 판정 키). title: 컨텍스트 타이틀(모임명 등 — 헤더 표시).
+ * canGoBack: in-app back 가능 여부(back chevron 가시성 결정). 토큰/PII 미포함(OD-4).
+ */
+export interface NavStatePayload {
+  pathname: string;
+  title: string;
+  canGoBack: boolean;
+}
+
+/**
  * 버전드 브리지 메시지. payload 는 토큰을 싣는 type(restore/synced/revalidate)에만 존재한다.
  * none/cleared 는 payload 없는 신호 메시지다. 모든 메시지는 인증용 nonce 를 envelope 에 싣는다(R-T8).
  */
@@ -69,7 +94,9 @@ export type BridgeMessage =
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.NONE; nonce: string }
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.CLEARED; nonce: string }
   | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.GOOGLE_SIGNIN_REQUEST; nonce: string }
-  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.INVITE_INVALID; nonce: string; payload: InviteInvalidPayload };
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.INVITE_INVALID; nonce: string; payload: InviteInvalidPayload }
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.NAV_STATE; nonce: string; payload: NavStatePayload }
+  | { version: number; type: typeof BRIDGE_MESSAGE_TYPES.NAV_BACK; nonce: string };
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set<string>(
   Object.values(BRIDGE_MESSAGE_TYPES),
@@ -97,6 +124,24 @@ function isValidInviteInvalidPayload(value: unknown): value is InviteInvalidPayl
     return false;
   }
   return typeof (value as Record<string, unknown>).loggedIn === "boolean";
+}
+
+/**
+ * nav:state 페이로드 형태 가드(pathname 은 비어 있지 않은 문자열, title 은 문자열, canGoBack 은 boolean).
+ * pathname 은 라우팅 키라 비어 있으면 안 되지만(항상 최소 "/"), title 은 전이 중 빈 문자열이 유효할 수
+ * 있어 non-empty 를 강제하지 않는다(유효 메시지 누락 방지 — REQ-MOBNAV-012).
+ */
+function isValidNavStatePayload(value: unknown): value is NavStatePayload {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const p = value as Record<string, unknown>;
+  return (
+    typeof p.pathname === "string" &&
+    !!p.pathname &&
+    typeof p.title === "string" &&
+    typeof p.canGoBack === "boolean"
+  );
 }
 
 /** 브리지 메시지를 postMessage 로 보낼 JSON 문자열로 직렬화한다. */
@@ -161,7 +206,22 @@ export function parseBridgeMessage(raw: string): BridgeMessage | null {
       payload: { loggedIn: candidate.payload.loggedIn },
     };
   }
-  // none/cleared/google-request — payload 없는 신호 메시지.
+  if (candidate.type === BRIDGE_MESSAGE_TYPES.NAV_STATE) {
+    if (!isValidNavStatePayload(candidate.payload)) {
+      return null; // nav:state 인데 payload({pathname,title,canGoBack}) 불완전 — 무시.
+    }
+    return {
+      version: candidate.version,
+      type: BRIDGE_MESSAGE_TYPES.NAV_STATE,
+      nonce,
+      payload: {
+        pathname: candidate.payload.pathname,
+        title: candidate.payload.title,
+        canGoBack: candidate.payload.canGoBack,
+      },
+    };
+  }
+  // none/cleared/google-request/nav:back — payload 없는 신호 메시지.
   return { version: candidate.version, type: candidate.type, nonce } as BridgeMessage;
 }
 
@@ -224,7 +284,12 @@ export type InboundAction =
    * loggedIn(실제 계정 세션 여부)에 따라 호출부가 분기한다: true → Alert → (tabs)/home, false → (auth)/login.
    */
   | { kind: "invite-invalid"; loggedIn: boolean }
-  /** 네이티브 발신 type(restore/revalidate) 수신, 또는 nonce 불일치(미인증) 등 — 무시. */
+  /**
+   * nav:state(nonce 인증 통과) → 네이티브 헤더 상태 갱신(SPEC-MOBILE-NAV-001 REQ-MOBNAV-010/011).
+   * 호출부가 pathname/title/canGoBack 으로 헤더 바(back chevron 가시성 + 타이틀)를 그린다(단일 진실 출처 = 웹).
+   */
+  | { kind: "nav-state"; pathname: string; title: string; canGoBack: boolean }
+  /** 네이티브 발신 type(restore/revalidate/nav:back) 수신, 또는 nonce 불일치(미인증) 등 — 무시. */
   | { kind: "ignore" };
 
 /**
@@ -263,6 +328,9 @@ export function constantTimeEquals(a: string, b: string): boolean {
  * @param expectedNonce cold-start 에 확립한 per-session nonce(이와 상수시간 비교해 인증)
  * @returns 네이티브가 실행할 InboundAction
  */
+// @MX:NOTE: [AUTO] nonce 인증이 모든 인바운드 분기(세션 + nav 채널)의 선행 게이트다 — 위조/미인증 메시지는
+// 어떤 부작용도 일으키지 않는다. SPEC-MOBILE-NAV-001 로 nav:state 분기가 additive 로 추가됐고 nav:back(네이티브 발신)은
+// default→ignore 로 흡수된다. 새 인바운드 type 추가 시 반드시 nonce 검증 이후 분기에 놓는다.
 export function decideInboundAction(
   message: BridgeMessage,
   expectedNonce: string,
@@ -292,8 +360,16 @@ export function decideInboundAction(
     case BRIDGE_MESSAGE_TYPES.INVITE_INVALID:
       // SPEC-MOIM-011 후속: 무효 초대 — loggedIn 에 따라 호출부가 Alert→(tabs)/home 또는 (auth)/login 분기.
       return { kind: "invite-invalid", loggedIn: message.payload.loggedIn };
+    case BRIDGE_MESSAGE_TYPES.NAV_STATE:
+      // SPEC-MOBILE-NAV-001: 웹 nav 상태 보고 — 호출부가 헤더 바(back chevron + 타이틀)를 갱신한다.
+      return {
+        kind: "nav-state",
+        pathname: message.payload.pathname,
+        title: message.payload.title,
+        canGoBack: message.payload.canGoBack,
+      };
     default:
-      // session:restore / resume:revalidate 등 네이티브 발신 type — 수신 분기에서 무시.
+      // session:restore / resume:revalidate / nav:back 등 네이티브 발신 type — 수신 분기에서 무시.
       return { kind: "ignore" };
   }
 }

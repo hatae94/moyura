@@ -41,6 +41,9 @@ import {
   buildRestoreMessage,
   buildRevalidateMessage,
   decideInboundAction,
+  BRIDGE_VERSION,
+  BRIDGE_MESSAGE_TYPES,
+  type NavStatePayload,
 } from "../lib/auth/bridge-protocol";
 import {
   resolveBridgeNavigation,
@@ -98,6 +101,13 @@ export interface UseAuthBridgeArgs {
    * (auth)/login 으로 분기한다.
    */
   onInviteInvalid?: (loggedIn: boolean) => void;
+  /**
+   * (SPEC-MOBILE-NAV-001 REQ-MOBNAV-010, optional) 웹이 route 변경마다 nav:state 로 보고한 nav 상태를
+   * 호출부에 전달한다(nonce 인증 통과분만). 부재 시(SHELL-001/MOBILE-002/004 호출부) onMessage 동작은
+   * 그대로다 — 회귀 0(MOBILE-004 optional-callback 패턴). BridgedWebView 가 이 콜백으로 헤더 상태를
+   * 갱신하고 NativeHeaderBar 에 전달한다(단일 진실 출처 = 웹).
+   */
+  onNavState?: (state: NavStatePayload) => void;
 }
 
 /** useAuthBridge 리턴. */
@@ -110,6 +120,11 @@ export interface UseAuthBridgeResult {
   injectRestore: (tokens: SessionTokens, currentUrl: string) => void;
   /** R-R1: resume 에 저장 토큰을 resume:revalidate 로 재주입(origin 선통과). */
   injectRevalidate: (tokens: SessionTokens, currentUrl: string) => void;
+  /**
+   * REQ-MOBNAV-020: 헤더 back chevron 탭/Android 하드웨어 back(web-back) 시 nav:back 을 웹으로 post 한다.
+   * 웹이 nav:back 을 수신해 in-app back(router.back()) 또는 딥링크 첫 진입 시 /home 폴백을 결정한다(OD-2/OD-3).
+   */
+  injectNavBack: () => void;
 }
 
 // 웹 핸들러 미등록 race 대비 재주입 간격(ms) — bounded 재시도(R-T7, MAX_INJECTION_RETRIES)와 함께 동작.
@@ -159,6 +174,7 @@ export function useAuthBridge({
   onCrossRouteDispatch,
   onDetailPush,
   onInviteInvalid,
+  onNavState,
 }: UseAuthBridgeArgs): UseAuthBridgeResult {
   // R-T7: 진행 중인 주입의 재시도 타이머·시도 횟수·ack 여부를 추적한다.
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -308,11 +324,20 @@ export function useAuthBridge({
           // SPEC-MOIM-011 후속: 무효 초대(nonce 인증 통과) → 호출부가 Alert→(tabs)/home 또는 (auth)/login 분기.
           onInviteInvalid?.(action.loggedIn);
           break;
+        case "nav-state":
+          // SPEC-MOBILE-NAV-001: 웹 nav 상태 보고(nonce 인증 통과) → 호출부가 헤더 바(back chevron + 타이틀)를
+          // 갱신한다. 단일 진실 출처 = 웹 — 네이티브는 이 상태만 소비해 NativeHeaderBar 를 그린다(REQ-MOBNAV-010).
+          onNavState?.({
+            pathname: action.pathname,
+            title: action.title,
+            canGoBack: action.canGoBack,
+          });
+          break;
         case "ignore":
           break;
       }
     },
-    [clearRetryTimer, onHandshakeResolved, nonce, onAuthSignal, onInviteInvalid],
+    [clearRetryTimer, onHandshakeResolved, nonce, onAuthSignal, onInviteInvalid, onNavState],
   );
 
   // R-T2/R-T7: 콜드스타트 토큰 주입 — origin allowlist 선통과 후 bounded 재시도로 주입.
@@ -361,6 +386,27 @@ export function useAuthBridge({
     [webViewRef, nonce, targetOrigin],
   );
 
+  // @MX:WARN: [AUTO] nav 브리지 배선(injectNavBack + onMessage 의 nav-state 분기)의 경계 —
+  //   헤더 back/Android web-back → nav:back post, 웹 nav:state → 헤더 상태. 위조는 nonce/origin 이중
+  //   방어로 이미 차단되므로(decideInboundAction·웹 verifyInboundMessage), 여기 위험은 *누락*이다.
+  // @MX:REASON: nav:back 이 웹에 도달하지 못하면(핸들러 미등록/origin 불일치/nonce 미확립) 헤더 back 이
+  //   침묵해 사용자가 상세에 갇힌다 — 이 SPEC 의 원 버그(back affordance 부재)가 back 동작 단계에서
+  //   재발한다. injectNavBack 은 restore/revalidate 와 동일한 postMessageJs 3중 방어(LIVE origin 재검증 +
+  //   specific targetOrigin + nonce 봉투)를 통과하며, 웹측 폴백(/home replace — REQ-MOBNAV-021)이 딥링크
+  //   첫 진입의 no-op/이탈을 fail-safe 로 막는다.
+  // REQ-MOBNAV-020: 헤더 back chevron 탭/Android web-back → nav:back 을 웹으로 위임한다(nonce 봉투 재사용,
+  //   토큰 없는 신호 메시지). injectRevalidate 와 동형 — 단일 주입(재시도 없음: back 은 명령이라 ack 불요).
+  const injectNavBack = useCallback((): void => {
+    const serialized = serializeBridgeMessage({
+      version: BRIDGE_VERSION,
+      type: BRIDGE_MESSAGE_TYPES.NAV_BACK,
+      nonce,
+    });
+    // R-T9/R-T8: 주입 JS 가 in-page LIVE origin 을 재검증하고 specific targetOrigin 으로만 post 한다.
+    // 웹 installNavBackListener 가 nonce/origin 인증 후 router.back()/폴백을 실행한다(위조 nav:back 거부).
+    webViewRef.current?.injectJavaScript(postMessageJs(serialized, targetOrigin));
+  }, [webViewRef, nonce, targetOrigin]);
+
   // SPEC-MOBILE-004 R-MOB4-001/002/005: 네이티브 Google Sign-In → signInWithIdToken → 세션 주입.
   // (injectRestore 정의 이후에 선언 — 클로저로 참조해 TDZ 회피.)
   //
@@ -403,5 +449,6 @@ export function useAuthBridge({
     onMessage,
     injectRestore,
     injectRevalidate,
+    injectNavBack,
   };
 }

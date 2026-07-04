@@ -80,7 +80,10 @@ function toRenderRows(
 // 상단 sticky 헤더 — ← 뒤로(모임 상세로 복귀) + "모임 채팅" 타이틀. 모임 상세 헤더와 동일 토큰.
 function ChatHeader({ moimId }: { moimId: string }) {
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
+    <header
+      data-shell-header
+      className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur"
+    >
       <Link
         href={`/home/${moimId}`}
         aria-label="모임 상세로 돌아가기"
