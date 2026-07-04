@@ -28,6 +28,7 @@ import {
 import { buildTargetOrigin } from "../hooks/auth-bridge-core";
 import { urlForRoute, type AppRoute } from "../lib/route-map-core";
 import { useAuth } from "../lib/auth/AuthContext";
+import type { AuthBridgeSignal } from "../lib/auth/auth-state-core";
 import { useAppLifecycle } from "../hooks/useAppLifecycle";
 import { useAuthBridge } from "../hooks/useAuthBridge";
 import { decideHeader, type NavState } from "../lib/nav-header-core";
@@ -201,6 +202,23 @@ export function BridgedWebView({
     [router],
   );
 
+  // R-R1 [FIX]: 세션 신호를 AuthContext(reportSignal)에 보고하면서, session:synced 최신 토큰으로 resume 재검증
+  //   토큰(useAppLifecycle tokensRef)을 함께 갱신한다. App.tsx→BridgedWebView 이전(SPEC-MOBILE-003) 때 이
+  //   "synced 시 registerColdStartTokens 갱신"이 누락됐다(useAppLifecycle:93/173 주석은 이 갱신을 명시한다).
+  //   누락 시: 콜드스타트 SecureStore 에 stale 토큰이 있는 상태에서 fresh 로그인하면 tokensRef 는 stale 로
+  //   남고, resume(백그라운드→포그라운드)가 그 stale 토큰으로 injectRevalidate → 웹 setSession 실패 →
+  //   session:none → clearWebViewCookies → *로그아웃*된다(device 확정). synced 만 갱신한다(none/cleared 는
+  //   useAuthBridge 가 clearTokens 로 별도 처리, 다음 콜드스타트/synced 가 tokensRef 를 정리).
+  const handleAuthSignal = useCallback(
+    (signal: AuthBridgeSignal, syncedTokens?: SessionTokens | null): void => {
+      reportSignal(signal, syncedTokens);
+      if (signal === "session:synced" && syncedTokens) {
+        registerColdStartTokens(syncedTokens); // resume 재검증 대상 토큰을 최신으로 갱신(stale 재검증 방지).
+      }
+    },
+    [reportSignal, registerColdStartTokens],
+  );
+
   // R-O1~R-O4 보존 + R-T2/R-T5/R-T7/R-R1/R-R3/R-T8/R-T9 + R-NC2/R-AS2 + NAV-001: OAuth 브리지 + 토큰
   // 동기화 + 신호 보고 + nav 상태 수신/back 위임.
   const { onShouldStartLoadWithRequest, onMessage, injectRestore, injectRevalidate, injectNavBack } =
@@ -209,8 +227,8 @@ export function BridgedWebView({
       webViewRef,
       onHandshakeResolved: resolveHandshake,
       nonce,
-      // R-AS2/R-NC5/R-PR5: synced/none/cleared 를 AuthContext 에 보고 → 가드가 전환을 수행한다.
-      onAuthSignal: reportSignal,
+      // R-AS2/R-NC5/R-PR5: synced/none/cleared 를 AuthContext 에 보고(가드 전환) + synced 시 resume 토큰 갱신.
+      onAuthSignal: handleAuthSignal,
       // R-NC2: 디스패치 변형 활성화(currentUrl 제공) + 교차 라우트 → router.replace.
       getCurrentUrl: () => currentUrlRef.current,
       onCrossRouteDispatch,
