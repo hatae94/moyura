@@ -21,9 +21,14 @@ import type { WebViewNavigation } from "react-native-webview/lib/WebViewTypes";
 
 import { WEB_URL } from "../lib/web-url";
 import { loadTokens, type SessionTokens } from "../lib/auth/token-store";
+import {
+  consumeDeepLinkTarget,
+  subscribeDeepLinkTarget,
+} from "../lib/push/deep-link-intent";
 import { buildTargetOrigin } from "../hooks/auth-bridge-core";
 import { urlForRoute, type AppRoute } from "../lib/route-map-core";
 import { useAuth } from "../lib/auth/AuthContext";
+import type { AuthBridgeSignal } from "../lib/auth/auth-state-core";
 import { useAppLifecycle } from "../hooks/useAppLifecycle";
 import { useAuthBridge } from "../hooks/useAuthBridge";
 import { decideHeader, type NavState } from "../lib/nav-header-core";
@@ -88,6 +93,12 @@ export interface BridgedWebViewProps {
    * 활성), `"(auth)"` 면 WebView back 보존(인증 플로우 in-WebView 유지).
    */
   routeContext: "(tabs)" | "(auth)";
+  /**
+   * SPEC-MOBILE-NAV-001 정합(알림 탭 딥링크): true 면 deep-link-intent(알림 탭이 저장한 대상 채팅 URL)를
+   * 소비해 이 WebView 를 대상으로 setSourceUri 한다(리마운트 없음 — 세션 쿠키 보존). home 탭만 true —
+   * 모임/채팅은 home 탭 하위 웹 라우트라 이 탭 WebView 가 소비한다. detail-push(별도 WebView) 대체.
+   */
+  consumesDeepLink?: boolean;
 }
 
 /**
@@ -103,8 +114,9 @@ export interface BridgedWebViewProps {
 export function BridgedWebView({
   sourceUri: initialSourceUri,
   routeContext,
+  consumesDeepLink = false,
 }: BridgedWebViewProps): React.JSX.Element {
-  const { nonce, reportSignal } = useAuth();
+  const { nonce, reportSignal, isSignedIn } = useAuth();
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
 
@@ -190,6 +202,23 @@ export function BridgedWebView({
     [router],
   );
 
+  // R-R1 [FIX]: 세션 신호를 AuthContext(reportSignal)에 보고하면서, session:synced 최신 토큰으로 resume 재검증
+  //   토큰(useAppLifecycle tokensRef)을 함께 갱신한다. App.tsx→BridgedWebView 이전(SPEC-MOBILE-003) 때 이
+  //   "synced 시 registerColdStartTokens 갱신"이 누락됐다(useAppLifecycle:93/173 주석은 이 갱신을 명시한다).
+  //   누락 시: 콜드스타트 SecureStore 에 stale 토큰이 있는 상태에서 fresh 로그인하면 tokensRef 는 stale 로
+  //   남고, resume(백그라운드→포그라운드)가 그 stale 토큰으로 injectRevalidate → 웹 setSession 실패 →
+  //   session:none → clearWebViewCookies → *로그아웃*된다(device 확정). synced 만 갱신한다(none/cleared 는
+  //   useAuthBridge 가 clearTokens 로 별도 처리, 다음 콜드스타트/synced 가 tokensRef 를 정리).
+  const handleAuthSignal = useCallback(
+    (signal: AuthBridgeSignal, syncedTokens?: SessionTokens | null): void => {
+      reportSignal(signal, syncedTokens);
+      if (signal === "session:synced" && syncedTokens) {
+        registerColdStartTokens(syncedTokens); // resume 재검증 대상 토큰을 최신으로 갱신(stale 재검증 방지).
+      }
+    },
+    [reportSignal, registerColdStartTokens],
+  );
+
   // R-O1~R-O4 보존 + R-T2/R-T5/R-T7/R-R1/R-R3/R-T8/R-T9 + R-NC2/R-AS2 + NAV-001: OAuth 브리지 + 토큰
   // 동기화 + 신호 보고 + nav 상태 수신/back 위임.
   const { onShouldStartLoadWithRequest, onMessage, injectRestore, injectRevalidate, injectNavBack } =
@@ -198,8 +227,8 @@ export function BridgedWebView({
       webViewRef,
       onHandshakeResolved: resolveHandshake,
       nonce,
-      // R-AS2/R-NC5/R-PR5: synced/none/cleared 를 AuthContext 에 보고 → 가드가 전환을 수행한다.
-      onAuthSignal: reportSignal,
+      // R-AS2/R-NC5/R-PR5: synced/none/cleared 를 AuthContext 에 보고(가드 전환) + synced 시 resume 토큰 갱신.
+      onAuthSignal: handleAuthSignal,
       // R-NC2: 디스패치 변형 활성화(currentUrl 제공) + 교차 라우트 → router.replace.
       getCurrentUrl: () => currentUrlRef.current,
       onCrossRouteDispatch,
@@ -277,6 +306,41 @@ export function BridgedWebView({
     webViewRef.current?.reload();
   }, [initialSourceUri]);
 
+  // SPEC-MOBILE-NAV-001 정합(알림 탭 딥링크): consumesDeepLink(home 탭)이면 deep-link-intent 에 저장된 대상
+  // 채팅 URL 을 소비해 이 *기존* WebView 를 setSourceUri 로 이동한다(리마운트 없음 — 세션 쿠키 보존, OD-1).
+  // 세션 확립(isSignedIn) 후에만 적용해 미인증 로드→/login 바운스→session:cleared 로그아웃 연쇄를 피한다:
+  //   - background 탭: 이미 isSignedIn=true → 구독 통지 즉시 적용.
+  //   - cold-start 탭: isSignedIn false→true 전이에서 effect 재실행이 대기 intent 를 쿠키 확립 후 적용.
+  const applyDeepLinkTarget = useCallback((): void => {
+    if (!consumesDeepLink || !isSignedIn) {
+      return; // home 탭 아님 또는 세션 미확립 — pending 유지(쿠키 확립 후 소비).
+    }
+    const target = consumeDeepLinkTarget();
+    if (!target) {
+      return; // 대기 intent 없음 — no-op(일반 흐름 무영향).
+    }
+    let targetOrigin: string;
+    try {
+      targetOrigin = new URL(target).origin;
+    } catch {
+      return; // malformed URL — 무시(이동 생략).
+    }
+    if (targetOrigin !== TRUSTED_ORIGIN) {
+      return; // R-T9/C-2: 비신뢰 origin — 무시(WebView origin 잠금 보존, intent 위조 방어).
+    }
+    setSourceUri(target); // 기존 WebView URL 교체(리마운트 아님 — 쿠키/PKCE 컨텍스트 보존, OD-1).
+  }, [consumesDeepLink, isSignedIn]);
+
+  // 마운트/세션 전이 시 대기 intent 소비 + intent 저장 통지 구독(background 탭 즉시 소비). isSignedIn 변화 시
+  // applyDeepLinkTarget 재생성 → effect 재실행이 cold-start 대기 intent 를 세션 확립 시점에 적용한다.
+  useEffect(() => {
+    if (!consumesDeepLink) {
+      return;
+    }
+    applyDeepLinkTarget();
+    return subscribeDeepLinkTarget(applyDeepLinkTarget);
+  }, [consumesDeepLink, applyDeepLinkTarget]);
+
   // SPEC-MOBILE-NAV-001: 헤더는 (tabs) 컨텍스트 + 웹이 보고한 헤더 필요 5페이지에서만 그린다(topology-
   // agnostic — 웹 pathname 만 소비). (auth)/공개 라우트에서는 NativeHeaderBar 를 마운트하지 않는다(routeContext
   // gating 은 여기서 소유). headerVisible 은 WebViewShell edges 조정(이중 top 인셋 방지)에도 쓴다.
@@ -333,7 +397,14 @@ export function BridgedWebView({
 
 /** (tabs) 탭 래퍼 공용 헬퍼 — 라우트의 호스팅 웹 URL 로 BridgedWebView 를 마운트한다(R-WB5/R-NC1). */
 export function TabWebView({ route }: { route: AppRoute }): React.JSX.Element {
-  return <BridgedWebView sourceUri={urlForRoute(route, WEB_URL)} routeContext="(tabs)" />;
+  return (
+    <BridgedWebView
+      sourceUri={urlForRoute(route, WEB_URL)}
+      routeContext="(tabs)"
+      // SPEC-MOBILE-NAV-001: 알림 탭 딥링크(모임/채팅)는 home 탭 하위 웹 라우트라 home 탭 WebView 가 소비한다.
+      consumesDeepLink={route === "home"}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
