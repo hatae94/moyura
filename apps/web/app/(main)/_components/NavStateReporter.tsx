@@ -25,7 +25,7 @@ import {
 } from "@/lib/native-bridge/bridge-protocol";
 
 // window 전역은 프로젝트 전역에서 이미 타입 증강되어 있다(ShellModeEffect: __MOYURA_NATIVE_SHELL__,
-// bridge-client: ReactNativeWebView / __MOYURA_BRIDGE_NONCE__). 여기서는 재선언하지 않고 그대로 참조한다.
+// bridge-transport: ReactNativeWebView / __MOYURA_BRIDGE_NONCE__). 여기서는 재선언하지 않고 그대로 참조한다.
 
 // 헤더 필요 5페이지의 route-derived 타이틀(REQ-MOBNAV-012 — document.title 비의존, route 데이터 산출).
 //
@@ -90,7 +90,7 @@ export function NavStateReporter(): null {
     }
 
     // per-session nonce(네이티브가 injectedJavaScriptBeforeContentLoaded 로 확립 — R-T8). 미확립이면
-    // 네이티브가 어차피 인증에 실패해 무시하므로 skip 한다(bridge-client announceTokens 가드와 동형).
+    // 네이티브가 어차피 인증에 실패해 무시하므로 skip 한다(session-bridge announceTokens 가드와 동형).
     const nonce = window.__MOYURA_BRIDGE_NONCE__ ?? "";
     if (!nonce) {
       return;

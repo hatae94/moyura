@@ -11,7 +11,7 @@
 // soft-nav 로 (main) 내부를 이동할 때마다 effect 가 재실행될 수 있으나, dedupe(lastAnnouncedAccessToken)가
 // 동일 토큰 중복 발신을 억제하고 네이티브 save 분기는 멱등이라 무해하다.
 //
-// 번들 최적화(First Load JS): bridge-client 는 @supabase/supabase-js 를 transitively 끌어온다. 이 컴포넌트는
+// 번들 최적화(First Load JS): session-bridge 는 @supabase/supabase-js 를 transitively 끌어온다. 이 컴포넌트는
 //   (main) layout 에 마운트되어 /home·/explore·/notifications·/profile 모든 페이지에 실린다. announceSessionFromCookies
 //   는 네이티브 WebView 에서만 실제 동작하므로, static import 를 제거하고 WebView 가드 통과 후에만 dynamic
 //   import 한다 → 번들러가 supabase 를 async chunk 로 분리, 순수 웹의 (main) First Load JS 에서 supabase 제거.
@@ -19,7 +19,7 @@
 
 import { useEffect } from "react";
 
-// bridge-client 를 static import 하지 않으므로(supabase chunk 분리), 가드 분기용 Window 타입만 로컬 재선언한다.
+// session-bridge 를 static import 하지 않으므로(supabase chunk 분리), 가드 분기용 Window 타입만 로컬 재선언한다.
 declare global {
   interface Window {
     ReactNativeWebView?: { postMessage(data: string): void };
@@ -32,7 +32,7 @@ declare global {
  */
 export function ShellSessionAnnouncer(): null {
   useEffect(() => {
-    // R-T4 가드(앞당김): 일반 브라우저/SSR 이면 bridge-client 를 import 하기 전에 즉시 bail out.
+    // R-T4 가드(앞당김): 일반 브라우저/SSR 이면 session-bridge 를 import 하기 전에 즉시 bail out.
     if (typeof window === "undefined" || !window.ReactNativeWebView) {
       return;
     }
@@ -43,7 +43,7 @@ export function ShellSessionAnnouncer(): null {
     let cancelled = false;
     let cancel: (() => void) | null = null;
 
-    void import("@/lib/native-bridge/bridge-client")
+    void import("@/lib/native-bridge/session-bridge")
       .then(({ announceSessionFromCookies }) => {
         if (cancelled) {
           return; // import 도중 unmount → announce 시작하지 않는다.
