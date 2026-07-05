@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/expo/eas-cli/main/packages/eas-json/schema/eas.schema.json",
   "cli": {
-    "version": ">= 0.60.0"
+    "version": ">= 0.60.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "local": {
@@ -33,9 +34,7 @@
     "production": {
       "environment": "production",
       "distribution": "store",
-      "android": {
-        "buildType": "apk"
-      },
+      "autoIncrement": true,
       "env": {
         "EAS_BUILD_PROFILE": "production"
       }
