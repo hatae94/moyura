@@ -10,7 +10,7 @@
       "distribution": "internal",
       "env": {
         "EAS_BUILD_PROFILE": "local",
-        "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000",
+        "EXPO_PUBLIC_API_BASE_URL": "http://192.168.219.102:3000",
         "GOOGLE_SERVICES_JSON": "../credentials/google-services.dev.json",
         "GOOGLE_SERVICES_PLIST": "../credentials/GoogleService-Info.dev.plist"
       }
@@ -22,8 +22,8 @@
       },
       "env": {
         "EAS_BUILD_PROFILE": "local-sim",
-        "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3001",
-        "EXPO_PUBLIC_WEB_URL": "http://localhost:3000",
+        "EXPO_PUBLIC_API_BASE_URL": "http://192.168.219.102:3001",
+        "EXPO_PUBLIC_WEB_URL": "http://192.168.219.102:3000",
         "EXPO_PUBLIC_SUPABASE_URL": "http://127.0.0.1:54321",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
         "GOOGLE_SERVICES_JSON": "../credentials/google-services.dev.json",

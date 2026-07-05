@@ -13,16 +13,16 @@ import { describe, it, expect } from "vitest";
 import { decideWebViewLoad } from "./auth-bridge-core";
 
 const ctx = {
-  trustedWebUrl: "http://localhost:3000",
+  trustedWebUrl: "http://192.168.219.102:3000",
   supabaseBaseUrl: "http://127.0.0.1:54321",
 };
 
 describe("decideWebViewLoad — detail push (REQ-MOIM3-003, 같은 탭 중첩)", () => {
   it("home list(/home) 에서 home detail(/home/123) 로의 이동은 push 디스패치", () => {
     expect(
-      decideWebViewLoad("http://localhost:3000/home/123", {
+      decideWebViewLoad("http://192.168.219.102:3000/home/123", {
         ...ctx,
-        currentUrl: "http://localhost:3000/home",
+        currentUrl: "http://192.168.219.102:3000/home",
       }),
     ).toEqual({ action: "push", route: "home", id: "123" });
   });
@@ -30,8 +30,8 @@ describe("decideWebViewLoad — detail push (REQ-MOIM3-003, 같은 탭 중첩)",
   it("uuid id 도 그대로 push 변형에 싣는다", () => {
     expect(
       decideWebViewLoad(
-        "http://localhost:3000/home/15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8",
-        { ...ctx, currentUrl: "http://localhost:3000/home" },
+        "http://192.168.219.102:3000/home/15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8",
+        { ...ctx, currentUrl: "http://192.168.219.102:3000/home" },
       ),
     ).toEqual({
       action: "push",
@@ -42,9 +42,9 @@ describe("decideWebViewLoad — detail push (REQ-MOIM3-003, 같은 탭 중첩)",
 
   it("같은 탭 list 의 query 변형(/home?filter=x)에서 detail 로 가도 push", () => {
     expect(
-      decideWebViewLoad("http://localhost:3000/home/123", {
+      decideWebViewLoad("http://192.168.219.102:3000/home/123", {
         ...ctx,
-        currentUrl: "http://localhost:3000/home?filter=upcoming",
+        currentUrl: "http://192.168.219.102:3000/home?filter=upcoming",
       }),
     ).toEqual({ action: "push", route: "home", id: "123" });
   });
@@ -52,7 +52,7 @@ describe("decideWebViewLoad — detail push (REQ-MOIM3-003, 같은 탭 중첩)",
 
 describe("decideWebViewLoad — detail push 회귀 0 (R-NC3 보존)", () => {
   it("currentUrl 부재면 detail 도 push 아님 → trusted-load(회귀 0)", () => {
-    expect(decideWebViewLoad("http://localhost:3000/home/123", ctx)).toBe(
+    expect(decideWebViewLoad("http://192.168.219.102:3000/home/123", ctx)).toBe(
       "trusted-load",
     );
   });
@@ -60,9 +60,9 @@ describe("decideWebViewLoad — detail push 회귀 0 (R-NC3 보존)", () => {
   it("cross-tab detail(/explore → /home/123)은 push 아님 → trusted-load (MOBILE-003 보존)", () => {
     // route(currentUrl)=explore !== detailRoute=home → 같은 탭 push 아님. 기존 crossroute 테스트와 일치.
     expect(
-      decideWebViewLoad("http://localhost:3000/home/123", {
+      decideWebViewLoad("http://192.168.219.102:3000/home/123", {
         ...ctx,
-        currentUrl: "http://localhost:3000/explore",
+        currentUrl: "http://192.168.219.102:3000/explore",
       }),
     ).toBe("trusted-load");
   });
@@ -71,16 +71,16 @@ describe("decideWebViewLoad — detail push 회귀 0 (R-NC3 보존)", () => {
     expect(
       decideWebViewLoad("https://evil.example.com/home/123", {
         ...ctx,
-        currentUrl: "http://localhost:3000/home",
+        currentUrl: "http://192.168.219.102:3000/home",
       }),
     ).toBe("deny");
   });
 
   it("채팅 입장(/moims/{id}/chat, 3 세그먼트)은 push/dispatch 아님 → trusted-load(WebView 내 유지)", () => {
     expect(
-      decideWebViewLoad("http://localhost:3000/moims/abc/chat", {
+      decideWebViewLoad("http://192.168.219.102:3000/moims/abc/chat", {
         ...ctx,
-        currentUrl: "http://localhost:3000/home/abc",
+        currentUrl: "http://192.168.219.102:3000/home/abc",
       }),
     ).toBe("trusted-load");
   });
@@ -89,16 +89,16 @@ describe("decideWebViewLoad — detail push 회귀 0 (R-NC3 보존)", () => {
     expect(
       decideWebViewLoad("http://127.0.0.1:54321/auth/v1/authorize?provider=google", {
         ...ctx,
-        currentUrl: "http://localhost:3000/home",
+        currentUrl: "http://192.168.219.102:3000/home",
       }),
     ).toBe("oauth-intercept");
   });
 
   it("같은 탭 cross-route(다른 단일 세그먼트)는 여전히 dispatch(detail 추가가 영향 없음)", () => {
     expect(
-      decideWebViewLoad("http://localhost:3000/explore", {
+      decideWebViewLoad("http://192.168.219.102:3000/explore", {
         ...ctx,
-        currentUrl: "http://localhost:3000/home",
+        currentUrl: "http://192.168.219.102:3000/home",
       }),
     ).toEqual({ action: "dispatch", route: "explore" });
   });

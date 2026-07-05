@@ -25,8 +25,8 @@ export function resolveWebUrl(value: string | undefined): string {
   if (!trimmed) {
     throw new Error(
       "[moyura/mobile] EXPO_PUBLIC_WEB_URL 이 설정되지 않았습니다. " +
-        "apps/mobile/.env 또는 EAS 프로파일 env 에 EXPO_PUBLIC_WEB_URL=http://localhost:3000 형태로 지정하세요. " +
-        "(Android 에뮬레이터는 http://10.0.2.2:3000, iOS 시뮬레이터는 http://localhost:3000, 실기기는 LAN IP 호스트 — R-W3) " +
+        "apps/mobile/.env 또는 EAS 프로파일 env 에 EXPO_PUBLIC_WEB_URL=http://192.168.219.102:3000 형태로 지정하세요. " +
+        "(Android 에뮬레이터는 http://10.0.2.2:3000, iOS 시뮬레이터는 http://192.168.219.102:3000, 실기기는 LAN IP 호스트 — R-W3) " +
         "(EXPO_PUBLIC_* 는 bundle 시점에 인라인되므로 미설정 시 자동 실패하지 않습니다 — R-W2)",
     );
   }

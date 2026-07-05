@@ -51,7 +51,7 @@ export type TokenProvider = () =>
 
 /** 클라이언트 생성 옵션. baseUrl 은 프론트 env(NEXT_PUBLIC/EXPO_PUBLIC)에서 주입한다. */
 export interface ApiClientOptions {
-  /** API 베이스 URL (예: http://localhost:3000). 뒤쪽 슬래시는 자동 제거된다. */
+  /** API 베이스 URL (예: http://192.168.219.102:3000). 뒤쪽 슬래시는 자동 제거된다. */
   baseUrl: string;
   /** 선택적 커스텀 fetch 구현(테스트/RN 폴리필 주입용). 기본값은 전역 fetch. */
   fetch?: typeof fetch;

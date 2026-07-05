@@ -87,7 +87,7 @@ function buildCsp(nonce: string): string {
   const wssSource = realtimeWssSource(
     supabaseUrl === "" ? undefined : supabaseUrl,
   );
-  // 채팅 등 클라이언트 측 백엔드 API 호출(localhost:3001)을 위한 origin(서버 fetch 는 CSP 비대상).
+  // 채팅 등 클라이언트 측 백엔드 API 호출(192.168.219.102:3001)을 위한 origin(서버 fetch 는 CSP 비대상).
   const apiSource = apiOriginSource(process.env.NEXT_PUBLIC_API_BASE_URL);
   return [
     `default-src 'self'`,

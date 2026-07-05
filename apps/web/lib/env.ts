@@ -25,7 +25,7 @@ export function resolveApiBaseUrl(value: string | undefined): string {
   if (!trimmed) {
     throw new Error(
       "[moyura/web] NEXT_PUBLIC_API_BASE_URL 이 설정되지 않았습니다. " +
-        "apps/web/.env.local 에 NEXT_PUBLIC_API_BASE_URL=http://localhost:3001 형태로 지정하세요. " +
+        "apps/web/.env.local 에 NEXT_PUBLIC_API_BASE_URL=http://192.168.219.102:3001 형태로 지정하세요. " +
         "(NEXT_PUBLIC_* 는 build 시점에 인라인되므로 미설정 시 자동 실패하지 않습니다 — R-E4)",
     );
   }

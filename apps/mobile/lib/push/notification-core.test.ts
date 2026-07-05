@@ -26,14 +26,14 @@ describe("extractMoimId (FCM data 페이로드 → moimId)", () => {
 
 describe("buildChatUrl (moimId → 대상 모임 채팅 WebView URL)", () => {
   it("webUrl 호스트에 /moims/{id}/chat 경로를 결합한다 (R-4 최소 구현)", () => {
-    expect(buildChatUrl("moim-A", "http://localhost:3000")).toBe(
-      "http://localhost:3000/moims/moim-A/chat",
+    expect(buildChatUrl("moim-A", "http://192.168.219.102:3000")).toBe(
+      "http://192.168.219.102:3000/moims/moim-A/chat",
     );
   });
 
   it("webUrl 에 trailing slash 가 있어도 중복 슬래시 없이 결합한다", () => {
-    expect(buildChatUrl("moim-A", "http://localhost:3000/")).toBe(
-      "http://localhost:3000/moims/moim-A/chat",
+    expect(buildChatUrl("moim-A", "http://192.168.219.102:3000/")).toBe(
+      "http://192.168.219.102:3000/moims/moim-A/chat",
     );
   });
 
@@ -44,7 +44,7 @@ describe("buildChatUrl (moimId → 대상 모임 채팅 WebView URL)", () => {
   });
 
   it("moimId 가 빈 값이면 null (대상 불명 — 네비게이션 불가)", () => {
-    expect(buildChatUrl("", "http://localhost:3000")).toBeNull();
-    expect(buildChatUrl("   ", "http://localhost:3000")).toBeNull();
+    expect(buildChatUrl("", "http://192.168.219.102:3000")).toBeNull();
+    expect(buildChatUrl("   ", "http://192.168.219.102:3000")).toBeNull();
   });
 });

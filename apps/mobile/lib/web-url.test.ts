@@ -9,7 +9,7 @@ import { resolveWebUrl } from "./web-url";
 
 describe("resolveWebUrl (R-W1/R-W2)", () => {
   it("정상 URL 이면 trim 한 값을 반환한다 (R-W1)", () => {
-    expect(resolveWebUrl("  http://localhost:3000  ")).toBe("http://localhost:3000");
+    expect(resolveWebUrl("  http://192.168.219.102:3000  ")).toBe("http://192.168.219.102:3000");
   });
 
   it("undefined 이면 설명 메시지와 함께 throw 한다 (R-W2/AC-W2)", () => {

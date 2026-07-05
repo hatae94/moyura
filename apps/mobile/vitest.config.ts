@@ -13,7 +13,7 @@ export default defineConfig({
     // web-url.ts 모듈 import 시 평가되는 WEB_URL 부팅 가드를 통과시키기 위한 테스트용 env.
     // (resolveWebUrl 자체는 인자를 받는 순수 함수라 이 값에 의존하지 않는다.)
     env: {
-      EXPO_PUBLIC_WEB_URL: "http://localhost:3000",
+      EXPO_PUBLIC_WEB_URL: "http://192.168.219.102:3000",
     },
   },
 });

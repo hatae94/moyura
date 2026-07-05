@@ -12,12 +12,12 @@ import {
 } from "./auth-bridge-core";
 
 describe("isTrustedOrigin (R-T6 / AC-T6: origin allowlist — 콜드스타트+resume 공용)", () => {
-  const WEB_URL = "http://localhost:3000";
+  const WEB_URL = "http://192.168.219.102:3000";
 
   it("현재 URL 의 origin 이 신뢰 WEB_URL 호스트와 같으면 true (토큰 주입 허용)", () => {
-    expect(isTrustedOrigin("http://localhost:3000/me", WEB_URL)).toBe(true);
-    expect(isTrustedOrigin("http://localhost:3000/login", WEB_URL)).toBe(true);
-    expect(isTrustedOrigin("http://localhost:3000/", WEB_URL)).toBe(true);
+    expect(isTrustedOrigin("http://192.168.219.102:3000/me", WEB_URL)).toBe(true);
+    expect(isTrustedOrigin("http://192.168.219.102:3000/login", WEB_URL)).toBe(true);
+    expect(isTrustedOrigin("http://192.168.219.102:3000/", WEB_URL)).toBe(true);
   });
 
   it("에뮬레이터 호스트(10.0.2.2)도 WEB_URL 이 그 호스트면 허용 (OD-7 일관)", () => {
@@ -31,11 +31,11 @@ describe("isTrustedOrigin (R-T6 / AC-T6: origin allowlist — 콜드스타트+re
   });
 
   it("포트가 다르면 false (origin 은 host+port 일치 — exact)", () => {
-    expect(isTrustedOrigin("http://localhost:4000/me", WEB_URL)).toBe(false);
+    expect(isTrustedOrigin("http://192.168.219.102:4000/me", WEB_URL)).toBe(false);
   });
 
   it("scheme 이 다르면 false (http vs https origin 불일치)", () => {
-    expect(isTrustedOrigin("https://localhost:3000/me", WEB_URL)).toBe(false);
+    expect(isTrustedOrigin("https://192.168.219.102:3000/me", WEB_URL)).toBe(false);
   });
 
   it("파싱 불가한 현재 URL 이면 false (방어적 — 주입 금지)", () => {

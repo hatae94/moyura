@@ -18,13 +18,13 @@ import { createClient } from "@/lib/supabase/server";
 
 // 소셜 OAuth redirectTo 는 요청 origin 에서 동적 구성한다(local/prod 공통 — 하드코딩 금지).
 // Vercel 등 리버스 프록시 뒤에서는 x-forwarded-host / x-forwarded-proto 가 실제 외부 호스트·스킴을 담는다.
-// 결과 URL 은 Supabase Redirect URLs 허용목록과 정확히 일치해야 한다(local: http://localhost:3000/auth/callback,
+// 결과 URL 은 Supabase Redirect URLs 허용목록과 정확히 일치해야 한다(local: http://192.168.219.102:3000/auth/callback,
 // prod: https://<web-domain>/auth/callback) — 불일치 시 GoTrue 가 Site URL 로 폴백해 ?code= 가 "/" 로 떨어진다.
 async function resolveCallbackUrl(): Promise<string> {
   const h = await headers();
-  const rawHost = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const rawHost = h.get("x-forwarded-host") ?? h.get("host") ?? "192.168.219.102:3000";
   const host = (rawHost.split(",")[0] ?? rawHost).trim();
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.");
+  const isLocal = host.startsWith("192.168.219.102") || host.startsWith("127.");
   const rawProto = h.get("x-forwarded-proto") ?? (isLocal ? "http" : "https");
   const proto = (rawProto.split(",")[0] ?? rawProto).trim();
   return `${proto}://${host}/auth/callback`;

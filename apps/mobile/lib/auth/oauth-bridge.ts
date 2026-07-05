@@ -6,13 +6,13 @@
 //
 // ── 브리지 설계 (OD-5 해소) ────────────────────────────────────────────────────
 // 웹 흐름: WebView 가 웹 로그인 → "Google" 클릭 → signInWithOAuthAction 이
-//   signInWithOAuth({ redirectTo: "http://localhost:3000/auth/callback?next=/home" }) 호출 →
+//   signInWithOAuth({ redirectTo: "http://192.168.219.102:3000/auth/callback?next=/home" }) 호출 →
 //   data.url = GoTrue authorize URL(host = EXPO_PUBLIC_SUPABASE_URL host, path /auth/v1/authorize,
 //   쿼리에 redirect_to=웹콜백) → 서버 redirect(data.url) → WebView 가 그 authorize URL 로 top-level 네비게이트.
 //
 // 문제(OD-5): openAuthSessionAsync(authorizeUrl, "moyura://auth-callback") 는 시스템 브라우저
 //   흐름이 moyura://auth-callback 으로 끝나야 success 를 반환한다. 그러나 웹의 redirect_to 는
-//   웹 콜백(localhost:3000/auth/callback)이므로, authorize URL 을 그대로 시스템 브라우저에 넘기면
+//   웹 콜백(192.168.219.102:3000/auth/callback)이므로, authorize URL 을 그대로 시스템 브라우저에 넘기면
 //   흐름이 브라우저 안에서 끝나 세션 쿠키가 브라우저 쿠키 저장소(WebView 와 분리)에 설정된다 = half-auth.
 //
 // 해결(R-F3 Google 한정 완성): 인터셉트한 authorize URL 의 redirect_to 를 moyura://auth-callback 으로

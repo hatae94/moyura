@@ -30,13 +30,13 @@ jobs:
       # 통과해야 하고(SPEC-AUTH-001 R-I4/R-E4), backend Zod 는 SUPABASE_URL/ANON_KEY 를 요구한다.
       NODE_ENV: test
       PORT: "3001"
-      CORS_ORIGINS: http://localhost:3000,http://localhost:8081
+      CORS_ORIGINS: http://192.168.219.102:3000,http://192.168.219.102:8081
       SUPABASE_URL: http://127.0.0.1:54321
       SUPABASE_ANON_KEY: ci-dummy-anon-key
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
+      NEXT_PUBLIC_API_BASE_URL: http://192.168.219.102:3001
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
-      EXPO_PUBLIC_API_BASE_URL: http://localhost:3001
+      EXPO_PUBLIC_API_BASE_URL: http://192.168.219.102:3001
       EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
     steps:

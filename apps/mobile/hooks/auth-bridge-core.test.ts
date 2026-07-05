@@ -12,22 +12,22 @@ import {
 
 // oauth-bridge.test.ts 와 동일한 로컬 호스트 형태(주입 — 순수 유지, env 비의존).
 const SUPABASE_BASE = "http://127.0.0.1:54321";
-const WEB_BASE = "http://localhost:3000";
+const WEB_BASE = "http://192.168.219.102:3000";
 
 describe("decideOAuthIntercept (R-O1 / AC-S6: shouldBridgeOAuth true/false)", () => {
   it("supabase 호스트의 /authorize URL 이면 bridge (인터셉트 → 임베디드 로드 차단)", () => {
     const authorizeUrl =
-      "http://127.0.0.1:54321/auth/v1/authorize?provider=google&redirect_to=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fcallback";
+      "http://127.0.0.1:54321/auth/v1/authorize?provider=google&redirect_to=http%3A%2F%2F192.168.219.102%3A3000%2Fauth%2Fcallback";
     expect(decideOAuthIntercept(authorizeUrl, SUPABASE_BASE)).toBe("bridge");
   });
 
   it("일반 웹 페이지 URL 이면 allow (정상 네비게이션 — 차단 금지, EC-5)", () => {
-    expect(decideOAuthIntercept("http://localhost:3000/login", SUPABASE_BASE)).toBe("allow");
+    expect(decideOAuthIntercept("http://192.168.219.102:3000/login", SUPABASE_BASE)).toBe("allow");
   });
 
   it("웹 콜백 URL 이면 allow (콜백은 인터셉트 대상이 아님)", () => {
     expect(
-      decideOAuthIntercept("http://localhost:3000/auth/callback?code=abc", SUPABASE_BASE),
+      decideOAuthIntercept("http://192.168.219.102:3000/auth/callback?code=abc", SUPABASE_BASE),
     ).toBe("allow");
   });
 });

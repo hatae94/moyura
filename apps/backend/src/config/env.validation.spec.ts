@@ -6,7 +6,7 @@ const baseValidEnv = {
   DIRECT_URL: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
   PORT: '3000',
   NODE_ENV: 'development',
-  CORS_ORIGINS: 'http://localhost:3000,http://localhost:8081',
+  CORS_ORIGINS: 'http://192.168.219.102:3000,http://192.168.219.102:8081',
   // SUPABASE_URL/ANON_KEY는 auth 런타임 required로 승격됨(R-I1).
   SUPABASE_URL: 'http://127.0.0.1:54321',
   SUPABASE_ANON_KEY: 'local-anon-key',
@@ -132,10 +132,10 @@ describe('validateEnv (AC-B1 / AC-B2)', () => {
 });
 
 describe('isOriginAllowed (AC-F1 / AC-F3)', () => {
-  const allowlist = ['http://localhost:3000', 'http://localhost:8081'];
+  const allowlist = ['http://192.168.219.102:3000', 'http://192.168.219.102:8081'];
 
   it('허용 목록에 있는 origin은 허용한다 (AC-F1)', () => {
-    expect(isOriginAllowed('http://localhost:3000', allowlist)).toBe(true);
+    expect(isOriginAllowed('http://192.168.219.102:3000', allowlist)).toBe(true);
   });
 
   it('허용 목록에 없는 origin은 거부한다 (AC-F3)', () => {

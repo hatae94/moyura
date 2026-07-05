@@ -39,7 +39,7 @@ export interface WebViewShellProps {
   /** WebView 가 로드할 source URL. 변경 시 WebView 가 새 URL 로 네비게이트한다(리마운트 아님). */
   sourceUri: string;
   /**
-   * R-T9/C-2: WebView 를 신뢰 origin 에 잠그는 originWhitelist(예: ["http://localhost:3000"]).
+   * R-T9/C-2: WebView 를 신뢰 origin 에 잠그는 originWhitelist(예: ["http://192.168.219.102:3000"]).
    * 기본값 ["http://*","https://*"] 대신 신뢰 origin 만 허용해 비신뢰 origin in-WebView 로드를 막는다.
    * onShouldStartLoadWithRequest 의 deny 게이트와 이중 방어한다.
    */

@@ -45,7 +45,7 @@ const SUPABASE_COOKIE_PREFIX = "sb-";
  *   - set(WEB_URL, cookie, false) = NSHTTPCookieStorage — 대칭/방어. RNW 가 NSHTTP 에서 재동기화하는 경로와
  *     이메일 로그인(서버 Set-Cookie→NSHTTP) 경로에 맞추고 cookie-clear.ts 의 BOTH-store 삭제와 짝을 맞춘다.
  * sb-* 세션 쿠키만 복사한다(다른 쿠키는 불필요). 원본 속성(path/domain/expires/secure/httpOnly)을 보존한다 —
- * secure 는 그대로 보존하므로 dev(http localhost, secure=false)·prod(https, secure=true) 양쪽에서 WebView scheme
+ * secure 는 그대로 보존하므로 dev(http 192.168.219.102, secure=false)·prod(https, secure=true) 양쪽에서 WebView scheme
  * 과 일치해 첫 GET 에 정상 전송된다.
  *
  * 실패(네이티브 모듈 미가용/스토어 접근 등)는 no-op 으로 흡수한다 — 선주입 실패가 로그인을 막지 않는다

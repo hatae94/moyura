@@ -12,23 +12,23 @@ import {
 
 // 로컬 GoTrue 호스트(EXPO_PUBLIC_SUPABASE_URL 와 동일 형태) + 웹 호스트.
 const SUPABASE_BASE = "http://127.0.0.1:54321";
-const WEB_BASE = "http://localhost:3000";
+const WEB_BASE = "http://192.168.219.102:3000";
 const RETURN_URL = "moyura://auth-callback";
 
 describe("isOAuthAuthorizeUrl (R-O1/AC-O1)", () => {
   it("supabase 호스트의 /authorize URL 이면 true (인터셉트 대상)", () => {
     const authorizeUrl =
-      "http://127.0.0.1:54321/auth/v1/authorize?provider=google&redirect_to=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fcallback%3Fnext%3D%2Fme";
+      "http://127.0.0.1:54321/auth/v1/authorize?provider=google&redirect_to=http%3A%2F%2F192.168.219.102%3A3000%2Fauth%2Fcallback%3Fnext%3D%2Fme";
     expect(isOAuthAuthorizeUrl(authorizeUrl, SUPABASE_BASE)).toBe(true);
   });
 
   it("일반 웹 페이지 URL 이면 false (정상 네비게이션 차단 금지 — EC-5)", () => {
-    expect(isOAuthAuthorizeUrl("http://localhost:3000/login", SUPABASE_BASE)).toBe(false);
+    expect(isOAuthAuthorizeUrl("http://192.168.219.102:3000/login", SUPABASE_BASE)).toBe(false);
   });
 
   it("웹 콜백 URL 이면 false (콜백은 인터셉트 대상이 아님)", () => {
     expect(
-      isOAuthAuthorizeUrl("http://localhost:3000/auth/callback?code=abc", SUPABASE_BASE),
+      isOAuthAuthorizeUrl("http://192.168.219.102:3000/auth/callback?code=abc", SUPABASE_BASE),
     ).toBe(false);
   });
 
@@ -46,7 +46,7 @@ describe("isOAuthAuthorizeUrl (R-O1/AC-O1)", () => {
 describe("rewriteAuthorizeRedirect (R-O1/OD-5)", () => {
   it("authorize URL 의 redirect_to 를 deep-link 복귀 URL 로 재작성한다", () => {
     const authorizeUrl =
-      "http://127.0.0.1:54321/auth/v1/authorize?provider=google&redirect_to=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fcallback%3Fnext%3D%2Fme";
+      "http://127.0.0.1:54321/auth/v1/authorize?provider=google&redirect_to=http%3A%2F%2F192.168.219.102%3A3000%2Fauth%2Fcallback%3Fnext%3D%2Fme";
     const rewritten = rewriteAuthorizeRedirect(authorizeUrl, RETURN_URL);
 
     const parsed = new URL(rewritten);
