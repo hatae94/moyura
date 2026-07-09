@@ -96,7 +96,7 @@
   - **생성 도구(D2 확정)**: `openapi-typescript 7.13.0` 타입 생성(`src/schema.d.ts`, gitignore — 재생성) + 얇은 타입드 fetch 래퍼(`createApiClient`, `getHealth`). openapi.json 계약 산출물은 커밋된다.
 - **로컬 DB**: **Supabase CLI `2.104.0` 로컬 스택**(Docker: Postgres + Auth/GoTrue + Studio), `supabase/config.toml` + `supabase/README.md`(start/stop). canonical 로컬 DB. R-C1~R-C4.
   - 로컬 스택은 `6543` pooler를 노출하지 않음 → 로컬은 **direct Postgres `:54322`** 운영(pooler는 prod 전용). 이 경우 prepared-statement 비활성은 N/A(R-C2, K8). prod에서만 pooled(6543) 적용.
-- **백엔드 prod 호스팅**: **Render** (Web Service). build `pnpm exec nx build backend`, start `node apps/backend/dist/src/main.js`, health check path `/health`, env는 Render secrets(`sync:false`) 주입. Blueprint `render.yaml`(루트) + 런북 `DEPLOY.md`(초기 계획안 `docs/deploy-render.md`는 보존). **2026-06-23 실 배포 — web=Vercel / backend=Render / mobile=EAS 분리**. SPEC 결정 #4.
+- **백엔드 prod 호스팅**: **Render** (Web Service). build `pnpm exec nx build backend`, start `node apps/backend/dist/src/main.js`, health check path `/health`, env는 Render secrets(`sync:false`) 주입. Blueprint `render.yaml`(루트) + 런북 `DEPLOY.md`(초기 계획안 `docs/deploy-render.md`는 보존). **2026-06-23 실 배포 — web=Vercel / backend=Render / mobile=EAS 분리**. SPEC 결정 #4. (프로덕션 도메인 `htyong.com` — 아래 §7 참조)
 - **CORS**: 환경별 web + mobile origin allowlist를 `CORS_ORIGINS`(validated config)에서 로드, 와일드카드(`*`) 금지. R-F1~R-F3.
 - **헬스 엔드포인트**: `GET /health` — `PrismaService.pingDatabase()`(`SELECT 1`)로 DB 연결 확인. 200(`ok`/`up`) / 503(`degraded`/`down`). end-to-end 배선 증명용(로컬 e2e 검증 완료). R-G1~R-G4.
 - **프런트 env 주입**: web `NEXT_PUBLIC_API_BASE_URL`(`apps/web/lib/env.ts` 가드, 루트 레이아웃에서 실행), mobile `EXPO_PUBLIC_API_BASE_URL`(`apps/mobile/lib/env.ts` 가드, `index.ts`에서 실행). 미설정 시 명시적 throw(R-E4 — `NEXT_PUBLIC_*`/`EXPO_PUBLIC_*`는 build/bundle 시점 정적 인라인). web은 api-client를 `transpilePackages`로 처리.
@@ -112,7 +112,7 @@
 
 ### follow-up (PLANNED — 의도적으로 연기)
 
-- **prod 배포 파이프라인**(SPEC-ENV-SETUP-001 연기 → **2026-06-23 수동 배포 진행**): web=Vercel / backend=Render(`render.yaml`) / mobile=EAS 분리 배포 + Supabase 클라우드 + `prisma migrate deploy`(수동, Session pooler `DIRECT_URL`) 적용. **여전히 미구현**: 자동 Prisma migrate + CI deploy 파이프라인, prod e2e 자동 증명. named follow-up.
+- **prod 배포 파이프라인**(SPEC-ENV-SETUP-001 연기 → **2026-06-23 수동 배포 진행**): web=Vercel / backend=Render(`render.yaml`) / mobile=EAS 분리 배포 + Supabase 클라우드 + `prisma migrate deploy`(수동, Session pooler `DIRECT_URL`) 적용. **여전히 미구현**: 자동 Prisma migrate + CI deploy 파이프라인, prod e2e 자동 증명. named follow-up. (커스텀 도메인 `htyong.com` 전환 2026-07-09 — 아래 §7 참조)
 - **인증 후속 과제**(SPEC-AUTH-001 연기): 실제 소셜 provider 키 발급/배선(Google/Apple/Kakao 콘솔), 모바일 런타임 OAuth 라운드트립(디바이스/시뮬레이터 — 현재 코드+config 스캐폴드만), 이메일 확인 + 비밀번호 재설정, RBAC/인가, prod HTTPS 강제. 모두 named follow-up(Non-Goal로 spec.md에 명시).
 - **프런트 자동 테스트 타겟**(SPEC-AUTH-001 evaluator MAJOR): web/mobile/api-client에 자동화 테스트 타겟 부재. 테스트 가능한 순수 함수(`resolveCallbackOutcome`/`resolveSupabaseConfig`/api-client Bearer 주입/`launchSocialOAuth`)가 회귀 보호되지 않음(빌드 시점 node sanity로만 검증). 별도 후속 작업으로 도입.
 
@@ -191,6 +191,73 @@
 | `DEPLOY.md` (루트) | prod 배포 런북(web=Vercel/backend=Render/mobile=EAS) |
 | `docs/deploy-render.md` | Render 배포 초기 계획안 |
 | `apps/{web,backend}/.env.production.example`, `supabase/.env.production.example` | prod env fill-in 템플릿 |
+
+## 7. 프로덕션 도메인 / 배포 토폴로지 (htyong.com, 2026-07-09)
+
+> 2026-07-09 경험적으로 검증된 실 배포 상태. SPEC 아님 — 운영 사실 기록.
+
+### 7-1. 도메인 및 DNS
+
+| 항목 | 값 |
+|------|----|
+| 커스텀 도메인 | `htyong.com` |
+| 등록처 | hosting.kr (후이즈) |
+| 이전 웹 URL | `moyura-web.vercel.app` |
+| 네임서버 위임 | Vercel DNS (`ns1.vercel-dns.com`, `ns2.vercel-dns.com`) |
+| DNS 레코드 관리 | **Vercel DNS Records** — 등록처 DNS 아님 (네임서버 위임 후 등록처 레코드 무효) |
+| apex A 레코드 | `htyong.com` → `216.198.79.1` (Vercel) |
+| www | `www.htyong.com` — DNS 레코드 현재 미구성 (선택) |
+
+### 7-2. 서비스 배치
+
+| 서비스 | 호스트 | 비고 |
+|--------|--------|------|
+| 웹 (Next.js) | `htyong.com` (Vercel) | apex 도메인으로 서빙 |
+| 백엔드 API (NestJS) | `moyura-backend.onrender.com` (Render) | 커스텀 도메인 `api.htyong.com` — **선택, 현재 미구성**; 쓰려면 Vercel DNS에 `api` CNAME → `moyura-backend.onrender.com` 추가 필요 (네임서버 위임 시 등록처의 기존 api CNAME 유실됨) |
+| Supabase | `qzibltkabfiaaxjtvmbz.supabase.co` | 호스팅 프로젝트 URL — 도메인 변경 무관, 불변 |
+
+### 7-3. 인증 설정 (Supabase 대시보드 — config.toml 로컬 값과 별개)
+
+| 항목 | 값 |
+|------|----|
+| Site URL | `https://htyong.com` |
+| Redirect URLs | `https://htyong.com/auth/callback`, `https://htyong.com/**` (와일드카드), www 변형, `moyura://auth-callback` |
+| 이메일 가입 확인 방식 | **6자리 OTP** (`{{ .Token }}` 템플릿, `verifyOtp type:signup`) — 매직링크 아님 |
+| 기본 이메일 발송기 | 시간당 2~4통 레이트리밋 → 실서비스는 커스텀 SMTP 권장 |
+
+> `/**` 와일드카드 항목은 필수. `signInWithOAuthAction`이 `redirectTo`에 `?next=/home` 등 쿼리를 붙이므로 exact URL 매칭만으로는 Supabase Redirect URL 검증 실패 → Site URL 폴백 → `/?code=` (루트) → `/login` 튕김 (2026-07-09 실증).
+
+### 7-4. Google OAuth (GCP OAuth 클라이언트)
+
+| 항목 | 값 |
+|------|----|
+| 승인된 JavaScript 원본 | `https://htyong.com` 포함 |
+| 승인된 리디렉션 URI | `https://qzibltkabfiaaxjtvmbz.supabase.co/auth/v1/callback` — Supabase hosted 고정값, 도메인 변경과 무관 |
+
+### 7-5. 환경변수
+
+| 위치 | 변수 | 비고 |
+|------|------|------|
+| Vercel | `NEXT_PUBLIC_API_BASE_URL` | Render URL 또는 `api.htyong.com` (미래) |
+| Vercel | `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL — 불변 |
+| Vercel | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key — 불변 |
+| Render | `CORS_ORIGINS` | `https://htyong.com` 포함 필수 |
+
+### 7-6. 운영 함정 / 주의 (2026-07-09 실증)
+
+**(a) `NEXT_PUBLIC_*` 빌드타임 인라인 → Vercel 재배포 필수**
+
+`NEXT_PUBLIC_*` 환경변수는 빌드 시점에 번들에 정적 인라인된다. Vercel 대시보드에서 값을 변경한 뒤 **Redeploy를 실행하지 않으면** 실행 중인 배포본이 이전 값을 유지한다 → 클라이언트 Supabase 설정 어긋남 → **이메일·Google 로그인 전부 `/login`으로 튕김 (에러 파라미터 없이)**. 도메인 마이그레이션 중 로그인 실패의 실제 원인이었으며 재배포로 해결됨.
+
+**(b) Supabase Redirect URL 매칭 = 글롭 전체 문자열 매칭 → `/**` 와일드카드 필수**
+
+`signInWithOAuthAction`이 `redirectTo`에 `?next=/home` 같은 쿼리를 붙여 Supabase로 보낸다. exact `https://htyong.com/auth/callback`만 등록된 경우 매칭 실패 → Site URL 폴백 → `/?code=`(루트) → `/login` 튕김. **`https://htyong.com/**` 와일드카드 항목이 반드시 있어야 한다.**
+
+**(c) 네임서버를 Vercel로 위임하면 등록처의 기존 DNS 레코드 유실**
+
+등록처(hosting.kr)에 설정했던 `api` CNAME 등 모든 레코드가 무효화된다. Vercel DNS에 필요한 레코드를 직접 재추가해야 한다.
+
+---
 
 ## 참조
 
