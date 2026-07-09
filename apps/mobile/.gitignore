@@ -43,3 +43,5 @@ yarn-error.*
 # EAS local build artifacts (eas build --local)
 *.apk
 *.aab
+
+credentials

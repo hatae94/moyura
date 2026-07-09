@@ -43,8 +43,8 @@
       "extends": "production",
       "env": {
         "EAS_BUILD_PROFILE": "production",
-        "GOOGLE_SERVICES_JSON": "../credentials/google-services.json",
-        "GOOGLE_SERVICES_PLIST": "../credentials/GoogleService-Info.plist"
+        "GOOGLE_SERVICES_JSON": "./credentials/google-services.json",
+        "GOOGLE_SERVICES_PLIST": "./credentials/GoogleService-Info.plist"
       }
     }
   }

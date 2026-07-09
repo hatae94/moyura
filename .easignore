@@ -1,0 +1,249 @@
+# ============================================
+# EAS Build ignore — used INSTEAD of .gitignore when present (Expo 공식 동작).
+# ============================================
+# 목적: git 에는 절대 커밋하지 않는(.gitignore 유지) Firebase CLIENT config
+#   (google-services.json/.dev.json + GoogleService-Info.plist/.dev.plist)를
+#   `eas build --local`/클라우드 아카이브에는 **포함**시켜 프로덕션 로컬 빌드가 찾도록 한다.
+#   서버 시크릿(서비스계정 키, OAuth 시크릿)은 빌드에도 절대 포함하지 않는다.
+# [주의] 이 파일이 있으면 EAS 는 .gitignore 를 무시하므로, 아래는 .gitignore 전체를
+#   복제하고 credentials 섹션만 조정한 것이다. .gitignore 를 바꾸면 여기도 동기화할 것.
+# ============================================
+
+# ===========================================
+# Go Build Artifacts
+# ===========================================
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+cover.out
+cover.html
+cpu.prof
+mem.prof
+
+# ===========================================
+# Build Artifacts & Distribution
+# ===========================================
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Mobile build artifacts (Android/iOS binaries — may embed google-services / signing config)
+*.apk
+*.aab
+*.ipa
+
+# ===========================================
+# Python Cache & Bytecode
+# ===========================================
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.ruff_cache/
+*.db
+*.sqlite
+*.sqlite3
+*.rdb
+*.dbm
+
+# ===========================================
+# Virtual Environments
+# ===========================================
+venv/
+.venv/
+env/
+.env/
+.uv_cache/
+.uv-cache/
+
+# ===========================================
+# Test Coverage
+# ===========================================
+.coverage
+coverage.json
+htmlcov/
+
+# ===========================================
+# IDE & Editors
+# ===========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sw?
+*~
+.cursor/
+*.sublime-project
+*.sublime-workspace
+*.njsproj
+*.sln
+*.suo
+.#*
+
+# ===========================================
+# OS Files
+# ===========================================
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+
+# Windows
+[Dd]esktop.ini
+Thumbs.db
+ehthumbs.db
+
+# Linux
+.directory
+
+# ===========================================
+# Logs & Temporary Files
+# ===========================================
+*.log
+logs/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# ===========================================
+# Backups
+# ===========================================
+.moai-backups/
+*.backup/
+*-backup/
+*_backup_*/
+
+# ===========================================
+# Secrets and Credentials (CRITICAL)
+# ===========================================
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Certificate files
+*.pem
+*.p12
+*.pfx
+*.jks
+
+# Private keys (specific patterns to avoid false positives)
+*-key.*
+*_key.*
+*.key.*
+*-secret-key.*
+*-api-key.*
+api-key-*
+secret-key-*
+private-key*
+*-secret.*
+*_secret.*
+*.secret.*
+secret-*.*
+
+# Credential patterns in environment files
+*_secret=*
+*_token=*
+
+# Cloud provider credentials
+.aws/config
+.aws/credentials
+
+# ===========================================
+# Project credentials
+# ===========================================
+# repo-root credentials/ (서비스계정 키·OAuth 시크릿 포함) — 빌드 아카이브에서 전부 제외.
+/credentials/
+
+# apps/mobile/credentials/ — Firebase CLIENT config(google-services.json/.dev.json +
+#   GoogleService-Info.plist/.dev.plist)는 로컬 프로덕션 빌드가 필요로 하므로 **포함**한다
+#   (.gitignore 의 `credentials` 패턴이 git 커밋은 계속 막는다 — 여긴 EAS 빌드 전용).
+#   단, 서버 시크릿은 빌드에도 절대 넣지 않는다:
+apps/mobile/credentials/*service-account*.json
+apps/mobile/credentials/*oauth*.json
+apps/mobile/credentials/moyura-web-oauth.json
+apps/mobile/credentials/.DS_Store
+
+# ===========================================
+# Claude Code Configuration
+# ===========================================
+.claude/settings.local.json
+.claude/settings.local.*.json
+.claude/.env.local*
+.claude/local/
+.claude/plans/
+.claude/agent-memory/
+.claude/worktrees/
+
+# Skill-specific credentials
+.claude/skills/*/.env*
+.claude/skills/*/secrets/
+.claude/skills/*/*/*secret*
+.claude/skills/*/*/*key*
+.claude/skills/*/*/*token*
+!.claude/skills/*/modules/*token*.md
+
+# ===========================================
+# Local-Only Files (never sync via git pull)
+# ===========================================
+.moai/status_line.sh
+.moai/memory/
+.moai/worktrees/
+.moai/cache/
+
+# ===========================================
+# Evolution Telemetry (local-only usage data)
+# ===========================================
+.moai/evolution/telemetry/*.jsonl
+!.moai/evolution/telemetry/.gitkeep
+
+# ===========================================
+# Node.js (for docs/Nextra)
+# ===========================================
+node_modules/
+*.tsbuildinfo
+.tscache/
+.next/
+out/
+
+# ===========================================
+# Build Tools & Frameworks
+# ===========================================
+.turbo/
+.nuxt/
+dist-ssr/
+
+# ===========================================
+# Deployment & CI/CD
+# ===========================================
+.vercel/
+.netlify/
+.firebase/
+
+# ===========================================
+# Monorepo Tooling (pnpm + Nx)
+# ===========================================
+.nx/cache
+.nx/workspace-data
+.pnpm-store/
+.pnpm-debug.log*
+
+# Expo / React Native (root-level safety net)
+.expo/
+
+# Native build artifacts (iOS CocoaPods)
+**/ios/Pods/
