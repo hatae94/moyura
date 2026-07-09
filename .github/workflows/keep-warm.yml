@@ -1,0 +1,30 @@
+# Render 무료 플랜 콜드스타트 완화 — 백엔드를 주기적으로 핑해 15분 스핀다운을 막는다.
+#
+# 배경: Render 무료 Web Service 는 15분 유휴 시 스핀다운되고, 다음 요청은 수초~수십초
+#   콜드스타트가 걸린다. 앱을 열 때 웹뷰 로딩 스피너가 오래 도는 주요 원인.
+# 한계: GitHub Actions 예약(cron)은 지연/스킵될 수 있어(특히 프라이빗 레포 무료 러너)
+#   완벽한 keep-alive 는 아니다. 더 확실히 하려면 UptimeRobot/cron-job.org(무료, 5분 핑) 병행 권장.
+# 비용: 무료 Actions 분(약 10초/run × 6/시 × 24 ≈ 하루 24분)으로 여유. Vercel 은 스핀다운이
+#   없으므로 백엔드(Render)만 핑한다.
+name: keep-backend-warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" # 10분마다(GitHub 지연 가능 — 최선노력)
+  workflow_dispatch: {}
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping backend /health (warm the Render dyno)
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -m 60 --retry 2 --retry-delay 5 https://api.htyong.com/health || echo 000)
+          echo "health -> $code"
+          # 콜드스타트 중 첫 요청이 오래 걸려도 성공으로 간주(다음 실사용자 요청은 warm).
+          [ "$code" = "200" ] || echo "::warning::backend health not 200 (code=$code) — 콜드스타트 중이거나 다운 가능"
