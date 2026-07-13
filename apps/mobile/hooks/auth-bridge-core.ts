@@ -15,12 +15,7 @@
 
 import { isOAuthAuthorizeUrl, buildWebCallbackUrl } from "../lib/auth/oauth-bridge";
 import { constantTimeEquals } from "../lib/auth/bridge-protocol";
-import {
-  isCrossRoute,
-  routeForUrl,
-  detailRouteForUrl,
-  type AppRoute,
-} from "../lib/route-map-core";
+import { isCrossRoute, routeForUrl, type AppRoute } from "../lib/route-map-core";
 // 타입 전용 import — 컴파일 시 erase 되어 런타임에 oauth.ts(expo import)를 끌어오지 않는다
 // (vitest node 환경의 순수성 유지 — AC-S6). OAuthLaunchResult 는 oauth.ts 의 공개 타입이다.
 import type { OAuthLaunchResult } from "../lib/auth/oauth";
@@ -185,24 +180,12 @@ export interface WebViewDispatch {
   route: AppRoute;
 }
 
-/**
- * (SPEC-MOIM-003 REQ-MOIM3-003) 같은 탭 내 중첩 detail 라우트(`/home/[id]`) 로드를 네이티브 push
- * 라우트 전환으로 재디스패치하라는 결정. 교차 탭 전환(WebViewDispatch)과 달리 현재 탭 위에 detail 화면을
- * push 하므로 네이티브 back 이 list 로 복귀한다(expo-router Stack).
- */
-export interface WebViewPush {
-  action: "push";
-  route: AppRoute;
-  id: string;
-}
-
-/** decideWebViewLoad 의 결정 — 기존 3분기 + 교차 라우트 디스패치(MOBILE-003) + detail push(MOIM-003) 변형. */
+/** decideWebViewLoad 의 결정 — 기존 3분기 + 교차 라우트 디스패치(MOBILE-003) 변형. */
 export type WebViewLoadDecision =
   | "oauth-intercept"
   | "trusted-load"
   | "deny"
-  | WebViewDispatch
-  | WebViewPush;
+  | WebViewDispatch;
 
 /**
  * onShouldStartLoadWithRequest 의 in-WebView 로드 결정(R-T9 — WebView origin 잠금, C-2 +
@@ -212,21 +195,18 @@ export type WebViewLoadDecision =
  *   - `"oauth-intercept"`: GoTrue authorize URL — 시스템 브라우저 브리지로 인터셉트(R-V1/R-NC3 보존).
  *   - `{ action: "dispatch", route }`: (R-NC2) currentUrl 이 주어지고, 타깃이 신뢰 origin 의 교차 앱
  *     라우트면 in-WebView 로드 deny + 네이티브 라우트 디스패치. ctx.currentUrl 부재 시 비활성(회귀 0).
- *   - `{ action: "push", route, id }`: (MOIM-003 REQ-MOIM3-003) currentUrl 이 같은 탭 list(예: /home)이고
- *     타깃이 그 탭의 신뢰 origin 중첩 detail(/home/{id})이면 in-WebView 로드 deny + 네이티브 push 디스패치.
- *     ctx.currentUrl 부재 시 비활성(회귀 0).
- *   - `"trusted-load"`: 신뢰 WEB_URL origin 의 http(s) 로드 — in-WebView 허용.
+ *   - `"trusted-load"`: 신뢰 WEB_URL origin 의 http(s) 로드 — in-WebView 허용. 같은 탭 내 중첩 detail
+ *     (/home/{id})은 SPEC-MOBILE-NAV-001 단일 WebView 모델에서 soft-nav 로 in-WebView 유지되며, 네이티브
+ *     헤더 오버레이가 back 을 처리한다(별도 detail-push 라우트 폐기).
  *   - `"deny"`: 비신뢰 top-level http(s) origin — in-WebView 로드 거부(외부 브라우저 위임).
  *
- * 우선순위: OAuth 인터셉트 > 교차 라우트 디스패치 > detail push > origin 판정. OAuth/인증 플로우 내부
- * (authorize, /login, /auth/callback)는 디스패치/push 보다 우선·보존된다(R-NC3 예외). detail push 는
- * 같은 탭(route(currentUrl)===detailRoute)일 때만 — cross-tab detail(/explore→/home/123)은 push 아님
- * (MOBILE-003 crossroute 동작 보존, trusted-load). 비-http scheme/파싱 불가 URL(about:blank 등)은
- * `"trusted-load"`(허용)로 처리해 무회귀.
+ * 우선순위: OAuth 인터셉트 > 교차 라우트 디스패치 > origin 판정. OAuth/인증 플로우 내부
+ * (authorize, /login, /auth/callback)는 디스패치보다 우선·보존된다(R-NC3 예외). 비-http scheme/파싱
+ * 불가 URL(about:blank 등)은 `"trusted-load"`(허용)로 처리해 무회귀.
  *
  * @param url WebView 가 로드하려는 네비게이션 URL
  * @param ctx 신뢰 WEB_URL + supabase base (+ optional currentUrl)
- * @returns "oauth-intercept" | "trusted-load" | "deny" | { action: "dispatch", route } | { action: "push", route, id }
+ * @returns "oauth-intercept" | "trusted-load" | "deny" | { action: "dispatch", route }
  */
 // 오버로드: currentUrl 부재(기존 호출부)면 결정은 디스패치 변형이 없는 3분기로 좁혀진다 — 기존
 // 소비자(useAuthBridge 의 exhaustive switch)가 타입 회귀 없이 그대로 컴파일된다(type-backward-compat).
@@ -262,15 +242,8 @@ export function decideWebViewLoad(
       return { action: "dispatch", route };
     }
   }
-  // (MOIM-003 REQ-MOIM3-003) detail push: currentUrl 이 주어졌고 신뢰 origin 의 중첩 detail(/home/{id})이며
-  // 그 detail 의 부모 라우트가 현재 탭과 같으면 deny + 네이티브 push(현재 탭 위에 상세 화면). 다른 탭의
-  // detail(/explore→/home/123)이나 detail 이 아닌 경로는 건너뛴다(MOBILE-003 crossroute 동작 보존, 회귀 0).
-  if (ctx.currentUrl !== undefined && trusted) {
-    const detail = detailRouteForUrl(url);
-    if (detail !== null && routeForUrl(ctx.currentUrl) === detail.route) {
-      return { action: "push", route: detail.route, id: detail.id };
-    }
-  }
-  // http(s) top-level: 신뢰 origin 이면 허용, 그 외 거부(외부 브라우저 위임).
+  // http(s) top-level: 신뢰 origin 이면 허용, 그 외 거부(외부 브라우저 위임). 같은 탭 내 중첩 detail
+  // (/home/{id})은 SPEC-MOBILE-NAV-001 단일 WebView 모델에서 신뢰 origin 이므로 trusted-load 로 in-WebView
+  // 유지된다(soft-nav) — 네이티브 헤더 오버레이가 back 을 처리한다(별도 detail-push 라우트 폐기).
   return trusted ? "trusted-load" : "deny";
 }

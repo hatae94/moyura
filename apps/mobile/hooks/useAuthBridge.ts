@@ -91,11 +91,6 @@ export interface UseAuthBridgeArgs {
    */
   onCrossRouteDispatch?: (route: AppRoute) => void;
   /**
-   * (SPEC-MOIM-003 REQ-MOIM3-003, optional) 같은 탭 내 중첩 detail 로드 차단 시 네이티브 detail 라우트로
-   * push 한다(router.push — 네이티브 back 으로 list 복귀). getCurrentUrl 와 함께 주어질 때만 동작한다.
-   */
-  onDetailPush?: (route: AppRoute, id: string) => void;
-  /**
    * (SPEC-MOIM-011 후속, optional) 웹 초대 수락 페이지가 로드 시 초대 무효를 invite:invalid 로 통지하면
    * 호출(nonce 인증 통과분만). loggedIn(실제 계정 세션 여부)에 따라 호출부가 Alert→(tabs)/home 또는
    * (auth)/login 으로 분기한다.
@@ -172,7 +167,6 @@ export function useAuthBridge({
   onAuthSignal,
   getCurrentUrl,
   onCrossRouteDispatch,
-  onDetailPush,
   onInviteInvalid,
   onNavState,
 }: UseAuthBridgeArgs): UseAuthBridgeResult {
@@ -218,16 +212,11 @@ export function useAuthBridge({
         supabaseBaseUrl: SUPABASE_URL,
         currentUrl: getCurrentUrl?.(),
       });
-      // R-NC2/R-NC3 + MOIM-003: 교차 라우트(dispatch)/중첩 detail(push) — in-WebView 로드 차단 후
-      // 네이티브 라우트로 전환(WebView 자체 이동 금지).
+      // R-NC2/R-NC3: 교차 탭 라우트 디스패치 — in-WebView 로드 차단 후 네이티브 라우트로 전환
+      // (WebView 자체 이동 금지). 같은 탭 내 중첩 detail(/home/{id})은 SPEC-MOBILE-NAV-001 단일 WebView
+      // 모델에서 trusted-load 로 in-WebView 유지되므로 여기서 처리하지 않는다(별도 detail-push 라우트 폐기).
       if (typeof decision === "object") {
-        if (decision.action === "push") {
-          // MOIM-003 REQ-MOIM3-003: 같은 탭 위에 detail 화면 push(네이티브 back 으로 list 복귀).
-          onDetailPush?.(decision.route, decision.id);
-        } else {
-          // MOBILE-003 R-NC2: 교차 탭 라우트 전환.
-          onCrossRouteDispatch?.(decision.route);
-        }
+        onCrossRouteDispatch?.(decision.route);
         return false;
       }
       switch (decision) {
@@ -250,7 +239,7 @@ export function useAuthBridge({
       return false;
     },
     // nativeGoogleSignInRef 는 안정적 ref 라 의존성이 아니다(oauth-intercept 가 ref.current 로 호출).
-    [getCurrentUrl, onCrossRouteDispatch, onDetailPush],
+    [getCurrentUrl, onCrossRouteDispatch],
   );
 
   // 진행 중인 주입 재시도 타이머를 정리한다(핸드셰이크 해결/언마운트 시).

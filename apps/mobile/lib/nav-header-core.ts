@@ -29,9 +29,9 @@ export interface HeaderDecision {
 }
 
 // 헤더 필요 5페이지(REQ-MOBNAV-001)의 세그먼트 규칙(§Exclusions 와 1:1).
-// route-map-core 의 routeForUrl/detailRouteForUrl 은 home/explore/notifications/profile 앱 라우트
-// 계약을 담을 뿐(3세그먼트 moims/* 는 그쪽에서 null) 헤더 판정 범위와 다르다 — 그래서 헤더 5페이지는
-// 별도 세그먼트 매칭으로 판정한다(plan §4.1·route-map-core.ts:213 인용).
+// route-map-core 의 routeForUrl 은 home/explore/notifications/profile 앱 라우트 계약을 담을 뿐
+// (중첩 경로 /home/{id}·3세그먼트 moims/* 는 그쪽에서 null) 헤더 판정 범위와 다르다 — 그래서 헤더
+// 5페이지는 별도 세그먼트 매칭으로 판정한다(plan §4.1).
 //   2세그먼트: /home/{id}, /moims/new
 //   3세그먼트: /moims/{id}/{sub} where sub ∈ {chat, schedule, expenses}
 const MOIMS_SUB_HEADER_PAGES: ReadonlySet<string> = new Set<string>([

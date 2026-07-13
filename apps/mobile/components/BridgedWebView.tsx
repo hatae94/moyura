@@ -175,15 +175,6 @@ export function BridgedWebView({
     [router],
   );
 
-  // MOIM-003 REQ-MOIM3-003: 같은 탭 내 중첩 detail 차단 시 네이티브 detail 라우트로 push(WebView 자체
-  // 이동 금지). replace 가 아니라 push 라 네이티브 back 이 list(예: (tabs)/home)로 복귀한다(expo-router Stack).
-  const onDetailPush = useCallback(
-    (route: AppRoute, id: string): void => {
-      router.push(`/(tabs)/${route}/${encodeURIComponent(id)}` as never);
-    },
-    [router],
-  );
-
   // SPEC-MOIM-011 후속: 웹 초대 수락 페이지가 로드 시 무효 초대(미지/만료/폐기)를 invite:invalid 로 통지하면
   // 네이티브가 처리한다(웹 모달 대신 — 앱 컨텍스트). 로그인 여부와 무관하게 안내 Alert("유효하지 않은
   // 초대입니다.", backdrop 비활성 — cancelable:false)를 띄우고, 확인 시 목적지로 router.replace 한다:
@@ -232,8 +223,6 @@ export function BridgedWebView({
       // R-NC2: 디스패치 변형 활성화(currentUrl 제공) + 교차 라우트 → router.replace.
       getCurrentUrl: () => currentUrlRef.current,
       onCrossRouteDispatch,
-      // MOIM-003 REQ-MOIM3-003: 같은 탭 내 detail → router.push((tabs)/home/[id]).
-      onDetailPush,
       // SPEC-MOIM-011 후속: 무효 초대 통지 → 네이티브 Alert + (tabs)/home 또는 (auth)/login 전환.
       onInviteInvalid,
       // SPEC-MOBILE-NAV-001 REQ-MOBNAV-010: 웹 nav:state 보고 → 헤더 상태 갱신(NativeHeaderBar 구동).
