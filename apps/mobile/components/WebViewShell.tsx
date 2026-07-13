@@ -131,16 +131,35 @@ export const WebViewShell = forwardRef<WebView, WebViewShellProps>(function WebV
     onLoadStart?.();
   }, [coverOpacity, onLoadStart]);
 
-  // 로드 종료 시 커버를 0 으로 페이드아웃해 아래 WebView 콘텐츠를 드러낸 뒤 호출부 onLoadEnd(maybeInjectRestore 등)를
-  // 그대로 호출한다. opacity 는 네이티브 드라이버 지원(레이아웃 영향 없음) → useNativeDriver:true.
-  const handleLoadEnd = useCallback((): void => {
+  // 커버를 0 으로 페이드아웃해 아래 WebView 콘텐츠를 드러내는 단일 헬퍼(문서 로드 종료 + SPA soft-nav 정착 공용).
+  const fadeOutCover = useCallback((): void => {
     Animated.timing(coverOpacity, {
       toValue: coverOpacityOnLoadEnd(),
       duration: COVER_FADE_DURATION_MS,
       useNativeDriver: true,
     }).start();
+  }, [coverOpacity]);
+
+  // 로드 종료 시 커버를 페이드아웃한 뒤 호출부 onLoadEnd(maybeInjectRestore 등)를 그대로 호출한다.
+  const handleLoadEnd = useCallback((): void => {
+    fadeOutCover();
     onLoadEnd?.();
-  }, [coverOpacity, onLoadEnd]);
+  }, [fadeOutCover, onLoadEnd]);
+
+  // [FIX — soft-nav 커버 정지] Android WebView 는 웹 SPA soft-nav(history.pushState — Next <Link> 클라이언트 전환)에서
+  // onLoadStart 는 발화하나 onLoadEnd 를 발화하지 않는다. 그 결과 커버가 불투명(1)으로 리셋된 뒤 걷히지 않아,
+  // 콘텐츠가 DOM 에 온전히 렌더됐는데도 로딩 커버(스피너)가 영구히 가린다(모임 상세 진입 = 무한 스피너의 실제 원인).
+  // onNavigationStateChange 는 soft-nav 에도 발화하므로, 네비게이션이 정착(!loading)하면 커버를 페이드아웃한다
+  // (문서 로드는 onLoadEnd 가, soft-nav 는 여기서 — 이중 경로로 커버가 반드시 걷힌다). 그 뒤 호출부 콜백을 위임한다.
+  const handleNavigationStateChange = useCallback(
+    (nav: WebViewNavigation): void => {
+      if (!nav.loading) {
+        fadeOutCover();
+      }
+      onNavigationStateChange?.(nav);
+    },
+    [fadeOutCover, onNavigationStateChange],
+  );
 
   return (
     // safe-area 인셋 적용 래퍼(네이티브 SafeAreaView). edges 미지정 시 전 엣지가 기본값이다.
@@ -188,8 +207,8 @@ export const WebViewShell = forwardRef<WebView, WebViewShellProps>(function WebV
         renderLoading={() => <LoadingOverlay />}
         // R-O1/R-T9: authorize 인터셉트 + WebView origin 잠금(비신뢰 in-WebView 로드 거부).
         onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
-        // R-U1: 히스토리 추적.
-        onNavigationStateChange={onNavigationStateChange}
+        // R-U1: 히스토리 추적 + [FIX] soft-nav 정착(!loading) 시 로딩 커버 페이드아웃(onLoadEnd 미발화 보완).
+        onNavigationStateChange={handleNavigationStateChange}
         // R-T5/R-R3/R-N4: 웹→네이티브 브리지 메시지 수신(SPEC-MOBILE-002).
         onMessage={onMessage}
         // R-U3 + R-NF2(T-003): 로드 시작 시 커버 리셋(불투명), 종료 시 커버 페이드아웃 후 호출부 콜백 위임.
