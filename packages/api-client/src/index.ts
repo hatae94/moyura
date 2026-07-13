@@ -60,7 +60,16 @@ export interface ApiClientOptions {
    * 미지정이거나 토큰이 없으면 Authorization 헤더 없이 호출한다(getHealth 등 public 경로 back-compat).
    */
   getToken?: TokenProvider;
+  /**
+   * 요청 타임아웃(ms). 초과하면 요청을 중단하고 ApiTimeoutError 를 던진다(무한 대기 방지 —
+   * SSR fetch 가 콜드 백엔드/네트워크 지연에 영구 pending 되어 로딩 UI 가 멈추는 것을 차단). 기본 8000ms.
+   * 0/음수면 타임아웃 비활성(무제한 — 비권장). 서버(SSR)는 플랫폼 함수 상한보다 짧게 두어 자체 재시도 UI 로 전환한다.
+   */
+  timeoutMs?: number;
 }
+
+/** 요청 타임아웃 기본값(ms). SSR fetch 무한 대기를 막는 상한 — 플랫폼 함수 상한(예: Vercel 10s)보다 짧게 둔다. */
+const DEFAULT_TIMEOUT_MS = 8000;
 
 /** API 호출 실패 시 던지는 에러. 응답 status/본문을 함께 보존한다. */
 export class ApiError extends Error {
@@ -71,6 +80,21 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+
+/**
+ * 요청이 타임아웃 상한을 초과해 중단됐을 때 던지는 에러. HTTP status 가 없는 일시적 실패이며(네트워크/콜드
+ * 커넥션 지연 등), 호출자는 이를 4xx/5xx 응답 오류(ApiError)와 구분해 재시도 UI 로 전환하거나 fail-closed
+ * 리다이렉트 대신 에러 경계로 승격해야 한다(로그인 튕김·404 오표시 방지).
+ */
+export class ApiTimeoutError extends Error {
+  constructor(
+    message: string,
+    readonly timeoutMs: number,
+  ) {
+    super(message);
+    this.name = 'ApiTimeoutError';
   }
 }
 
@@ -88,12 +112,14 @@ export class ApiClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly getToken?: TokenProvider;
+  private readonly timeoutMs: number;
 
   constructor(options: ApiClientOptions) {
     if (!options.baseUrl) {
       throw new Error('@moyura/api-client: baseUrl 이 필요합니다.');
     }
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     // 기본 fetch 는 globalThis 에 바인딩한다. 브라우저(WHATWG fetch)는 this===window 를 요구하므로
     // detached 참조(`globalThis.fetch`)를 그대로 호출하면 "Illegal invocation" TypeError 가 난다
     // (Node 의 fetch 는 관대해 서버 컴포넌트에서는 드러나지 않았다 — 채팅이 첫 브라우저 호출에서 노출).
@@ -127,11 +153,52 @@ export class ApiClient {
       }
     }
 
-    const response = await this.fetchImpl(`${this.baseUrl}${String(path)}`, {
-      ...init,
-      method: String(method).toUpperCase(),
-      headers,
-    });
+    // 무한 대기 방지: AbortController + setTimeout 으로 요청에 타임아웃 상한을 건다. AbortSignal.timeout
+    // 정적 메서드 대신 수동 컨트롤러를 쓰는 이유 — RN/Hermes 등 런타임 호환성 + 호출자 signal 과의 결합.
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer =
+      this.timeoutMs > 0
+        ? setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+          }, this.timeoutMs)
+        : undefined;
+    // 호출자가 자체 signal 을 주면 그 abort 도 우리 컨트롤러로 전파한다(타임아웃과 공존 — 호출자 취소 보존).
+    const callerSignal = init?.signal;
+    if (callerSignal) {
+      if (callerSignal.aborted) {
+        controller.abort();
+      } else {
+        callerSignal.addEventListener('abort', () => controller.abort(), {
+          once: true,
+        });
+      }
+    }
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}${String(path)}`, {
+        ...init,
+        method: String(method).toUpperCase(),
+        headers,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      // 타임아웃으로 인한 abort 는 전용 에러로 승격해 호출자가 일시적 실패(재시도 대상)로 구분하게 한다.
+      if (timedOut) {
+        throw new ApiTimeoutError(
+          `요청 시간 초과: ${String(method).toUpperCase()} ${String(path)} (${this.timeoutMs}ms)`,
+          this.timeoutMs,
+        );
+      }
+      // 그 외(네트워크 실패, 호출자 abort 등)는 원본 에러를 그대로 전파한다.
+      throw err;
+    } finally {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    }
 
     const text = await response.text();
     const body: unknown = text ? JSON.parse(text) : undefined;

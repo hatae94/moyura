@@ -11,7 +11,12 @@ import { cache } from "react";
 
 import { redirect } from "next/navigation";
 
-import { ApiError, createApiClient, type ProfileResponse } from "@moyura/api-client";
+import {
+  ApiError,
+  ApiTimeoutError,
+  createApiClient,
+  type ProfileResponse,
+} from "@moyura/api-client";
 import type { Session } from "@supabase/supabase-js";
 
 import { API_BASE_URL } from "@/lib/env";
@@ -60,6 +65,11 @@ export const requireNamedSession = cache(
       // 백엔드 401/오류는 미인증으로 간주해 /login 으로 보낸다(토큰 내용 비노출 — R-A9).
       if (err instanceof ApiError && err.status === 401) {
         redirect("/login");
+      }
+      // 일시적 타임아웃(콜드 커넥션/네트워크 지연)은 인증 실패가 아니므로 /login 으로 튕기지 않고
+      // 에러 경계(app/error.tsx)로 승격해 재시도 UI 를 노출한다 — 일시 장애가 로그아웃처럼 보이는 것을 막는다.
+      if (err instanceof ApiTimeoutError) {
+        throw err;
       }
       // 그 외 오류도 보호 경로 진입을 차단한다(가드 fail-closed).
       redirect("/login");

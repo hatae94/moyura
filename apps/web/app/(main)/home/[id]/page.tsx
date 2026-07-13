@@ -69,8 +69,10 @@ export default async function MoimDetailPage({
       const isRealAccount = session.user?.is_anonymous !== true;
       redirect(isRealAccount ? "/home" : "/login");
     }
-    // 그 외 오류도 상세 진입을 차단한다(fail-closed — 토큰/오류 상세 비노출).
-    notFound();
+    // 일시적 실패(타임아웃/네트워크/5xx — status 404/403 아님)는 404 로 숨기지 않고 에러 경계(app/error.tsx)로
+    // 승격해 재시도 UI 를 노출한다. 타임아웃 없는 fetch 가 콜드 백엔드에 영구 pending 되어 로딩이 멈추던 근인을
+    // api-client 타임아웃(ApiTimeoutError)으로 끊고, 여기서 사용자가 갇히지 않게 재시도로 연결한다.
+    throw err;
   }
 
   // SPEC-MOIM-006: 투표 목록 + 결과(multiSelect + 호출자 myVotes 포함)를 서버에서 조회한다. 멤버십은 위 getMoim 이 이미
