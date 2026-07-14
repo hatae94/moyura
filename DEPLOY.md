@@ -170,6 +170,14 @@ pnpm --filter @moyura/backend exec prisma migrate deploy
 - 빌드타임에 **`NEXT_PUBLIC_*` 3개**(`NEXT_PUBLIC_API_BASE_URL` / `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`)가 인라인되므로 Vercel env 에 설정 후 **redeploy** 한다(기존 빌드엔 소급 안 됨, Production/Preview 스코프 주의).
 - 백엔드 API(openapi) 변경 시: `pnpm exec nx run api-client:generate` 재실행 → `schema.d.ts` 재커밋(typecheck 가 드리프트 감지).
 
+#### 함수 콜드 스타트 (성능 — 2026-07-14 실측)
+
+Vercel 서버리스 함수는 유휴 후 첫 요청에 **콜드 스타트**가 붙는다. prod 실측(`curl https://htyong.com/login`): call1 **~1.85s** → call2 ~0.55s → call3 ~0.23s(`x-vercel-id: icn1::sin1` — 함수 리전 sin1). 이는 "모임 상세 첫 진입이 느리다"의 큰 부분이며, SSR 워터폴/스트리밍 최적화(warm 경로)로는 해결되지 않는다.
+
+- [권장] **Fluid Compute 활성**: Vercel Dashboard → 프로젝트 → Settings → Functions → **Fluid Compute** ON. 인스턴스 재사용·프리워밍으로 콜드 스타트를 크게 줄인다(신규 프로젝트 기본값). **이 프로젝트의 콜드 스타트 대응 1순위.**
+- keep-warm cron ping 은 이 앱엔 **부적합**: 느린 라우트 `/home/[id]` 가 인증 필요라 외부 핑으로 직접 못 깨우고, Vercel 의 라우트-함수 번들링상 공개 라우트를 핑해도 `(main)` 그룹 함수가 워밍된다는 보장이 없다.
+- 검증: 유휴 후 첫 진입 vs 반복 진입 델타 측정. Fluid Compute ON 후 첫 진입 콜드 페널티(~1.8s)가 사라지는지 확인.
+
 ### 모바일 → EAS
 
 - `apps/mobile/eas.json` 의 `production` 프로파일 `env`(EXPO_PUBLIC_* 6개: web/API 도메인, Supabase URL/anon, Google client id 2개)를 prod 값으로 채운 뒤 `eas build --profile production`.
