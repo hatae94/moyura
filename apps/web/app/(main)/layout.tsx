@@ -16,6 +16,7 @@ import { headers } from "next/headers";
 import { createApiClient } from "@moyura/api-client";
 
 import { requireNamedSession } from "@/lib/auth/require-named-session";
+import { createClient } from "@/lib/supabase/server";
 import { API_BASE_URL } from "@/lib/env";
 import { getUnreadCount } from "@/lib/notifications/api";
 
@@ -39,25 +40,39 @@ export default async function MainLayout({
   // 차단한다('unsafe-inline' 은 nonce 존재 시 무시됨) — 누락 시 셸 모드 탭바 숨김이 통째로 무력화.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
+  // 세션 토큰을 getSession()(로컬 쿠키 읽기, 무네트워크)으로 먼저 확보해 이름 가드(GET /me)와 미읽음
+  // 카운트(GET /notifications/unread-count)를 병렬 발사한다 — 둘 다 토큰만 필요하고 서로 독립적이라
+  // 기존의 직렬 2웨이브(가드 → 카운트)를 1웨이브로 줄인다(모든 (main) 라우트 −1 RTT). requireNamedSession
+  // 이 세션/이름 미충족 시 redirect 의 권위이며(둘 다 fire 되지만 redirect 시 카운트 결과는 폐기), getSession
+  // 은 로컬이라 requireNamedSession 내부 getSession 과 중복돼도 저렴하다.
+  const supabase = await createClient();
+  const {
+    data: { session: cookieSession },
+  } = await supabase.auth.getSession();
+
+  // Notifications M4b: 하단 탭 배지의 초기 미읽음 카운트를 서버에서 fetch 한다(하드코딩 mock 대체).
+  //   graceful degrade: 조회 실패/미인증은 셸 진입을 절대 막지 않는다 → 0(배지 숨김)으로 폴백. 이후 실시간
+  //   신호(user:{sub} → NotificationCountProvider 재조회)가 자가 치유한다. 세션이 없으면 아래
+  //   requireNamedSession 이 /login 으로 보내므로 0 으로 둔다. 토큰은 Bearer 헤더로만 전달(R-D4).
+  const unreadCountPromise: Promise<number> = cookieSession
+    ? getUnreadCount(
+        createApiClient({
+          baseUrl: API_BASE_URL,
+          getToken: () => cookieSession.access_token,
+        }),
+      ).catch((err) => {
+        // 비차단 폴백(0). 관측을 위해 서버 로그만 남긴다(토큰/민감정보 미노출).
+        console.error("[moyura/web] 초기 미읽음 알림 카운트 조회 실패 — 배지 0 으로 폴백", err);
+        return 0;
+      })
+    : Promise.resolve(0);
+
   // SPEC-MOBILE-004 REQ-MOB4-004: 세션 가드(R-WB1)에 이름 온보딩 가드를 합친다.
   //   세션 없음 → /login, 세션 있음 + Profile.name 미보유 → /onboarding(이 (main) 그룹 밖).
   // 데스크톱 웹도 이 server-side 가드로 자동 커버된다(AC-7). 미충족 시 내부에서 redirect 한다.
+  // 이 GET /me 는 위 unreadCountPromise(GET /notifications/unread-count)와 병렬로 진행된다.
   const { session } = await requireNamedSession();
-
-  // Notifications M4b: 하단 탭 배지의 초기 미읽음 카운트를 서버에서 fetch 한다(하드코딩 mock 대체).
-  //   graceful degrade: 조회 실패는 셸 진입을 절대 막지 않는다 → 0(배지 숨김)으로 폴백. 이후 실시간
-  //   신호(user:{sub} → NotificationCountProvider 재조회)가 자가 치유한다. 토큰은 Bearer 헤더로만 전달(R-D4).
-  let initialUnreadCount = 0;
-  try {
-    const api = createApiClient({
-      baseUrl: API_BASE_URL,
-      getToken: () => session.access_token,
-    });
-    initialUnreadCount = await getUnreadCount(api);
-  } catch (err) {
-    // 비차단 폴백(0). 관측을 위해 서버 로그만 남긴다(토큰/민감정보 미노출).
-    console.error("[moyura/web] 초기 미읽음 알림 카운트 조회 실패 — 배지 0 으로 폴백", err);
-  }
+  const initialUnreadCount = await unreadCountPromise;
 
   return (
     // Notifications M4b: 셸 전체를 카운트 프로바이더로 감싼다. children(서버 컴포넌트)은 그대로 통과하고,

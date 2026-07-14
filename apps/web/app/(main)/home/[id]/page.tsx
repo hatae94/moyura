@@ -12,6 +12,7 @@
 //
 // 비멤버/미존재 안전 처리(REQ-MOIM3-005): 백엔드가 비멤버 403·미존재 404 를 반환하며(인가 단일 출처,
 // 약화하지 않는다), 양쪽 모두 notFound() 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
+import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { Calendar, MapPin } from "lucide-react";
 
@@ -52,12 +53,31 @@ export default async function MoimDetailPage({
     getToken: () => session.access_token,
   });
 
-  // 상세 + 멤버 병렬 조회. 비멤버 403 는 로그인 상태로 리다이렉트, 미존재 404 는 notFound() 로 처리한다.
-  let moim: MoimDetail;
-  let members: MoimMember[];
-  try {
-    [moim, members] = await Promise.all([getMoim(api, id), getMoimMembers(api, id)]);
-  } catch (err) {
+  // 모임·멤버·투표·일정을 단일 파(wave)로 동시 발사한다(SSR 워터폴 축소). 셸(헤더/일정/멤버)은 인가 게이트
+  // (moim/members)만 await 해 즉시 렌더하고, 가장 무거운 투표 섹션(자체 fetch + 큰 클라 섬 + realtime 구독)은
+  // <Suspense>로 스트리밍한다 — 첫 의미있는 페인트가 polls 완료를 기다리지 않는다. 네 fetch 모두 여기서 동시
+  // 시작되므로(단일 웨이브) polls 도 셸이 준비될 즈음 대부분 해소돼 있다.
+  const moimP = getMoim(api, id);
+  const membersP = getMoimMembers(api, id);
+  const scheduleP = getSchedule(api, id);
+  // polls 는 아래 <Suspense> 경계 뒤에서 소비된다. 게이트가 notFound/redirect 로 단락돼도 unhandled
+  // rejection 이 나지 않도록, 그리고 조회 실패 시 graceful degrade(빈 배열 — "아직 투표가 없어요")하도록
+  // 여기서 catch 한다.
+  const pollsP: Promise<PollWithResults[]> = listPolls(api, id).catch(() => []);
+
+  // 인가 게이트: moim/members 는 필수. Next 16 스트리밍은 Suspense 가 스트림을 시작하면 HTTP 상태코드를
+  // 커밋하므로, 404/403 분기는 어떤 Suspense 경계보다 먼저(여기서) 이뤄져야 한다. schedule 은 셸 상단 위젯이라
+  // 함께 게이트에서 해소한다(graceful degrade — 실패 시 undefined → 위젯 미렌더).
+  const [moimSettled, membersSettled, scheduleSettled] = await Promise.allSettled([
+    moimP,
+    membersP,
+    scheduleP,
+  ]);
+
+  // moim/members 는 필수. 각각 실패 시 상태코드로 분기한다. raise 는 never 반환 함수 선언이라(화살표
+  // const 는 TS never-내로잉이 불안정 — 함수 선언만 신뢰 가능), 두 if 이후 moimSettled/membersSettled 는
+  // fulfilled 로 좁혀진다(TS 제어흐름 내로잉).
+  function raiseMoimAccessError(err: unknown): never {
     const status = moimErrorStatus(err);
     if (status === 404) {
       // 모임이 존재하지 않음 → 404 페이지(콘텐츠/토큰 비노출).
@@ -74,18 +94,12 @@ export default async function MoimDetailPage({
     // api-client 타임아웃(ApiTimeoutError)으로 끊고, 여기서 사용자가 갇히지 않게 재시도로 연결한다.
     throw err;
   }
+  if (moimSettled.status === "rejected") raiseMoimAccessError(moimSettled.reason);
+  if (membersSettled.status === "rejected") raiseMoimAccessError(membersSettled.reason);
 
-  // SPEC-MOIM-006: 투표 목록 + 결과(multiSelect + 호출자 myVotes 포함)를 서버에서 조회한다. 멤버십은 위 getMoim 이 이미
-  // 통과시켰으므로(같은 assertMember 게이트) 정상 멤버에게는 성공한다. poll 조회 실패는 상세 전체를 막지 않고
-  // 빈 배열로 graceful degrade 한다("아직 투표가 없어요" — 허위 값 금지). 인가는 위에서 이미 강제됐다.
-  // 투표 + 일정 요약을 병렬 조회. 각각 실패해도 상세 전체는 막지 않는다(graceful degrade — 인가는 위에서 강제됨).
-  // polls 실패 → 빈 배열("아직 투표 없음"). schedule 실패 → undefined(요약 위젯 미렌더, 오해 소지 있는 CTA 방지).
-  const [pollsSettled, scheduleSettled] = await Promise.allSettled([
-    listPolls(api, id),
-    getSchedule(api, id),
-  ]);
-  const polls: PollWithResults[] =
-    pollsSettled.status === "fulfilled" ? pollsSettled.value : [];
+  const moim: MoimDetail = moimSettled.value;
+  const members: MoimMember[] = membersSettled.value;
+  // schedule graceful degrade: 실패 → undefined(요약 위젯 미렌더, 오해 소지 있는 CTA 방지).
   const schedule: ScheduleEvent | null | undefined =
     scheduleSettled.status === "fulfilled" ? scheduleSettled.value.schedule : undefined;
 
@@ -167,17 +181,59 @@ export default async function MoimDetailPage({
         </section>
 
         {/* SPEC-MOIM-006/007: 투표 섹션(Client 섬). 투표 목록·득표 막대·내 표 강조·단일/다중 투표·마감·생성 폼.
-            currentUserId(세션 user.id = JWT sub) 는 생성자 전용 "마감하기" 버튼 노출 판정에 쓰인다(직렬화 string). */}
-        <PollsSection
-          moimId={moim.id}
-          polls={polls}
-          currentUserId={session.user.id}
-          accessToken={session.access_token}
-        />
+            currentUserId(세션 user.id = JWT sub) 는 생성자 전용 "마감하기" 버튼 노출 판정에 쓰인다(직렬화 string).
+            가장 무거운 섹션이라 <Suspense>로 스트리밍한다 — 셸(헤더/일정/멤버)이 먼저 페인트되고, polls 해소 시
+            아래 자리표시자가 실제 투표 섹션으로 교체된다(첫 페인트가 polls fetch 를 기다리지 않음). */}
+        <Suspense fallback={<PollsSectionFallback />}>
+          <PollsSectionStreamed
+            pollsPromise={pollsP}
+            moimId={moim.id}
+            currentUserId={session.user.id}
+            accessToken={session.access_token}
+          />
+        </Suspense>
       </div>
 
       {/* 우측 하단 플로팅 speed dial — 채팅/일정 조율/경비 액션(fixed, 문서 흐름 밖). */}
       <MoimActionDock moimId={moim.id} />
     </div>
+  );
+}
+
+/**
+ * 투표 섹션 스트리밍 래퍼(Server) — 상위에서 시작한 pollsP 를 <Suspense> 경계 안에서 await 해 기존
+ * 클라이언트 <PollsSection> 에 값(직렬화 가능)으로 전달한다. 이 컴포넌트가 suspend 되는 동안 상위 셸은 이미
+ * 페인트돼 있고, polls 해소 시 이 서브트리만 스트리밍돼 자리표시자를 교체한다(sibling 셸을 블록하지 않음).
+ */
+async function PollsSectionStreamed({
+  pollsPromise,
+  moimId,
+  currentUserId,
+  accessToken,
+}: {
+  pollsPromise: Promise<PollWithResults[]>;
+  moimId: string;
+  currentUserId: string;
+  accessToken: string | null;
+}) {
+  const polls = await pollsPromise;
+  return (
+    <PollsSection
+      moimId={moimId}
+      polls={polls}
+      currentUserId={currentUserId}
+      accessToken={accessToken}
+    />
+  );
+}
+
+/** 투표 섹션 스트리밍 폴백 — 헤더 + 카드 자리표시자(loading.tsx 와 동일한 skeleton 시각 언어, 공간 예약으로 CLS 완화). */
+function PollsSectionFallback() {
+  return (
+    <section className="flex flex-col gap-3" aria-busy="true" aria-label="투표 불러오는 중">
+      <div className="skeleton h-5 w-20 rounded-md" />
+      <div className="skeleton h-28 w-full rounded-2xl" />
+      <div className="skeleton h-28 w-full rounded-2xl" />
+    </section>
   );
 }
