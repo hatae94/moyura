@@ -28,11 +28,18 @@ describe('ProfileService', () => {
   // SPEC-ACCOUNT-001 T-02: withdrawnAccount.findUnique 툼스톤 선조회 스텁을 함께 제공한다.
   //   - tombstone=false(기본): 툼스톤 없음 → 기존 upsert 정상 경로.
   //   - tombstone=true: 툼스톤 존재 → upsert 미호출 + AccountWithdrawnException.
+  // SPEC-MOIM-DETAIL 성능 최적화(핫패스): upsertBySub 는 read-first 다 — profile.findUnique 로 존재를 먼저 확인해
+  // 히트면 그대로 반환(툼스톤 조회 + upsert 쓰기 생략). existingProfile 인자로 이 read-hit 를 흉내낸다(기본 미존재=null).
   function makePrisma(
     seedName: string | null = null,
     tombstone = false,
+    existingProfile: Profile | null = null,
   ): {
     prisma: PrismaService;
+    findProfile: jest.Mock<
+      Promise<Profile | null>,
+      [{ where: { id: string } }]
+    >;
     upsert: jest.Mock<Promise<Profile>, [UpsertArg]>;
     update: jest.Mock<Promise<Profile>, [UpdateArg]>;
     findTombstone: jest.Mock<
@@ -40,6 +47,10 @@ describe('ProfileService', () => {
       [FindTombstoneArg]
     >;
   } {
+    const findProfile = jest.fn<
+      Promise<Profile | null>,
+      [{ where: { id: string } }]
+    >(() => Promise.resolve(existingProfile));
     const upsert = jest.fn<Promise<Profile>, [UpsertArg]>((arg) =>
       Promise.resolve({
         id: arg.where.id,
@@ -69,10 +80,10 @@ describe('ProfileService', () => {
       ),
     );
     const prisma = {
-      profile: { upsert, update },
+      profile: { findUnique: findProfile, upsert, update },
       withdrawnAccount: { findUnique: findTombstone },
     } as unknown as PrismaService;
-    return { prisma, upsert, update, findTombstone };
+    return { prisma, findProfile, upsert, update, findTombstone };
   }
 
   it('검증된 sub를 id로 UPSERT한다 (AC-B3)', async () => {
@@ -142,6 +153,53 @@ describe('ProfileService', () => {
     const callArg = upsert.mock.calls[0][0];
     expect(Object.keys(callArg.create)).toEqual(['id']);
     expect(callArg.update).toEqual({});
+  });
+
+  // --- SPEC-MOIM-DETAIL 성능 최적화(핫패스): read-first ---
+
+  it('profile 이 이미 존재하면 그대로 반환하고 툼스톤 조회·upsert 쓰기를 모두 건너뛴다', async () => {
+    const existing: Profile = {
+      id: 'sub-A',
+      name: '홍길동',
+      createdAt: new Date('2026-06-02T00:00:00Z'),
+    };
+    const { prisma, findProfile, upsert, findTombstone } = makePrisma(
+      null,
+      false,
+      existing,
+    );
+    const service = new ProfileService(prisma);
+
+    const profile = await service.upsertBySub('sub-A');
+
+    // 존재하는 profile 을 그대로 반환한다(name 보존).
+    expect(profile).toEqual(existing);
+    // read-first: findUnique 는 검증된 sub 를 id 키로 1회 조회한다.
+    expect(findProfile).toHaveBeenCalledWith({ where: { id: 'sub-A' } });
+    // 핫패스 최적화: 존재 히트면 툼스톤 조회(read)와 upsert(write)를 모두 생략한다.
+    expect(findTombstone).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('profile 미존재(read miss)면 툼스톤 확인 후 upsert 로 생성한다(최초 인증 회귀)', async () => {
+    const { prisma, findProfile, upsert, findTombstone } = makePrisma(
+      null,
+      false,
+      null,
+    );
+    const service = new ProfileService(prisma);
+
+    const profile = await service.upsertBySub('sub-new');
+
+    // miss → 툼스톤 확인 → upsert 생성 순서를 모두 거친다.
+    expect(findProfile).toHaveBeenCalledWith({ where: { id: 'sub-new' } });
+    expect(findTombstone).toHaveBeenCalledWith({ where: { sub: 'sub-new' } });
+    expect(upsert).toHaveBeenCalledWith({
+      where: { id: 'sub-new' },
+      create: { id: 'sub-new' },
+      update: {},
+    });
+    expect(profile.id).toBe('sub-new');
   });
 
   it('멱등: 동일 sub 재호출 시에도 where=id 키로만 동작한다 (AC-B4)', async () => {

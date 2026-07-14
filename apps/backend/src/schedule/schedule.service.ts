@@ -126,6 +126,17 @@ export class ScheduleService {
     moimId: string,
   ): Promise<ScheduleEventWithSlots | null> {
     await this.moim.assertMember(sub, moimId);
+    return this.getScheduleUnchecked(sub, moimId);
+  }
+
+  // @MX:NOTE: [AUTO] SPEC-MOIM-DETAIL 성능 최적화: 인가를 건너뛴 일정 조회(getDetail 전용).
+  // getDetail 이 상단에서 assertMember 를 이미 1회 통과한 뒤 호출한다 — 반드시 게이트 이후에만 사용해야 한다.
+  // 공개 getSchedule 은 게이트를 유지한다. 이 변형은 assertMember 만 생략하고 이벤트 조회 + SAFETY 슬롯 필터
+  // (getHiddenUserIds) 의미론은 완전히 동일하게 유지한다(byte-identical 응답 — 미설정이면 null).
+  async getScheduleUnchecked(
+    sub: string,
+    moimId: string,
+  ): Promise<ScheduleEventWithSlots | null> {
     const event = await this.prisma.scheduleEvent.findUnique({
       where: { moimId },
       include: { slots: true },

@@ -23,6 +23,18 @@ export class ProfileService {
   // [동시성] Prisma upsert는 id(= sub) PK 유일성에 의존하는 원자적 연산이다. 동일 신규 sub의
   // 동시 요청에도 중복 row가 생기지 않으며 애플리케이션 락을 쓰지 않는다(R-B4/B5).
   async upsertBySub(sub: string): Promise<Profile> {
+    // @MX:NOTE: [AUTO] 성능 최적화(핫패스): GET /me 는 requireNamedSession 이 인증 웹 페이지마다 호출하므로
+    // 매 페이지 로드가 이 경로를 탄다. profile 이 이미 존재하면 그것을 그대로 반환하고 툼스톤 조회 + upsert 쓰기를
+    // 모두 건너뛴다(cross-region DB 왕복: 예전 read+write 2회 → 읽기 히트 시 read 1회). 존재하는 profile 은 탈퇴
+    // 툼스톤일 수 없다 — 탈퇴 처리(SPEC-ACCOUNT-001)가 profile 을 삭제하기 때문이다(부활 차단 불변식 보존).
+    const existing = await this.prisma.profile.findUnique({
+      where: { id: sub },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    // profile 미존재(최초 인증 또는 탈퇴 후). 여기서만 툼스톤을 확인하고 생성한다.
     // SPEC-ACCOUNT-001 T-02: 툼스톤 선조회(부활 차단, REQ-ACCOUNT-003). 탈퇴 처리된 sub는
     // profile을 재생성하지 않고 계정 소멸 신호(410)를 던진다 — 잔존 토큰의 GET /me가 유예 창
     // 내에서 PII를 부활시키는 것을 구조적으로 막는다. sub는 가드-검증된 값만 전달된다.
@@ -33,10 +45,10 @@ export class ProfileService {
       throw new AccountWithdrawnException();
     }
 
+    // upsert 유지(create 대신) — findUnique 와 create 사이의 동시성 경합에도 id PK 유일성 기반 멱등이다
+    // (동일 신규 sub 동시 요청 시 중복 row 생성 방지, R-B4/B5). create/update 모두 id만 다룬다(mass-assignment 차단).
     return this.prisma.profile.upsert({
       where: { id: sub },
-      // create/update 모두 id만 다룬다 — 클라이언트 입력을 끼워 넣지 않는다(R-B3/M-5).
-      // update:{}이므로 기존 name은 건드리지 않고 그대로 보존한다(SPEC-MOBILE-004 T-001 UPSERT preserve).
       create: { id: sub },
       update: {},
     });

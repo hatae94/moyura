@@ -45,6 +45,11 @@ describe('/me (통합 — 가드 배선 + UPSERT 키 출처)', () => {
 
     const fakePrisma = {
       profile: {
+        // SPEC-MOIM-DETAIL 성능 최적화(핫패스): upsertBySub 가 read-first 로 먼저 조회한다.
+        // 히트(store 존재)면 그 profile 을 그대로 반환해 툼스톤 조회·upsert 를 건너뛴다(실제 DB 동작 미러).
+        findUnique: jest.fn((arg: { where: { id: string } }) =>
+          Promise.resolve(store.get(arg.where.id) ?? null),
+        ),
         upsert: jest.fn(
           (arg: { where: { id: string }; create: { id: string } }) => {
             lastUpsertArg = arg;

@@ -95,13 +95,27 @@ export class MoimService {
   // @MX:REASON: "모임 없음 → 404, 비멤버 → 403" 판정의 유일한 진입점. 각 도메인이 멤버십 검사를 따로
   // 구현하면 드리프트가 생기므로 여기서만 검사한다. 미인증(401)은 라우트 가드가 선처리한다.
   async assertMember(sub: string, moimId: string): Promise<void> {
-    // 존재하지 않는 모임은 멤버십 판정 이전에 404로 거른다(엣지 케이스).
-    await this.requireMoim(moimId);
+    // 판정 자체는 assertMemberReturningMoim 이 단일 출처다 — void 계약만 유지하기 위해 반환 moim 을 버린다.
+    await this.assertMemberReturningMoim(sub, moimId);
+  }
+
+  // @MX:NOTE: [AUTO] 멤버십 인가 + moim 반환의 내부 헬퍼(assertMember/getMoim 공유). "모임 조회 → 멤버십 판정"을
+  // 정확히 1회씩만 수행한다(SPEC-MOIM-DETAIL 성능 최적화). getMoim 이 예전엔 assertMember(requireMoim=moim read)
+  // 후 requireMoim 을 또 호출해 moim 을 두 번 읽었다(cross-region DB 왕복 2배). requireMoim 이 이미 moim 을
+  // 반환하므로 그 결과를 그대로 흘려보내면 판정과 반환이 한 번의 read 로 합쳐진다. "없는 모임 404 → 비멤버 403"
+  // 판정 순서/의미는 불변(공개 계약은 assertMember/getMoim ANCHOR 가 유지).
+  private async assertMemberReturningMoim(
+    sub: string,
+    moimId: string,
+  ): Promise<Moim> {
+    // 존재하지 않는 모임은 멤버십 판정 이전에 404로 거른다(엣지 케이스). requireMoim 이 moim 을 반환한다.
+    const moim = await this.requireMoim(moimId);
     const membership = await this.findMembership(sub, moimId);
     if (!membership) {
       // 인증되었으나 멤버가 아님 → 403(401 아님 — 가드가 인증을 이미 통과시켰다).
       throw new ForbiddenException();
     }
+    return moim;
   }
 
   // @MX:ANCHOR: [AUTO] owner 인가의 단일 출처(REQ-MOIM-003). 모임 삭제 및 향후 owner 전용 작업(MOIM-002
@@ -118,10 +132,9 @@ export class MoimService {
   }
 
   // 단건 모임 조회(REQ-MOIM-005 / AC-6). 멤버 한정 — 비멤버 403, 없는 모임 404는 assertMember가 판정한다.
+  // 인가 판정 시 조회한 moim 을 그대로 반환한다(중복 moim read 제거 — 판정+반환 1회 read).
   async getMoim(sub: string, moimId: string): Promise<Moim> {
-    await this.assertMember(sub, moimId);
-    // assertMember가 존재를 보장하므로 여기서 다시 조회해도 항상 존재한다.
-    return this.requireMoim(moimId);
+    return this.assertMemberReturningMoim(sub, moimId);
   }
 
   // 자신이 속한 모임 목록(REQ-MOIM-005 / AC-6). 멤버십에서 moimId를 모아 해당 모임만 반환한다.
@@ -139,6 +152,14 @@ export class MoimService {
   // 멤버 목록 조회(REQ-MOIM-006 / AC-5). 멤버 한정 — 각 멤버의 nickname 포함. 비멤버 403/없는 모임 404.
   async listMembers(sub: string, moimId: string): Promise<MoimMember[]> {
     await this.assertMember(sub, moimId);
+    return this.listMembersUnchecked(moimId);
+  }
+
+  // @MX:NOTE: [AUTO] SPEC-MOIM-DETAIL 성능 최적화: 인가를 건너뛴 멤버 목록 조회(getDetail 전용).
+  // getDetail 이 상단에서 assertMember 를 이미 1회 통과한 뒤 members/polls/schedule 을 Promise.all 로 병렬 조회할 때
+  // 각 후속 조회가 assertMember 를 반복하면 cross-region DB 왕복이 배가된다. 이 unchecked 변형은 게이트를 생략해
+  // 중복 판정을 없앤다 — 반드시 assertMember 통과 이후에만 호출해야 한다(공개 listMembers 는 게이트 유지). 형태 불변.
+  listMembersUnchecked(moimId: string): Promise<MoimMember[]> {
     return this.prisma.moimMember.findMany({ where: { moimId } });
   }
 

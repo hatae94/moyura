@@ -71,11 +71,12 @@ function makeService(): {
 // 세 서비스가 모두 필요하다. 기존 단건 라우트 테스트는 poll/schedule 을 호출하지 않으므로 no-op mock 으로
 // 채워도 무방하다 — new MoimController(service) 단일 인자 호출을 이 팩토리로 대체한다.
 function makeController(service: MoimService): MoimController {
+  // SPEC-MOIM-DETAIL 성능 최적화: getDetail 은 unchecked 변형(listPollsUnchecked/getScheduleUnchecked)을 호출한다.
   const pollService = {
-    listPolls: jest.fn().mockResolvedValue([]),
+    listPollsUnchecked: jest.fn().mockResolvedValue([]),
   } as unknown as PollService;
   const scheduleService = {
-    getSchedule: jest.fn().mockResolvedValue(null),
+    getScheduleUnchecked: jest.fn().mockResolvedValue(null),
   } as unknown as ScheduleService;
   return new MoimController(service, pollService, scheduleService);
 }
@@ -401,48 +402,56 @@ describe('MoimController', () => {
     } as unknown as ScheduleEventWithSlots;
 
     // 상세 라우트 전용 컨트롤러 팩토리 — poll/schedule mock 을 명시적으로 주입해 집계 형태를 검증한다.
+    // SPEC-MOIM-DETAIL 성능 최적화: getDetail 은 게이트(getMoim) 1회 통과 후 unchecked 변형
+    // (listMembersUnchecked/listPollsUnchecked/getScheduleUnchecked)만 호출한다(assertMember 중복 없음).
     function makeDetailController(): {
       controller: MoimController;
       moimMocks: {
         getMoim: jest.Mock;
-        listMembers: jest.Mock;
+        listMembersUnchecked: jest.Mock;
       };
-      listPolls: jest.Mock;
-      getSchedule: jest.Mock;
+      listPollsUnchecked: jest.Mock;
+      getScheduleUnchecked: jest.Mock;
     } {
       const getMoim = jest.fn().mockResolvedValue(MOIM);
-      const listMembers = jest.fn().mockResolvedValue([MEMBER]);
+      const listMembersUnchecked = jest.fn().mockResolvedValue([MEMBER]);
       const moimService = {
         getMoim,
-        listMembers,
+        listMembersUnchecked,
       } as unknown as MoimService;
-      const listPolls = jest.fn().mockResolvedValue([POLL]);
-      const getSchedule = jest.fn().mockResolvedValue(SCHEDULE);
-      const pollService = { listPolls } as unknown as PollService;
-      const scheduleService = { getSchedule } as unknown as ScheduleService;
+      const listPollsUnchecked = jest.fn().mockResolvedValue([POLL]);
+      const getScheduleUnchecked = jest.fn().mockResolvedValue(SCHEDULE);
+      const pollService = { listPollsUnchecked } as unknown as PollService;
+      const scheduleService = {
+        getScheduleUnchecked,
+      } as unknown as ScheduleService;
       return {
         controller: new MoimController(
           moimService,
           pollService,
           scheduleService,
         ),
-        moimMocks: { getMoim, listMembers },
-        listPolls,
-        getSchedule,
+        moimMocks: { getMoim, listMembersUnchecked },
+        listPollsUnchecked,
+        getScheduleUnchecked,
       };
     }
 
     it('멤버에게 모임+멤버+투표+일정을 개별 엔드포인트와 byte-identical 하게 합쳐 반환한다(200)', async () => {
-      const { controller, moimMocks, listPolls, getSchedule } =
-        makeDetailController();
+      const {
+        controller,
+        moimMocks,
+        listPollsUnchecked,
+        getScheduleUnchecked,
+      } = makeDetailController();
 
       const res = await controller.getDetail(USER, 'moim-A');
 
-      // 게이트(getMoim) + 세 조회 모두 user.sub + id 로 호출된다(myVotes 는 호출자 기준).
+      // 게이트(getMoim)는 sub+id 로 1회. unchecked 조회는 게이트 통과 후 호출된다(members 는 moimId 만, myVotes 는 sub 기준).
       expect(moimMocks.getMoim).toHaveBeenCalledWith('sub-U', 'moim-A');
-      expect(moimMocks.listMembers).toHaveBeenCalledWith('sub-U', 'moim-A');
-      expect(listPolls).toHaveBeenCalledWith('sub-U', 'moim-A');
-      expect(getSchedule).toHaveBeenCalledWith('sub-U', 'moim-A');
+      expect(moimMocks.listMembersUnchecked).toHaveBeenCalledWith('moim-A');
+      expect(listPollsUnchecked).toHaveBeenCalledWith('sub-U', 'moim-A');
+      expect(getScheduleUnchecked).toHaveBeenCalledWith('sub-U', 'moim-A');
 
       // moim: toMoimDto 형태(GET /moims/:id 동일).
       expect(res.moim).toEqual({
@@ -502,9 +511,10 @@ describe('MoimController', () => {
     });
 
     it('투표 없음/일정 미설정은 500 없이 [] / { schedule: null } 로 반환한다(graceful)', async () => {
-      const { controller, listPolls, getSchedule } = makeDetailController();
-      listPolls.mockResolvedValueOnce([]);
-      getSchedule.mockResolvedValueOnce(null);
+      const { controller, listPollsUnchecked, getScheduleUnchecked } =
+        makeDetailController();
+      listPollsUnchecked.mockResolvedValueOnce([]);
+      getScheduleUnchecked.mockResolvedValueOnce(null);
 
       const res = await controller.getDetail(USER, 'moim-A');
 
@@ -513,30 +523,38 @@ describe('MoimController', () => {
     });
 
     it('비멤버면 게이트(getMoim)가 던진 403 을 전파하고 후속 조회를 하지 않는다', async () => {
-      const { controller, moimMocks, listPolls, getSchedule } =
-        makeDetailController();
+      const {
+        controller,
+        moimMocks,
+        listPollsUnchecked,
+        getScheduleUnchecked,
+      } = makeDetailController();
       moimMocks.getMoim.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(controller.getDetail(USER, 'moim-A')).rejects.toThrow(
         ForbiddenException,
       );
       // 게이트 실패 시 members/polls/schedule 은 호출되지 않는다(인가 약화 없음).
-      expect(moimMocks.listMembers).not.toHaveBeenCalled();
-      expect(listPolls).not.toHaveBeenCalled();
-      expect(getSchedule).not.toHaveBeenCalled();
+      expect(moimMocks.listMembersUnchecked).not.toHaveBeenCalled();
+      expect(listPollsUnchecked).not.toHaveBeenCalled();
+      expect(getScheduleUnchecked).not.toHaveBeenCalled();
     });
 
     it('없는 모임이면 게이트(getMoim)가 던진 404 를 전파하고 후속 조회를 하지 않는다', async () => {
-      const { controller, moimMocks, listPolls, getSchedule } =
-        makeDetailController();
+      const {
+        controller,
+        moimMocks,
+        listPollsUnchecked,
+        getScheduleUnchecked,
+      } = makeDetailController();
       moimMocks.getMoim.mockRejectedValueOnce(new NotFoundException());
 
       await expect(controller.getDetail(USER, 'moim-A')).rejects.toThrow(
         NotFoundException,
       );
-      expect(moimMocks.listMembers).not.toHaveBeenCalled();
-      expect(listPolls).not.toHaveBeenCalled();
-      expect(getSchedule).not.toHaveBeenCalled();
+      expect(moimMocks.listMembersUnchecked).not.toHaveBeenCalled();
+      expect(listPollsUnchecked).not.toHaveBeenCalled();
+      expect(getScheduleUnchecked).not.toHaveBeenCalled();
     });
   });
 });

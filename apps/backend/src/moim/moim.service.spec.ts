@@ -96,6 +96,8 @@ function makePrisma(seed?: { moims?: Moim[]; members?: MoimMember[] }): {
   prisma: PrismaService;
   tables: Tables;
   transaction: TransactionMock;
+  // moim.findUnique 스텁 참조(중복 read 제거 검증용 — unbound-method 회피 위해 참조를 노출).
+  moimFindUnique: jest.Mock;
 } {
   const tables: Tables = {
     moim: new Map(seed?.moims?.map((m) => [m.id, m])),
@@ -130,12 +132,15 @@ function makePrisma(seed?: { moims?: Moim[]; members?: MoimMember[] }): {
     return Promise.all(arg as Promise<unknown>[]);
   });
 
+  // moim.findUnique 를 별도 참조로 두어 호출 횟수를 unbound-method 경고 없이 단언한다(push.listener.spec 패턴).
+  const moimFindUnique = jest.fn((arg: { where: { id: string } }) =>
+    Promise.resolve(tables.moim.get(arg.where.id) ?? null),
+  );
+
   const prisma = {
     $transaction: transaction,
     moim: {
-      findUnique: jest.fn((arg: { where: { id: string } }) =>
-        Promise.resolve(tables.moim.get(arg.where.id) ?? null),
-      ),
+      findUnique: moimFindUnique,
       findMany: jest.fn((arg: { where: { id: { in: string[] } } }) =>
         Promise.resolve(
           arg.where.id.in
@@ -215,7 +220,7 @@ function makePrisma(seed?: { moims?: Moim[]; members?: MoimMember[] }): {
     },
   } as unknown as PrismaService;
 
-  return { prisma, tables, transaction };
+  return { prisma, tables, transaction, moimFindUnique };
 }
 
 describe('MoimService', () => {
@@ -429,6 +434,21 @@ describe('MoimService', () => {
         NotFoundException,
       );
     });
+
+    // SPEC-MOIM-DETAIL 성능 최적화: 인가 판정 시 조회한 moim 을 그대로 반환한다 — moim.findUnique 는 정확히 1회만
+    // 호출된다(예전엔 assertMember 의 requireMoim + getMoim 의 requireMoim 로 2회 read 해 cross-region 왕복 2배였음).
+    it('멤버 단건 조회는 moim 을 정확히 1회만 읽는다(중복 read 제거)', async () => {
+      const { moim, owner, member } = seededMoim();
+      const { prisma, moimFindUnique } = makePrisma({
+        moims: [moim],
+        members: [owner, member],
+      });
+      const service = new MoimService(prisma, makeEvents());
+
+      await service.getMoim('sub-member', 'moim-A');
+
+      expect(moimFindUnique).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('listMyMoims (REQ-MOIM-005 / AC-6)', () => {
@@ -544,6 +564,26 @@ describe('MoimService', () => {
       await expect(service.listMembers('sub-U', 'missing')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    // SPEC-MOIM-DETAIL 성능 최적화: listMembersUnchecked 는 게이트(assertMember)를 건너뛰고 멤버 목록만 반환한다.
+    // getDetail 이 상단에서 이미 게이트를 통과한 뒤 호출하는 전용 경로다 — moim.findUnique(존재 검사)를 하지 않는다.
+    describe('listMembersUnchecked (SPEC-MOIM-DETAIL 성능 최적화)', () => {
+      it('게이트 없이 멤버 목록을 반환하고 moim 존재 조회(findUnique)를 하지 않는다', async () => {
+        const { moim, owner, member } = seededMoim();
+        const { prisma, moimFindUnique } = makePrisma({
+          moims: [moim],
+          members: [owner, member],
+        });
+        const service = new MoimService(prisma, makeEvents());
+
+        const result = await service.listMembersUnchecked('moim-A');
+
+        const nicknames = result.map((m) => m.nickname).sort();
+        expect(nicknames).toEqual(['참가자1', '호스트']);
+        // unchecked 경로는 멤버십/존재 판정을 하지 않으므로 moim.findUnique 를 호출하지 않는다.
+        expect(moimFindUnique).not.toHaveBeenCalled();
+      });
     });
   });
 

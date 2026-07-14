@@ -123,11 +123,15 @@ export class MoimController {
   // 웹 SSR이 4개 병렬 백엔드 호출을 1개로 대체할 수 있게 한다. 인가 게이트는 개별 엔드포인트와 동일하다:
   // 401(가드가 JWT 부재 선처리) · 403(비멤버) · 404(없는 모임). getMoim(user.sub, id)을 먼저 호출해 게이트를
   // 통과시킨다(assertMember 단일 출처 재사용 — 여기서 재구현 금지). 통과하면 호출자는 확정 멤버이므로 이후
-  // members/polls/schedule 은 인가된 상태다. 각 후속 조회는 내부적으로 assertMember 를 다시 수행하지만(중복 판정)
-  // 로컬 DB 왕복이라 저렴하다 — 이득은 4개 NETWORK 호출을 1개로 접는 것이다(인가 약화 없음). 게이트 통과 후
-  // 세 조회는 독립적이므로 Promise.all 로 서버측 동시 실행한다. polls/schedule 은 graceful data([]/null 유효 —
-  // "투표 없음"/"일정 없음"에 500 금지, 개별 엔드포인트와 동일하게 [] / null 반환). 각 필드 형태는 개별
-  // 엔드포인트 매퍼(toMoimDto/toMemberDto/resultToDto/toScheduleDto)를 그대로 재사용해 byte-identical 하다.
+  // members/polls/schedule 은 인가된 상태다.
+  // @MX:NOTE: [AUTO] 성능 최적화: 게이트는 상단 getMoim 1회로만 통과시키고, 이후 세 조회는 assertMember 를 다시
+  // 수행하지 않는 unchecked 변형(listMembersUnchecked / listPollsUnchecked / getScheduleUnchecked)을 쓴다.
+  // 예전엔 각 후속 조회가 assertMember(requireMoim + findMembership = 2 DB 쿼리)를 반복해 멤버십을 4회 판정했다
+  // (~8 중복 cross-region 쿼리). Supabase DB 가 Railway 백엔드와 다른 리전이라 쿼리당 ~0.3s 라 이 중복이 비쌌다.
+  // 이제 assertMember 는 1회뿐이다(인가 약화 없음 — 게이트 통과 후에만 unchecked 호출). 개별 엔드포인트
+  // (GET /moims/:id/polls, /members, /schedule)는 각자 게이트를 유지한다. 세 조회는 독립적이라 Promise.all 로
+  // 동시 실행한다. polls/schedule 은 graceful data([]/null 유효 — "투표 없음"/"일정 없음"에 500 금지). 각 필드
+  // 형태는 개별 엔드포인트 매퍼(toMoimDto/toMemberDto/resultToDto/toScheduleDto)를 재사용해 byte-identical 하다.
   @Get(':id/detail')
   @ApiOkResponse({
     description: '모임 상세 집계(모임+멤버+투표+일정) — 웹 SSR 1회 호출용',
@@ -141,14 +145,16 @@ export class MoimController {
     @Param('id') id: string,
   ): Promise<MoimDetailResponseDto> {
     // 1) 인가 게이트(비멤버 403 / 없는 모임 404를 throw). 통과하면 호출자는 확정 멤버.
+    //    getMoim 은 인가 판정 시 조회한 moim 을 그대로 반환한다(중복 moim read 없음).
     const moim = await this.moimService.getMoim(user.sub, id);
 
-    // 2) 게이트 통과 후 나머지 세 조회를 동시에 수행한다(서로 독립적). polls/schedule 은 빈 배열/null 이 유효 —
-    //    호출자 myVotes 는 user.sub 기준으로 채워진다(개별 GET /moims/:id/polls 와 동일).
+    // 2) 게이트 통과 후 나머지 세 조회를 동시에 수행한다(서로 독립적). unchecked 변형이라 assertMember 를 반복하지
+    //    않는다(멤버십은 위 게이트로 이미 확정). polls/schedule 은 빈 배열/null 이 유효 — 호출자 myVotes 는
+    //    user.sub 기준으로 채워진다(개별 GET /moims/:id/polls 와 동일).
     const [members, polls, schedule] = await Promise.all([
-      this.moimService.listMembers(user.sub, id),
-      this.pollService.listPolls(user.sub, id),
-      this.scheduleService.getSchedule(user.sub, id),
+      this.moimService.listMembersUnchecked(id),
+      this.pollService.listPollsUnchecked(user.sub, id),
+      this.scheduleService.getScheduleUnchecked(user.sub, id),
     ]);
 
     return {

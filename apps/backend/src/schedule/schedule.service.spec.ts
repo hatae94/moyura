@@ -623,6 +623,58 @@ describe('ScheduleService', () => {
     });
   });
 
+  // SPEC-MOIM-DETAIL 성능 최적화: getScheduleUnchecked — assertMember 만 생략, 이벤트 조회 + SAFETY 슬롯 필터는 불변.
+  describe('getScheduleUnchecked (SPEC-MOIM-DETAIL 성능 최적화)', () => {
+    async function seedWithSlots(): Promise<void> {
+      await service.setSchedule(
+        'owner',
+        MOIM_ID,
+        ['2026-07-04'],
+        1080,
+        1440,
+        30,
+      );
+      const ev = tables.event.get(MOIM_ID);
+      for (const [uid, min] of [
+        ['owner', 1080],
+        ['m2', 1110],
+        ['blocked-user', 1140],
+      ] as const) {
+        tables.slot.set(slotKey(ev.id, uid, '2026-07-04', min), {
+          scheduleEventId: ev.id,
+          userId: uid,
+          date: '2026-07-04',
+          startMinute: min,
+          createdAt: NOW,
+        });
+      }
+    }
+
+    it('비멤버 sub 로도 일정을 반환한다(게이트 생략 — getDetail 이 이미 게이트 통과 후 호출)', async () => {
+      await seedWithSlots();
+      // 'stranger' 는 members 집합에 없다 — 공개 getSchedule 이면 403 이지만 unchecked 는 게이트를 건너뛴다.
+      const result = await service.getScheduleUnchecked('stranger', MOIM_ID);
+      expect(result).not.toBeNull();
+      expect(result?.dates).toEqual(['2026-07-04']);
+    });
+
+    it('SAFETY 슬롯 필터(getHiddenUserIds)를 그대로 적용한다(공개 경로와 동일)', async () => {
+      await seedWithSlots();
+      hidden = ['blocked-user'];
+      const result = await service.getScheduleUnchecked('owner', MOIM_ID);
+      const userIds = result?.slots.map((s) => s.userId) ?? [];
+      expect(userIds).not.toContain('blocked-user');
+      expect(result?.slots).toHaveLength(2);
+      expect(getHiddenUserIds).toHaveBeenCalledWith('owner');
+    });
+
+    it('세션 미설정이면 null(슬롯 없음 — 숨김 조회 생략)', async () => {
+      const result = await service.getScheduleUnchecked('owner', MOIM_ID);
+      expect(result).toBeNull();
+      expect(getHiddenUserIds).not.toHaveBeenCalled();
+    });
+  });
+
   // ── SPEC-NOTIFICATIONS-001 M2: 도메인 이벤트 발행 ──────────────────────────────
   // create 경로만 started 발행(재설정 update 는 미발행), 나머지는 성공 후 각 이벤트 1회 + authz 실패 미발행.
   describe('M2 이벤트 발행 (SPEC-NOTIFICATIONS-001)', () => {

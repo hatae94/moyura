@@ -291,8 +291,13 @@ model PollVote {
   poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
   option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
 
-  // 옵션별 득표 수 집계(voteCount)를 커버한다.
+  // 옵션 Cascade 삭제 FK + 옵션별 조회를 커버한다.
   @@index([optionId])
+  // SPEC-MOIM-DETAIL 성능 최적화: aggregatePolls 의 "내 표"(myVotes) 조회는 WHERE pollId IN(...) AND userId=sub 다.
+  // 복합 PK (pollId, optionId, userId) 로는 userId 가 3번째라 pollId 시크 후 옵션 전체를 훑어야 한다 — poll·option
+  // 카디널리티가 커질수록 비싸진다. userId 단독 인덱스로 "내 표"를 직접 시크한다(DeviceToken/ExpenseShare 선례 동일).
+  // groupBy(WHERE pollId IN)와 listMembers(WHERE moimId)는 각 테이블 PK 최좌측 prefix 로 이미 커버되어 추가 불필요.
+  @@index([userId])
   // 복합 PK = 멤버당 옵션당 한 표 불변식(다중 선택 = 옵션마다 0..N 표 토글, 단일 선택 = 교체로 한 표 유지).
   @@id([pollId, optionId, userId])
   @@map("poll_vote")

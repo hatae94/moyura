@@ -822,6 +822,97 @@ describe('PollService', () => {
     });
   });
 
+  // ── SPEC-MOIM-DETAIL 성능 최적화: listPollsUnchecked — assertMember 만 생략, SAFETY 필터/집계는 불변 ──
+  describe('listPollsUnchecked() (SPEC-MOIM-DETAIL 성능 최적화)', () => {
+    it('assertMember 를 호출하지 않고(게이트 생략) 목록+집계를 반환한다', async () => {
+      const { safety } = makeSafetyService();
+      // assertMember 스텁 참조를 유지해 호출 여부를 unbound-method 경고 없이 단언한다(push.listener.spec 패턴).
+      const assertMember = jest.fn(() => Promise.resolve());
+      const moimStub = { assertMember } as unknown as MoimService;
+      const service = new PollService(
+        makePrisma(),
+        moimStub,
+        { emit } as unknown as EventEmitter2,
+        safety,
+      );
+      // moim/멤버 없이도 시드 poll 을 그대로 반환한다(게이트 생략 증명 — getDetail 이 이미 게이트 통과 후 호출).
+      const { poll, options } = seedPoll('moim-A', '점심?', ['A', 'B'], false);
+      seedVote(poll.id, options[0].id, 'member-1');
+
+      const polls = await service.listPollsUnchecked('member-1', 'moim-A');
+
+      expect(polls).toHaveLength(1);
+      expect(polls[0].myVotes).toEqual([options[0].id]);
+      // 게이트를 건너뛰므로 assertMember 는 호출되지 않는다(멤버십은 상위 getDetail 게이트로 이미 확정).
+      expect(assertMember).not.toHaveBeenCalled();
+    });
+
+    it('공개 listPolls 와 byte-identical 한 결과를 낸다(집계 의미론 불변)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      setMember('moim-A', 'member-2');
+      const { poll, options } = seedPoll('moim-A', '점심?', ['A', 'B'], false);
+      seedVote(poll.id, options[0].id, 'member-1');
+      seedVote(poll.id, options[0].id, 'member-2');
+
+      const gated = await service.listPolls('member-1', 'moim-A');
+      const unchecked = await service.listPollsUnchecked('member-1', 'moim-A');
+
+      expect(unchecked).toEqual(gated);
+    });
+
+    it('SAFETY 숨김 필터(getHiddenUserIds)를 그대로 적용한다(공개 경로와 동일)', async () => {
+      const { service, getHiddenUserIds } = makeServiceWithSafety();
+      hiddenBySub.set('viewer', ['userB']);
+      seedPoll('moim-A', 'B의 투표', ['x', 'y'], false, 'userB');
+      seedPoll('moim-A', 'A의 투표', ['x', 'y'], false, 'userA');
+
+      const polls = await service.listPollsUnchecked('viewer', 'moim-A');
+
+      // 숨긴 생성자(userB)의 poll 은 제외되고 hidden 조회는 뷰어 sub 로 1회 수행된다(공개 경로와 동일).
+      expect(polls.map((p) => p.question)).toEqual(['A의 투표']);
+      expect(getHiddenUserIds).toHaveBeenCalledWith('viewer');
+    });
+  });
+
+  // ── SPEC-MOIM-DETAIL 성능 최적화: aggregatePolls 병렬 조회(옵션/집계/내표 동시 실행) ──
+  describe('aggregatePolls 병렬 조회 (SPEC-MOIM-DETAIL 성능 최적화)', () => {
+    it('listPolls 결과가 옵션·voteCount·myVotes 모두 정확하다(병렬화 후 집계 불변)', async () => {
+      const service = makeService();
+      setMember('moim-A', 'member-1');
+      setMember('moim-A', 'member-2');
+      // 두 개의 poll 을 시드해 여러 pollIds 에 대한 병렬 조회를 검증한다.
+      const p1 = seedPoll('moim-A', '점심?', ['A', 'B'], false);
+      const p2 = seedPoll('moim-A', '저녁?', ['C', 'D'], true);
+      seedVote(p1.poll.id, p1.options[0].id, 'member-1'); // p1: A(호출자)
+      seedVote(p1.poll.id, p1.options[0].id, 'member-2'); // p1: A(타인)
+      seedVote(p2.poll.id, p2.options[1].id, 'member-1'); // p2: D(호출자)
+
+      const polls = await service.listPolls('member-1', 'moim-A');
+      const byQuestion = new Map(polls.map((p) => [p.question, p]));
+
+      const lunch = byQuestion.get('점심?');
+      expect(new Map(lunch.options.map((o) => [o.label, o.voteCount]))).toEqual(
+        new Map([
+          ['A', 2],
+          ['B', 0],
+        ]),
+      );
+      expect(lunch.myVotes).toEqual([p1.options[0].id]);
+
+      const dinner = byQuestion.get('저녁?');
+      expect(
+        new Map(dinner.options.map((o) => [o.label, o.voteCount])),
+      ).toEqual(
+        new Map([
+          ['C', 0],
+          ['D', 1],
+        ]),
+      );
+      expect(dinner.myVotes).toEqual([p2.options[1].id]);
+    });
+  });
+
   // ── SPEC-MOIM-007: createPoll — closesAt 옵트인 ──
   describe('createPoll() — closesAt 옵트인(REQ-MOIM7-002 / AC-2)', () => {
     it('closesAt 를 전달하면 poll 의 closesAt 가 설정된다', async () => {

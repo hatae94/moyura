@@ -298,15 +298,39 @@ export class PollService {
 
   // 투표 목록 + 결과 조회(REQ-MOIM7-005 / AC-5 — MOIM-006 확장). 멤버 한정 — 비멤버 403/없는 모임 404. poll 없으면 빈 배열.
   async listPolls(sub: string, moimId: string): Promise<PollWithResults[]> {
-    // 멤버십 인가(비멤버에게 투표 내용 비노출).
-    await this.moim.assertMember(sub, moimId);
+    // 멤버십 인가(비멤버에게 투표 내용 비노출)와 숨김 목록 조회는 서로 독립적이므로 병렬 실행한다.
+    // assertMember 가 throw(비멤버 403/없는 모임 404)하면 Promise.all 이 그대로 전파한다 — getHiddenUserIds
+    // 결과는 버려지고 아래 findMany 에 도달하지 않는다(인가 약화 없음, 조회 순서만 병렬화). cross-region 왕복 1회 절약.
+    const [, hiddenIds] = await Promise.all([
+      this.moim.assertMember(sub, moimId),
+      this.safety.getHiddenUserIds(sub),
+    ]);
 
-    // @MX:NOTE: [AUTO] SPEC-SAFETY-001 REQ-FLT-002 / AC-FLT-2: 뷰어(sub)가 숨긴 생성자(block∪report)의 poll 을
-    // createdBy notIn 으로 목록에서 제외한다(요청당 1회 조회). 필터는 오직 poll.findMany(목록 노출)에만 적용하며
-    // aggregatePolls 의 표 집계(pollVote)에는 적용하지 않는다 — 숨김 대상이 다른(보이는) poll 에 던진 표는 그대로
-    // 집계에 남아 익명 집계 수치가 불변이다(AC-FLT-2). notIn 이 빈 배열이면 아무 poll 도 제외하지 않는다(no-op).
+    return this.listPollsWithHidden(sub, moimId, hiddenIds);
+  }
+
+  // @MX:NOTE: [AUTO] SPEC-MOIM-DETAIL 성능 최적화: 인가를 건너뛴 투표 목록+결과 조회(getDetail 전용).
+  // getDetail 이 상단에서 assertMember 를 이미 1회 통과한 뒤 호출한다 — 반드시 게이트 이후에만 사용해야 한다.
+  // 공개 listPolls 는 게이트를 유지한다. 이 변형은 assertMember 만 생략하고 SAFETY 숨김 필터(getHiddenUserIds)와
+  // 집계 의미론은 완전히 동일하게 유지한다(byte-identical 응답).
+  async listPollsUnchecked(
+    sub: string,
+    moimId: string,
+  ): Promise<PollWithResults[]> {
     const hiddenIds = await this.safety.getHiddenUserIds(sub);
+    return this.listPollsWithHidden(sub, moimId, hiddenIds);
+  }
 
+  // 숨김 목록(hiddenIds)을 이미 확보한 상태에서 poll 목록을 조회·집계한다(listPolls/listPollsUnchecked 공유 코어).
+  private async listPollsWithHidden(
+    sub: string,
+    moimId: string,
+    hiddenIds: string[],
+  ): Promise<PollWithResults[]> {
+    // @MX:NOTE: [AUTO] SPEC-SAFETY-001 REQ-FLT-002 / AC-FLT-2: 뷰어(sub)가 숨긴 생성자(block∪report)의 poll 을
+    // createdBy notIn 으로 목록에서 제외한다. 필터는 오직 poll.findMany(목록 노출)에만 적용하며 aggregatePolls 의
+    // 표 집계(pollVote)에는 적용하지 않는다 — 숨김 대상이 다른(보이는) poll 에 던진 표는 그대로 집계에 남아 익명
+    // 집계 수치가 불변이다(AC-FLT-2). notIn 이 빈 배열이면 아무 poll 도 제외하지 않는다(no-op).
     const polls = await this.prisma.poll.findMany({
       where: { moimId, createdBy: { notIn: hiddenIds } },
     });
@@ -325,25 +349,32 @@ export class PollService {
   ): Promise<PollWithResults[]> {
     const pollIds = polls.map((p) => p.id);
 
-    // 옵션을 한 번에 조회(표 0 옵션도 빠뜨리지 않기 위해 옵션 목록이 voteCount 의 기준이다).
-    const options = await this.prisma.pollOption.findMany({
-      where: { pollId: { in: pollIds } },
-    });
+    // @MX:NOTE: [AUTO] SPEC-MOIM-DETAIL 성능 최적화: 세 조회는 모두 pollIds 만 의존하고 서로 독립적이라 병렬화한다.
+    //   1) pollOption.findMany — 옵션 목록(표 0 옵션도 빠뜨리지 않는 voteCount 기준)
+    //   2) pollVote.groupBy(by optionId) — 옵션별 득표 수 집계
+    //   3) pollVote.findMany(userId=sub) — 호출자 자신의 표(myVotes)
+    // 예전엔 순차 실행이라 cross-region DB 왕복을 3회 직렬로 지불했다 — Promise.all 로 1회 왕복 지연으로 접는다.
+    // 집계 의미론(옵션 목록 기준 0 채움 / myVotes 목록 수집)은 완전히 불변이다.
+    const [options, grouped, mine] = await Promise.all([
+      this.prisma.pollOption.findMany({
+        where: { pollId: { in: pollIds } },
+      }),
+      this.prisma.pollVote.groupBy({
+        by: ['optionId'],
+        where: { pollId: { in: pollIds } },
+        _count: { _all: true },
+      }),
+      this.prisma.pollVote.findMany({
+        where: { pollId: { in: pollIds }, userId: sub },
+      }),
+    ]);
 
-    // 옵션별 득표 수 집계(groupBy by optionId). 표 0 옵션은 집계에 안 나오므로 옵션 목록에서 0 으로 채운다.
-    const grouped = await this.prisma.pollVote.groupBy({
-      by: ['optionId'],
-      where: { pollId: { in: pollIds } },
-      _count: { _all: true },
-    });
+    // 옵션별 득표 수(표 0 옵션은 집계에 안 나오므로 옵션 목록에서 0 으로 채운다).
     const countByOption = new Map<string, number>(
       grouped.map((g) => [g.optionId, g._count._all]),
     );
 
     // 호출자 자신의 표(pollId → optionId 목록). 다중 선택은 한 poll 에 여러 표를 가질 수 있어 목록으로 모은다.
-    const mine = await this.prisma.pollVote.findMany({
-      where: { pollId: { in: pollIds }, userId: sub },
-    });
     const myVotesByPoll = new Map<string, string[]>();
     for (const v of mine) {
       const list = myVotesByPoll.get(v.pollId) ?? [];
