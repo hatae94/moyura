@@ -17,7 +17,7 @@
 // 초기화돼 OAuth 흐름이 깨진다. ref/sourceUri 소유는 호출부(App.tsx)에 두고, OAuth 복귀 시
 // sourceUri 교체(setSourceUri)만으로 네비게이트한다(리마운트 아님). SafeAreaView 래핑은 무조건적
 // (조건부 아님)이라 WebView 인스턴스를 보존한다 — 래퍼 추가가 자식을 리마운트하지 않는다.
-import { forwardRef, useCallback, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useRef } from "react";
 import { Animated, Platform, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import WebView from "react-native-webview";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
@@ -34,6 +34,11 @@ import {
   coverOpacityOnLoadStart,
   coverOpacityOnLoadEnd,
 } from "../lib/ui/webview-fade-core";
+
+// [P2] 로딩 커버 강제 해제 타임아웃(ms). 커버가 이 시간 내 정착 신호(onLoadEnd/onNavigationStateChange !loading)를
+// 받지 못하면 강제로 걷어 무한 스피너를 방지한다. 정상 로드/soft-nav 는 정착 시 타이머가 해제되므로 영향 없다 —
+// 진짜 정지일 때만 발동하도록 넉넉히(서버 P0 타임아웃 8s 보다 길게) 둔다.
+const LOAD_TIMEOUT_MS = 12000;
 
 export interface WebViewShellProps {
   /** WebView 가 로드할 source URL. 변경 시 WebView 가 새 URL 로 네비게이트한다(리마운트 아님). */
@@ -123,28 +128,52 @@ export const WebViewShell = forwardRef<WebView, WebViewShellProps>(function WebV
   // 불투명 커버(스켈레톤 배경)를 1→0 으로 페이드아웃해 동일한 페이드인을 구현한다(WebView 비서스펜드 — 불변식은
   // webview-fade-core.ts 가 강제). 무조건적 Animated.View 커버라 WebView 를 리마운트하지 않는다(OD-1 보존).
   const coverOpacity = useRef(new Animated.Value(COVER_OPACITY_LOADING)).current;
+  // [P2] 로딩 커버 강제 해제 타임아웃 핸들. 커버가 정착 신호를 끝내 못 받고 오래 지속되면(첫 soft-nav 정지 등) 발동한다.
+  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 재로드(handleRetry) 시에도 다시 페이드인하도록 로드 시작에 커버를 불투명(1)으로 리셋한 뒤
-  // 호출부 onLoadStart 를 그대로 호출한다(기존 콜백 행위 보존). WebView opacity 는 건드리지 않는다(항상 1).
-  const handleLoadStart = useCallback((): void => {
-    coverOpacity.setValue(coverOpacityOnLoadStart());
-    onLoadStart?.();
-  }, [coverOpacity, onLoadStart]);
+  // 진행 중인 커버 타임아웃을 해제한다(정착/언마운트 시).
+  const clearLoadTimeout = useCallback((): void => {
+    if (loadTimeoutRef.current !== null) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+  }, []);
 
-  // 커버를 0 으로 페이드아웃해 아래 WebView 콘텐츠를 드러내는 단일 헬퍼(문서 로드 종료 + SPA soft-nav 정착 공용).
+  // 커버를 0 으로 페이드아웃해 아래 WebView 콘텐츠를 드러내는 단일 헬퍼(문서 로드 종료 + SPA soft-nav 정착 + P2 타임아웃 공용).
+  // 진행 중인 P2 타임아웃도 함께 해제한다(정착했으므로 강제 해제 불필요).
   const fadeOutCover = useCallback((): void => {
+    clearLoadTimeout();
     Animated.timing(coverOpacity, {
       toValue: coverOpacityOnLoadEnd(),
       duration: COVER_FADE_DURATION_MS,
       useNativeDriver: true,
     }).start();
-  }, [coverOpacity]);
+  }, [coverOpacity, clearLoadTimeout]);
+
+  // 재로드(handleRetry) 시에도 다시 페이드인하도록 로드 시작에 커버를 불투명(1)으로 리셋한 뒤 호출부 onLoadStart 를
+  // 그대로 호출한다(기존 콜백 행위 보존). WebView opacity 는 건드리지 않는다(항상 1).
+  // [P2 방어] 커버가 정착 신호(onLoadEnd / onNavigationStateChange !loading)를 끝내 못 받으면(원인 불문: 세션 첫
+  // soft-nav 정지·WebView 레이스·SSR 무응답 등) 무한 스피너에 갇힌다. LOAD_TIMEOUT_MS 후 커버를 강제 페이드아웃해
+  // 아래 웹 상태(렌더된 콘텐츠 또는 웹 자체 로딩/에러 UI)를 드러낸다. 정착 시엔 fadeOutCover 가 타이머를 먼저
+  // 해제하므로 정상 로드에는 영향이 없다(진짜 정지일 때만 발동).
+  const handleLoadStart = useCallback((): void => {
+    coverOpacity.setValue(coverOpacityOnLoadStart());
+    clearLoadTimeout();
+    loadTimeoutRef.current = setTimeout(() => {
+      loadTimeoutRef.current = null;
+      fadeOutCover();
+    }, LOAD_TIMEOUT_MS);
+    onLoadStart?.();
+  }, [coverOpacity, onLoadStart, clearLoadTimeout, fadeOutCover]);
 
   // 로드 종료 시 커버를 페이드아웃한 뒤 호출부 onLoadEnd(maybeInjectRestore 등)를 그대로 호출한다.
   const handleLoadEnd = useCallback((): void => {
     fadeOutCover();
     onLoadEnd?.();
   }, [fadeOutCover, onLoadEnd]);
+
+  // 언마운트 시 진행 중인 P2 커버 타임아웃을 정리한다(타이머 누수 방지).
+  useEffect(() => clearLoadTimeout, [clearLoadTimeout]);
 
   // [FIX — soft-nav 커버 정지] Android WebView 는 웹 SPA soft-nav(history.pushState — Next <Link> 클라이언트 전환)에서
   // onLoadStart 는 발화하나 onLoadEnd 를 발화하지 않는다. 그 결과 커버가 불투명(1)으로 리셋된 뒤 걷히지 않아,
