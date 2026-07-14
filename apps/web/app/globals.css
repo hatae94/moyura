@@ -401,3 +401,11 @@ html[data-shell="native"] [data-home-action-dock] {
 html[data-shell="native"] [data-shell-header] {
   visibility: hidden;
 }
+
+/* [FIX] 모임 상세(home/[id]) 헤더는 아바타+이름+일정 다중 행이라 ~180px 로 키가 커, visibility:hidden 으로 높이를
+   보존하면 네이티브 헤더(52px) 아래 넓은 공백이 남는다(위 규칙은 헤더 ~60px 단일 바를 가정 — schedule/chat 커플링용).
+   모임 상세는 sticky 칩레일·flex 컬럼 커플링이 없으므로 셸 모드에서 헤더 박스를 접어(display:none) 공백을 제거한다.
+   커플링이 필요한 페이지(schedule top-[60px]·chat flex)는 data-shell-header 기본값(visibility:hidden)을 유지한다. */
+html[data-shell="native"] [data-shell-header="collapse"] {
+  display: none;
+}

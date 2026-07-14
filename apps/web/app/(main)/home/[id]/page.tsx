@@ -106,7 +106,7 @@ export default async function MoimDetailPage({
       {/* 헤더: 모임 그라데이션 아바타 + 이름 + 일정/장소(정직 표시 — SPEC-MOIM-004 REQ-MOIM4-006) + 개설일.
           sticky top-0 z-30 + 반투명 backdrop-blur 로 문서 스크롤 중 상단 고정(탭바 z-40·모달 z-50 아래). */}
       <header
-        data-shell-header
+        data-shell-header="collapse"
         className="sticky top-0 z-30 border-b border-border/60 bg-background/80 px-5 pb-4 pt-page backdrop-blur-xl"
       >
         <div className="flex items-center gap-3.5">
