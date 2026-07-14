@@ -84,6 +84,22 @@ export interface paths {
         patch: operations["MoimController_updateMaxMembers"];
         trace?: never;
     };
+    "/moims/{id}/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MoimController_getDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/moims/{id}/members": {
         parameters: {
             query?: never;
@@ -143,6 +159,182 @@ export interface paths {
         put?: never;
         post: operations["MoimController_transferOwner"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/polls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PollController_list"];
+        put?: never;
+        post: operations["PollController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/polls/{pollId}/vote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PollController_vote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/polls/{pollId}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PollController_close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ScheduleController_get"];
+        put: operations["ScheduleController_set"];
+        post?: never;
+        delete: operations["ScheduleController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ScheduleController_setMine"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ScheduleController_setDates"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule/window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ScheduleController_setWindow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moims/{id}/schedule/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ScheduleController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SafetyController_createReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SafetyController_listBlocks"];
+        put?: never;
+        post: operations["SafetyController_createBlock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/blocks/{blockedUserId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["SafetyController_unblock"];
         options?: never;
         head?: never;
         patch?: never;
@@ -228,102 +420,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/reports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["SafetyController_createReport"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/blocks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["SafetyController_listBlocks"];
-        put?: never;
-        post: operations["SafetyController_createBlock"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/blocks/{blockedUserId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["SafetyController_unblock"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/moims/{id}/polls": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["PollController_list"];
-        put?: never;
-        post: operations["PollController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/moims/{id}/polls/{pollId}/vote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["PollController_vote"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/moims/{id}/polls/{pollId}/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["PollController_close"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/moims/{id}/expenses": {
         parameters: {
             query?: never;
@@ -399,86 +495,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["SettlementController_removeById"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/moims/{id}/schedule": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ScheduleController_get"];
-        put: operations["ScheduleController_set"];
-        post?: never;
-        delete: operations["ScheduleController_remove"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/moims/{id}/schedule/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["ScheduleController_setMine"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/moims/{id}/schedule/dates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["ScheduleController_setDates"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/moims/{id}/schedule/window": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["ScheduleController_setWindow"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/moims/{id}/schedule/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ScheduleController_confirm"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -713,6 +729,168 @@ export interface components {
              */
             joinedAt: string;
         };
+        PollOptionResponseDto: {
+            /**
+             * @description 선택지 id
+             * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
+             */
+            id: string;
+            /**
+             * @description 선택지 라벨
+             * @example 토요일
+             */
+            label: string;
+            /**
+             * @description 이 선택지의 득표 수(표 0 이면 0)
+             * @example 3
+             */
+            voteCount: number;
+            /**
+             * @description 날짜 투표 옵션의 시각(ISO-8601). 일반 투표 옵션은 null.
+             * @example 2026-06-27T12:00:00.000Z
+             */
+            optionDate: string | null;
+        };
+        PollResponseDto: {
+            /**
+             * @description 투표 id(uuid)
+             * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
+             */
+            id: string;
+            /**
+             * @description 투표 질문
+             * @example 다음 모임 날짜는?
+             */
+            question: string;
+            /**
+             * @description 생성자 sub(= profile.id)
+             * @example 00000000-0000-4000-8000-000000000001
+             */
+            createdBy: string;
+            /**
+             * @description 투표 생성 시각(ISO-8601)
+             * @example 2026-06-20T00:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * @description 여러 개 선택 허용 여부(true=다중 선택/토글, false=단일 선택/교체).
+             * @example false
+             */
+            multiSelect: boolean;
+            /**
+             * @description 투표 종류. "general"=일반(자유 텍스트 옵션), "date"=날짜 투표(optionDate 있음), "place"=장소 투표(마감 시 승자 → location).
+             * @example general
+             * @enum {string}
+             */
+            kind: "general" | "date" | "place";
+            /** @description 선택지 목록(각 선택지의 득표 수 + optionDate 포함) */
+            options: components["schemas"]["PollOptionResponseDto"][];
+            /**
+             * @description 호출자 자신이 고른 선택지 id 목록(미투표 시 빈 배열). 단일 선택은 0/1요소, 다중 선택은 0..N요소.
+             * @example [
+             *       "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
+             *     ]
+             */
+            myVotes: string[];
+            /**
+             * @description 마감 시각(ISO-8601). null 이면 마감 없음(영구히 열림). 마감 판정은 isClosed 를 권위 있는 출처로 사용한다.
+             * @example 2026-06-25T12:00:00.000Z
+             */
+            closesAt: string | null;
+            /**
+             * @description 서버 계산 마감 여부(closesAt != null AND closesAt <= 서버 now). 클라이언트 시계 오차 차단용 — 차단/배지 판정에 사용한다.
+             * @example false
+             */
+            isClosed: boolean;
+            /**
+             * @description 자동 확정된 모임 일정(ISO-8601). 날짜 투표 마감 시 단일 최다 득표 옵션의 날짜가 Moim.startsAt 으로 설정된 경우에만 값이 있다. vote/list 응답에선 항상 null.
+             * @example 2026-06-27T12:00:00.000Z
+             */
+            finalizedStartsAt: string | null;
+            /**
+             * @description 자동 확정된 모임 장소. 장소 투표 마감 시 단일 최다 득표 옵션의 장소명이 Moim.location 으로 설정된 경우에만 값이 있다. vote/list 응답·날짜 투표에선 null.
+             * @example 강남역 2번 출구
+             */
+            finalizedLocation: string | null;
+            /**
+             * @description finalize 건너뛴 이유. "tie"=동점, "no_votes"=표 없음, null=finalize 성공 또는 일반 투표 또는 vote/list 응답.
+             * @example null
+             * @enum {string|null}
+             */
+            finalizeSkippedReason: "tie" | "no_votes" | null;
+        };
+        ScheduleSlotDto: {
+            /**
+             * @description 가능 멤버 sub(= profile.id)
+             * @example uuid
+             */
+            userId: string;
+            /**
+             * @description 슬롯 날짜(ISO date)
+             * @example 2026-07-05
+             */
+            date: string;
+            /**
+             * @description 슬롯 시작(후보일 00:00 기준 분, >=1440 이면 다음날)
+             * @example 1080
+             */
+            startMinute: number;
+        };
+        ScheduleEventDto: {
+            /** @example uuid */
+            id: string;
+            /** @example uuid */
+            moimId: string;
+            /**
+             * @description 생성자 sub
+             * @example uuid
+             */
+            createdBy: string;
+            /**
+             * @description 후보 날짜 배열
+             * @example [
+             *       "2026-07-05",
+             *       "2026-07-06"
+             *     ]
+             */
+            dates: string[];
+            /**
+             * @description 하루 시작(분)
+             * @example 1080
+             */
+            startMinute: number;
+            /**
+             * @description 하루 종료(분, >1440=자정 넘김)
+             * @example 1440
+             */
+            endMinute: number;
+            /**
+             * @description 슬롯 단위(분)
+             * @example 30
+             */
+            slotMinutes: number;
+            /**
+             * @description 확정 시각(ISO datetime, nullable). 있으면 moim.startsAt 이 확정되어 그리드가 읽기 전용.
+             * @example 2026-07-01T12:00:00.000Z
+             */
+            confirmedAt?: string | null;
+            /** @description 전체 멤버 가능 슬롯 */
+            slots: components["schemas"]["ScheduleSlotDto"][];
+        };
+        ScheduleResponseDto: {
+            /** @description 일정 조율 세션(미설정이면 null) */
+            schedule?: components["schemas"]["ScheduleEventDto"] | null;
+        };
+        MoimDetailResponseDto: {
+            /** @description 모임 단건 정보(GET /moims/:id 와 동일 형태) */
+            moim: components["schemas"]["MoimResponseDto"];
+            /** @description 멤버 목록(GET /moims/:id/members 와 동일 형태) */
+            members: components["schemas"]["MemberResponseDto"][];
+            /** @description 투표 목록(GET /moims/:id/polls 와 동일 형태 — 각 옵션 voteCount + 호출자 myVotes 포함). 투표 없으면 빈 배열. */
+            polls: components["schemas"]["PollResponseDto"][];
+            /** @description 일정 조율 세션(GET /moims/:id/schedule 의 body.schedule 과 동일 형태). 미설정이면 null. */
+            schedule: components["schemas"]["ScheduleResponseDto"] | null;
+        };
         UpdateMaxMembersDto: {
             /**
              * @description 수정할 모임 정원(1 이상의 정수). 현재 멤버 수 미만으로 낮춰도 소급 퇴장 없음(신규 가입만 차단).
@@ -731,6 +909,204 @@ export interface components {
              * @example 00000000-0000-4000-8000-000000000002
              */
             userId: string;
+        };
+        CreatePollDto: {
+            /**
+             * @description 투표 질문(trim 후 비어 있을 수 없음)
+             * @example 다음 모임 날짜는?
+             */
+            question: string;
+            /**
+             * @description 선택지 라벨 배열(trim 후 비지 않은 항목 2개 이상 필요)
+             * @example [
+             *       "토요일",
+             *       "일요일"
+             *     ]
+             */
+            options: string[];
+            /**
+             * @description 여러 개 선택 허용 여부(poll 별 옵트인). true 면 다중 선택(토글), 생략/false 면 단일 선택(교체).
+             * @default false
+             * @example false
+             */
+            multiSelect: boolean;
+            /**
+             * @description 마감 시각(ISO-8601). 생략 시 null(마감 없음 — 영구히 열림). 무효 ISO 는 400 Bad Request.
+             * @example 2026-06-25T12:00:00.000Z
+             */
+            closesAt?: string | null;
+            /**
+             * @description 투표 종류. "date" 면 options 가 ISO-8601 날짜 문자열 배열(옵션별 optionDate 저장), "place" 면 자유 텍스트 장소명(마감 시 승자 label → Moim.location). 생략/"general" 이면 일반 자유 텍스트 옵션.
+             * @default general
+             * @example general
+             * @enum {string}
+             */
+            kind: "general" | "date" | "place";
+        };
+        VoteDto: {
+            /**
+             * @description 선택지 id(해당 poll 에 속해야 함 — 아니면 400)
+             * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
+             */
+            optionId: string;
+        };
+        SetScheduleDto: {
+            /**
+             * @description 후보 날짜 배열(ISO date "YYYY-MM-DD"). 최소 1개, 임의 다수.
+             * @example [
+             *       "2026-07-05",
+             *       "2026-07-06",
+             *       "2026-07-12"
+             *     ]
+             */
+            dates: string[];
+            /**
+             * @description 하루 시작 시각(후보일 00:00 기준 분, 0~1440).
+             * @example 1080
+             */
+            startMinute: number;
+            /**
+             * @description 하루 종료 시각(후보일 00:00 기준 분). startMinute 초과 + 자정 넘김 시 1440 초과 가능(예: 익일 02:00 = 1560).
+             * @example 1440
+             */
+            endMinute: number;
+            /**
+             * @description 슬롯 단위(분). 15/30/60 중 하나. 생략 시 30.
+             * @default 30
+             * @example 30
+             */
+            slotMinutes: number;
+        };
+        SetAvailabilityDto: {
+            /**
+             * @description 가능 슬롯 배열. 각 항목 { date, startMinute }. 세션의 dates·시간 범위·슬롯 격자에 정렬되어야 한다(미정렬 → 400).
+             * @example [
+             *       {
+             *         "date": "2026-07-05",
+             *         "startMinute": 1080
+             *       },
+             *       {
+             *         "date": "2026-07-05",
+             *         "startMinute": 1110
+             *       }
+             *     ]
+             */
+            slots: {
+                /** @example 2026-07-05 */
+                date?: string;
+                /** @example 1080 */
+                startMinute?: number;
+            }[];
+        };
+        ConfirmScheduleDto: {
+            /**
+             * @description 확정할 날짜(ISO date "YYYY-MM-DD"). 세션 dates 중 하나여야 한다.
+             * @example 2026-07-05
+             */
+            date: string;
+            /**
+             * @description 확정할 시작 시각(후보일 00:00 기준 분). 세션 시간 범위·격자에 정렬. >1440 이면 다음날 새벽(자정 넘김).
+             * @example 1080
+             */
+            startMinute: number;
+        };
+        CreateReportDto: {
+            /**
+             * @description 신고 대상(피신고 콘텐츠 작성자) sub(profile.id).
+             * @example user-b
+             */
+            targetUserId: string;
+            /**
+             * @description 신고 컨텍스트 모임 id.
+             * @example moim-a
+             */
+            moimId: string;
+            /**
+             * @description 신고 사유(trim 후 비어 있을 수 없음 — 빈 값은 400).
+             * @example 스팸
+             */
+            reason: string;
+            /**
+             * @description 신고 콘텐츠 타입. 단일 PK 4종만 허용(복합 PK 콘텐츠는 400, REQ-RPT-004).
+             * @example chat_message
+             * @enum {string}
+             */
+            contentType: "chat_message" | "poll" | "expense" | "settlement_request";
+            /**
+             * @description 신고 콘텐츠 id(TEXT 통일). chat_message(BigInt PK)는 필터 시 BigInt 캐스팅(REQ-RPT-005).
+             * @example 42
+             */
+            contentId: string;
+        };
+        ReportResponseDto: {
+            /**
+             * @description 신고 id(uuid)
+             * @example uuid
+             */
+            id: string;
+            /**
+             * @description 신고자 sub(가드-검증 sub)
+             * @example user-a
+             */
+            reporterId: string;
+            /**
+             * @description 신고 대상 sub
+             * @example user-b
+             */
+            targetUserId: string;
+            /**
+             * @description 신고 컨텍스트 모임 id
+             * @example moim-a
+             */
+            moimId: string;
+            /**
+             * @description 신고 사유
+             * @example 스팸
+             */
+            reason: string;
+            /**
+             * @description 신고 콘텐츠 타입(단일 PK 4종)
+             * @example chat_message
+             */
+            contentType: string;
+            /**
+             * @description 신고 콘텐츠 id(TEXT)
+             * @example 42
+             */
+            contentId: string;
+            /**
+             * @description 생성 시각(ISO-8601)
+             * @example 2026-07-02T00:00:00.000Z
+             */
+            createdAt: string;
+        };
+        CreateBlockDto: {
+            /**
+             * @description 차단 대상 sub(profile.id). 자기 자신(sub)이면 400. 이미 차단돼 있으면 멱등 성공(200).
+             * @example user-b
+             */
+            blockedUserId: string;
+        };
+        BlockResponseDto: {
+            /**
+             * @description 차단자 sub(가드-검증 sub)
+             * @example user-a
+             */
+            blockerId: string;
+            /**
+             * @description 차단 대상 sub
+             * @example user-b
+             */
+            blockedUserId: string;
+            /**
+             * @description 생성 시각(ISO-8601)
+             * @example 2026-07-02T00:00:00.000Z
+             */
+            createdAt: string;
+        };
+        BlockListResponseDto: {
+            /** @description 내가 차단한 목록(block 행만) */
+            items: components["schemas"]["BlockResponseDto"][];
         };
         CreateInviteDto: {
             /**
@@ -864,234 +1240,6 @@ export interface components {
              * @example 37
              */
             nextCursor: string | null;
-        };
-        CreateReportDto: {
-            /**
-             * @description 신고 대상(피신고 콘텐츠 작성자) sub(profile.id).
-             * @example user-b
-             */
-            targetUserId: string;
-            /**
-             * @description 신고 컨텍스트 모임 id.
-             * @example moim-a
-             */
-            moimId: string;
-            /**
-             * @description 신고 사유(trim 후 비어 있을 수 없음 — 빈 값은 400).
-             * @example 스팸
-             */
-            reason: string;
-            /**
-             * @description 신고 콘텐츠 타입. 단일 PK 4종만 허용(복합 PK 콘텐츠는 400, REQ-RPT-004).
-             * @example chat_message
-             * @enum {string}
-             */
-            contentType: "chat_message" | "poll" | "expense" | "settlement_request";
-            /**
-             * @description 신고 콘텐츠 id(TEXT 통일). chat_message(BigInt PK)는 필터 시 BigInt 캐스팅(REQ-RPT-005).
-             * @example 42
-             */
-            contentId: string;
-        };
-        ReportResponseDto: {
-            /**
-             * @description 신고 id(uuid)
-             * @example uuid
-             */
-            id: string;
-            /**
-             * @description 신고자 sub(가드-검증 sub)
-             * @example user-a
-             */
-            reporterId: string;
-            /**
-             * @description 신고 대상 sub
-             * @example user-b
-             */
-            targetUserId: string;
-            /**
-             * @description 신고 컨텍스트 모임 id
-             * @example moim-a
-             */
-            moimId: string;
-            /**
-             * @description 신고 사유
-             * @example 스팸
-             */
-            reason: string;
-            /**
-             * @description 신고 콘텐츠 타입(단일 PK 4종)
-             * @example chat_message
-             */
-            contentType: string;
-            /**
-             * @description 신고 콘텐츠 id(TEXT)
-             * @example 42
-             */
-            contentId: string;
-            /**
-             * @description 생성 시각(ISO-8601)
-             * @example 2026-07-02T00:00:00.000Z
-             */
-            createdAt: string;
-        };
-        CreateBlockDto: {
-            /**
-             * @description 차단 대상 sub(profile.id). 자기 자신(sub)이면 400. 이미 차단돼 있으면 멱등 성공(200).
-             * @example user-b
-             */
-            blockedUserId: string;
-        };
-        BlockResponseDto: {
-            /**
-             * @description 차단자 sub(가드-검증 sub)
-             * @example user-a
-             */
-            blockerId: string;
-            /**
-             * @description 차단 대상 sub
-             * @example user-b
-             */
-            blockedUserId: string;
-            /**
-             * @description 생성 시각(ISO-8601)
-             * @example 2026-07-02T00:00:00.000Z
-             */
-            createdAt: string;
-        };
-        BlockListResponseDto: {
-            /** @description 내가 차단한 목록(block 행만) */
-            items: components["schemas"]["BlockResponseDto"][];
-        };
-        CreatePollDto: {
-            /**
-             * @description 투표 질문(trim 후 비어 있을 수 없음)
-             * @example 다음 모임 날짜는?
-             */
-            question: string;
-            /**
-             * @description 선택지 라벨 배열(trim 후 비지 않은 항목 2개 이상 필요)
-             * @example [
-             *       "토요일",
-             *       "일요일"
-             *     ]
-             */
-            options: string[];
-            /**
-             * @description 여러 개 선택 허용 여부(poll 별 옵트인). true 면 다중 선택(토글), 생략/false 면 단일 선택(교체).
-             * @default false
-             * @example false
-             */
-            multiSelect: boolean;
-            /**
-             * @description 마감 시각(ISO-8601). 생략 시 null(마감 없음 — 영구히 열림). 무효 ISO 는 400 Bad Request.
-             * @example 2026-06-25T12:00:00.000Z
-             */
-            closesAt?: string | null;
-            /**
-             * @description 투표 종류. "date" 면 options 가 ISO-8601 날짜 문자열 배열(옵션별 optionDate 저장), "place" 면 자유 텍스트 장소명(마감 시 승자 label → Moim.location). 생략/"general" 이면 일반 자유 텍스트 옵션.
-             * @default general
-             * @example general
-             * @enum {string}
-             */
-            kind: "general" | "date" | "place";
-        };
-        PollOptionResponseDto: {
-            /**
-             * @description 선택지 id
-             * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
-             */
-            id: string;
-            /**
-             * @description 선택지 라벨
-             * @example 토요일
-             */
-            label: string;
-            /**
-             * @description 이 선택지의 득표 수(표 0 이면 0)
-             * @example 3
-             */
-            voteCount: number;
-            /**
-             * @description 날짜 투표 옵션의 시각(ISO-8601). 일반 투표 옵션은 null.
-             * @example 2026-06-27T12:00:00.000Z
-             */
-            optionDate: string | null;
-        };
-        PollResponseDto: {
-            /**
-             * @description 투표 id(uuid)
-             * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
-             */
-            id: string;
-            /**
-             * @description 투표 질문
-             * @example 다음 모임 날짜는?
-             */
-            question: string;
-            /**
-             * @description 생성자 sub(= profile.id)
-             * @example 00000000-0000-4000-8000-000000000001
-             */
-            createdBy: string;
-            /**
-             * @description 투표 생성 시각(ISO-8601)
-             * @example 2026-06-20T00:00:00.000Z
-             */
-            createdAt: string;
-            /**
-             * @description 여러 개 선택 허용 여부(true=다중 선택/토글, false=단일 선택/교체).
-             * @example false
-             */
-            multiSelect: boolean;
-            /**
-             * @description 투표 종류. "general"=일반(자유 텍스트 옵션), "date"=날짜 투표(optionDate 있음), "place"=장소 투표(마감 시 승자 → location).
-             * @example general
-             * @enum {string}
-             */
-            kind: "general" | "date" | "place";
-            /** @description 선택지 목록(각 선택지의 득표 수 + optionDate 포함) */
-            options: components["schemas"]["PollOptionResponseDto"][];
-            /**
-             * @description 호출자 자신이 고른 선택지 id 목록(미투표 시 빈 배열). 단일 선택은 0/1요소, 다중 선택은 0..N요소.
-             * @example [
-             *       "15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8"
-             *     ]
-             */
-            myVotes: string[];
-            /**
-             * @description 마감 시각(ISO-8601). null 이면 마감 없음(영구히 열림). 마감 판정은 isClosed 를 권위 있는 출처로 사용한다.
-             * @example 2026-06-25T12:00:00.000Z
-             */
-            closesAt: string | null;
-            /**
-             * @description 서버 계산 마감 여부(closesAt != null AND closesAt <= 서버 now). 클라이언트 시계 오차 차단용 — 차단/배지 판정에 사용한다.
-             * @example false
-             */
-            isClosed: boolean;
-            /**
-             * @description 자동 확정된 모임 일정(ISO-8601). 날짜 투표 마감 시 단일 최다 득표 옵션의 날짜가 Moim.startsAt 으로 설정된 경우에만 값이 있다. vote/list 응답에선 항상 null.
-             * @example 2026-06-27T12:00:00.000Z
-             */
-            finalizedStartsAt: string | null;
-            /**
-             * @description 자동 확정된 모임 장소. 장소 투표 마감 시 단일 최다 득표 옵션의 장소명이 Moim.location 으로 설정된 경우에만 값이 있다. vote/list 응답·날짜 투표에선 null.
-             * @example 강남역 2번 출구
-             */
-            finalizedLocation: string | null;
-            /**
-             * @description finalize 건너뛴 이유. "tie"=동점, "no_votes"=표 없음, null=finalize 성공 또는 일반 투표 또는 vote/list 응답.
-             * @example null
-             * @enum {string|null}
-             */
-            finalizeSkippedReason: "tie" | "no_votes" | null;
-        };
-        VoteDto: {
-            /**
-             * @description 선택지 id(해당 poll 에 속해야 함 — 아니면 400)
-             * @example 15ebe4ba-7f12-4e2c-bfa4-a0a9eb5022b8
-             */
-            optionId: string;
         };
         CreateExpenseDto: {
             /**
@@ -1281,128 +1429,6 @@ export interface components {
             amount: number;
             /** @description 요청 생성 시각(ISO-8601) */
             createdAt: string;
-        };
-        SetScheduleDto: {
-            /**
-             * @description 후보 날짜 배열(ISO date "YYYY-MM-DD"). 최소 1개, 임의 다수.
-             * @example [
-             *       "2026-07-05",
-             *       "2026-07-06",
-             *       "2026-07-12"
-             *     ]
-             */
-            dates: string[];
-            /**
-             * @description 하루 시작 시각(후보일 00:00 기준 분, 0~1440).
-             * @example 1080
-             */
-            startMinute: number;
-            /**
-             * @description 하루 종료 시각(후보일 00:00 기준 분). startMinute 초과 + 자정 넘김 시 1440 초과 가능(예: 익일 02:00 = 1560).
-             * @example 1440
-             */
-            endMinute: number;
-            /**
-             * @description 슬롯 단위(분). 15/30/60 중 하나. 생략 시 30.
-             * @default 30
-             * @example 30
-             */
-            slotMinutes: number;
-        };
-        ScheduleSlotDto: {
-            /**
-             * @description 가능 멤버 sub(= profile.id)
-             * @example uuid
-             */
-            userId: string;
-            /**
-             * @description 슬롯 날짜(ISO date)
-             * @example 2026-07-05
-             */
-            date: string;
-            /**
-             * @description 슬롯 시작(후보일 00:00 기준 분, >=1440 이면 다음날)
-             * @example 1080
-             */
-            startMinute: number;
-        };
-        ScheduleEventDto: {
-            /** @example uuid */
-            id: string;
-            /** @example uuid */
-            moimId: string;
-            /**
-             * @description 생성자 sub
-             * @example uuid
-             */
-            createdBy: string;
-            /**
-             * @description 후보 날짜 배열
-             * @example [
-             *       "2026-07-05",
-             *       "2026-07-06"
-             *     ]
-             */
-            dates: string[];
-            /**
-             * @description 하루 시작(분)
-             * @example 1080
-             */
-            startMinute: number;
-            /**
-             * @description 하루 종료(분, >1440=자정 넘김)
-             * @example 1440
-             */
-            endMinute: number;
-            /**
-             * @description 슬롯 단위(분)
-             * @example 30
-             */
-            slotMinutes: number;
-            /**
-             * @description 확정 시각(ISO datetime, nullable). 있으면 moim.startsAt 이 확정되어 그리드가 읽기 전용.
-             * @example 2026-07-01T12:00:00.000Z
-             */
-            confirmedAt?: string | null;
-            /** @description 전체 멤버 가능 슬롯 */
-            slots: components["schemas"]["ScheduleSlotDto"][];
-        };
-        ScheduleResponseDto: {
-            /** @description 일정 조율 세션(미설정이면 null) */
-            schedule?: components["schemas"]["ScheduleEventDto"] | null;
-        };
-        SetAvailabilityDto: {
-            /**
-             * @description 가능 슬롯 배열. 각 항목 { date, startMinute }. 세션의 dates·시간 범위·슬롯 격자에 정렬되어야 한다(미정렬 → 400).
-             * @example [
-             *       {
-             *         "date": "2026-07-05",
-             *         "startMinute": 1080
-             *       },
-             *       {
-             *         "date": "2026-07-05",
-             *         "startMinute": 1110
-             *       }
-             *     ]
-             */
-            slots: {
-                /** @example 2026-07-05 */
-                date?: string;
-                /** @example 1080 */
-                startMinute?: number;
-            }[];
-        };
-        ConfirmScheduleDto: {
-            /**
-             * @description 확정할 날짜(ISO date "YYYY-MM-DD"). 세션 dates 중 하나여야 한다.
-             * @example 2026-07-05
-             */
-            date: string;
-            /**
-             * @description 확정할 시작 시각(후보일 00:00 기준 분). 세션 시간 범위·격자에 정렬. >1440 이면 다음날 새벽(자정 넘김).
-             * @example 1080
-             */
-            startMinute: number;
         };
         RegisterDeviceDto: {
             /**
@@ -1818,6 +1844,49 @@ export interface operations {
             };
         };
     };
+    MoimController_getDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 모임 상세 집계(모임+멤버+투표+일정) — 웹 SSR 1회 호출용 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoimDetailResponseDto"];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 대상 모임의 멤버가 아님 — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 존재하지 않는 모임 — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     MoimController_getMembers: {
         parameters: {
             query?: never;
@@ -1982,6 +2051,618 @@ export interface operations {
             };
             /** @description 모임 없음 또는 대상 멤버십 없음 — 404 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PollController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 모임의 투표 목록(옵션별 voteCount + multiSelect + 호출자 myVotes 포함) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollResponseDto"][];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 대상 모임의 멤버가 아님(또는 없는 모임) — 403/404 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PollController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePollDto"];
+            };
+        };
+        responses: {
+            /** @description 투표 생성 + 옵션(투표 0 직후 상태) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollResponseDto"];
+                };
+            };
+            /** @description 빈 question / 유효 옵션 <2 / 무효 closesAt ISO / 미지 kind / 무효 날짜 옵션 ISO — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 대상 모임의 멤버가 아님(또는 없는 모임) — 403/404 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PollController_vote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                pollId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoteDto"];
+            };
+        };
+        responses: {
+            /** @description 투표 기록/교체 + 갱신된 단건 poll 결과 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollResponseDto"];
+                };
+            };
+            /** @description 빈 optionId / 해당 poll 의 선택지가 아닌 optionId — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 대상 모임의 멤버가 아님 — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 해당 모임에 속하지 않는(또는 없는) pollId — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 마감된 투표에 투표 시도 — 409 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PollController_close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                pollId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 마감된 poll 결과(closesAt=now, isClosed:true, finalize 필드 포함) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollResponseDto"];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 비멤버 또는 생성자가 아닌 멤버 — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 해당 모임에 속하지 않는(또는 없는) pollId — 404 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 일정 조율 세션(미설정이면 null) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponseDto"];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetScheduleDto"];
+            };
+        };
+        responses: {
+            /** @description 일정 조율 세션 설정/재설정 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponseDto"];
+                };
+            };
+            /** @description 날짜/시간 범위/슬롯 단위 검증 실패 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 일정 조율 세션 삭제(초기화) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_setMine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAvailabilityDto"];
+            };
+        };
+        responses: {
+            /** @description 내 가능 슬롯 교체 저장 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 미설정/확정됨/범위 밖 슬롯 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_setDates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 후보 날짜 편집(멤버 누구나) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponseDto"];
+                };
+            };
+            /** @description 미설정/확정됨/날짜 형식 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_setWindow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 시간대 넓히기(멤버 누구나) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponseDto"];
+                };
+            };
+            /** @description 미설정/확정됨/좁히기/격자 어긋남 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 멤버 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmScheduleDto"];
+            };
+        };
+        responses: {
+            /** @description 일정 확정(moim.startsAt 갱신) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 미설정/후보 밖 날짜/범위 밖 시각 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner 아님(또는 모임 미존재) — 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SafetyController_createReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReportDto"];
+            };
+        };
+        responses: {
+            /** @description 신고 저장 결과 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponseDto"];
+                };
+            };
+            /** @description content_type 화이트리스트 외 또는 빈 reason — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SafetyController_listBlocks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 내가 차단한 목록(block 행만) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockListResponseDto"];
+                };
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SafetyController_createBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBlockDto"];
+            };
+        };
+        responses: {
+            /** @description 차단 생성 결과(멱등 — 이미 존재해도 201) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockResponseDto"];
+                };
+            };
+            /** @description 자기 차단 또는 blockedUserId 누락 — 400 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SafetyController_unblock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blockedUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 차단 해제 완료(없는 행도 멱등 204) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 유효한 Supabase JWT 부재 — 401 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2299,325 +2980,6 @@ export interface operations {
             };
             /** @description 대상 모임의 멤버가 아님(또는 없는 모임) — 403 */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    SafetyController_createReport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateReportDto"];
-            };
-        };
-        responses: {
-            /** @description 신고 저장 결과 */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReportResponseDto"];
-                };
-            };
-            /** @description content_type 화이트리스트 외 또는 빈 reason — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    SafetyController_listBlocks: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 내가 차단한 목록(block 행만) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BlockListResponseDto"];
-                };
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    SafetyController_createBlock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateBlockDto"];
-            };
-        };
-        responses: {
-            /** @description 차단 생성 결과(멱등 — 이미 존재해도 201) */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BlockResponseDto"];
-                };
-            };
-            /** @description 자기 차단 또는 blockedUserId 누락 — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    SafetyController_unblock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                blockedUserId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 차단 해제 완료(없는 행도 멱등 204) */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PollController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 모임의 투표 목록(옵션별 voteCount + multiSelect + 호출자 myVotes 포함) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PollResponseDto"][];
-                };
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 대상 모임의 멤버가 아님(또는 없는 모임) — 403/404 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PollController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreatePollDto"];
-            };
-        };
-        responses: {
-            /** @description 투표 생성 + 옵션(투표 0 직후 상태) */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PollResponseDto"];
-                };
-            };
-            /** @description 빈 question / 유효 옵션 <2 / 무효 closesAt ISO / 미지 kind / 무효 날짜 옵션 ISO — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 대상 모임의 멤버가 아님(또는 없는 모임) — 403/404 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PollController_vote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                pollId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VoteDto"];
-            };
-        };
-        responses: {
-            /** @description 투표 기록/교체 + 갱신된 단건 poll 결과 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PollResponseDto"];
-                };
-            };
-            /** @description 빈 optionId / 해당 poll 의 선택지가 아닌 optionId — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 대상 모임의 멤버가 아님 — 403 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 해당 모임에 속하지 않는(또는 없는) pollId — 404 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 마감된 투표에 투표 시도 — 409 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PollController_close: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                pollId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 마감된 poll 결과(closesAt=now, isClosed:true, finalize 필드 포함) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PollResponseDto"];
-                };
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 비멤버 또는 생성자가 아닌 멤버 — 403 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 해당 모임에 속하지 않는(또는 없는) pollId — 404 */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2976,299 +3338,6 @@ export interface operations {
             };
             /** @description 타-모임 또는 미존재 settlementId — 404 */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ScheduleController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 일정 조율 세션(미설정이면 null) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleResponseDto"];
-                };
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 멤버 아님(또는 모임 미존재) — 403 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ScheduleController_set: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetScheduleDto"];
-            };
-        };
-        responses: {
-            /** @description 일정 조율 세션 설정/재설정 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleResponseDto"];
-                };
-            };
-            /** @description 날짜/시간 범위/슬롯 단위 검증 실패 — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description owner 아님(또는 모임 미존재) — 403 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ScheduleController_remove: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 일정 조율 세션 삭제(초기화) */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description owner 아님(또는 모임 미존재) — 403 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ScheduleController_setMine: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetAvailabilityDto"];
-            };
-        };
-        responses: {
-            /** @description 내 가능 슬롯 교체 저장 */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 미설정/확정됨/범위 밖 슬롯 — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 멤버 아님(또는 모임 미존재) — 403 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ScheduleController_setDates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 후보 날짜 편집(멤버 누구나) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleResponseDto"];
-                };
-            };
-            /** @description 미설정/확정됨/날짜 형식 — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 멤버 아님(또는 모임 미존재) — 403 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ScheduleController_setWindow: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 시간대 넓히기(멤버 누구나) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleResponseDto"];
-                };
-            };
-            /** @description 미설정/확정됨/좁히기/격자 어긋남 — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 멤버 아님(또는 모임 미존재) — 403 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ScheduleController_confirm: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfirmScheduleDto"];
-            };
-        };
-        responses: {
-            /** @description 일정 확정(moim.startsAt 갱신) */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 미설정/후보 밖 날짜/범위 밖 시각 — 400 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description 유효한 Supabase JWT 부재 — 401 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description owner 아님(또는 모임 미존재) — 403 */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };

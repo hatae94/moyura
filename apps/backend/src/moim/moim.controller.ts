@@ -5,10 +5,12 @@ import {
   Delete,
   Get,
   HttpCode,
+  Inject,
   Param,
   Patch,
   Post,
   UseGuards,
+  forwardRef,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -25,8 +27,13 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
 import type { VerifiedUser } from '../auth/token-verifier.service';
 import type { Moim, MoimMember } from '../generated/prisma/client';
+import { resultToDto } from '../poll/poll.controller';
+import { PollService } from '../poll/poll.service';
+import { toScheduleDto } from '../schedule/schedule.controller';
+import { ScheduleService } from '../schedule/schedule.service';
 import { CreateMoimDto } from './dto/create-moim.dto';
 import { MemberResponseDto } from './dto/member-response.dto';
+import { MoimDetailResponseDto } from './dto/moim-detail-response.dto';
 import { MoimResponseDto } from './dto/moim-response.dto';
 import { TransferOwnerDto } from './dto/transfer-owner.dto';
 import { UpdateMaxMembersDto } from './dto/update-max-members.dto';
@@ -41,7 +48,16 @@ import { MoimService } from './moim.service';
 @Controller('moims')
 @UseGuards(SupabaseAuthGuard)
 export class MoimController {
-  constructor(private readonly moimService: MoimService) {}
+  constructor(
+    private readonly moimService: MoimService,
+    // SPEC-MOIM-DETAIL-001: 상세 집계(GET /moims/:id/detail)가 개별 poll/schedule 엔드포인트와 동일한
+    // 서비스 메서드를 재사용한다(listPolls/getSchedule). Moim↔Poll/Schedule 모듈 순환 때문에 두 서비스는
+    // forwardRef 로 해석된 모듈에서 온다 — @Inject(forwardRef(...))로 명시해 순환 해석을 안전하게 처리한다.
+    @Inject(forwardRef(() => PollService))
+    private readonly pollService: PollService,
+    @Inject(forwardRef(() => ScheduleService))
+    private readonly scheduleService: ScheduleService,
+  ) {}
 
   // POST /moims — 모임 생성 + 생성자 owner 멤버십(REQ-MOIM-004 / AC-1). 201.
   @Post()
@@ -101,6 +117,47 @@ export class MoimController {
   ): Promise<MoimResponseDto> {
     const moim = await this.moimService.getMoim(user.sub, id);
     return toMoimDto(moim);
+  }
+
+  // @MX:NOTE: [AUTO] SPEC-MOIM-DETAIL-001: GET /moims/:id/detail — 모임+멤버+투표+일정을 1회로 합친 상세 집계.
+  // 웹 SSR이 4개 병렬 백엔드 호출을 1개로 대체할 수 있게 한다. 인가 게이트는 개별 엔드포인트와 동일하다:
+  // 401(가드가 JWT 부재 선처리) · 403(비멤버) · 404(없는 모임). getMoim(user.sub, id)을 먼저 호출해 게이트를
+  // 통과시킨다(assertMember 단일 출처 재사용 — 여기서 재구현 금지). 통과하면 호출자는 확정 멤버이므로 이후
+  // members/polls/schedule 은 인가된 상태다. 각 후속 조회는 내부적으로 assertMember 를 다시 수행하지만(중복 판정)
+  // 로컬 DB 왕복이라 저렴하다 — 이득은 4개 NETWORK 호출을 1개로 접는 것이다(인가 약화 없음). 게이트 통과 후
+  // 세 조회는 독립적이므로 Promise.all 로 서버측 동시 실행한다. polls/schedule 은 graceful data([]/null 유효 —
+  // "투표 없음"/"일정 없음"에 500 금지, 개별 엔드포인트와 동일하게 [] / null 반환). 각 필드 형태는 개별
+  // 엔드포인트 매퍼(toMoimDto/toMemberDto/resultToDto/toScheduleDto)를 그대로 재사용해 byte-identical 하다.
+  @Get(':id/detail')
+  @ApiOkResponse({
+    description: '모임 상세 집계(모임+멤버+투표+일정) — 웹 SSR 1회 호출용',
+    type: MoimDetailResponseDto,
+  })
+  @ApiUnauthorizedResponse({ description: '유효한 Supabase JWT 부재 — 401' })
+  @ApiForbiddenResponse({ description: '대상 모임의 멤버가 아님 — 403' })
+  @ApiNotFoundResponse({ description: '존재하지 않는 모임 — 404' })
+  async getDetail(
+    @CurrentUser() user: VerifiedUser,
+    @Param('id') id: string,
+  ): Promise<MoimDetailResponseDto> {
+    // 1) 인가 게이트(비멤버 403 / 없는 모임 404를 throw). 통과하면 호출자는 확정 멤버.
+    const moim = await this.moimService.getMoim(user.sub, id);
+
+    // 2) 게이트 통과 후 나머지 세 조회를 동시에 수행한다(서로 독립적). polls/schedule 은 빈 배열/null 이 유효 —
+    //    호출자 myVotes 는 user.sub 기준으로 채워진다(개별 GET /moims/:id/polls 와 동일).
+    const [members, polls, schedule] = await Promise.all([
+      this.moimService.listMembers(user.sub, id),
+      this.pollService.listPolls(user.sub, id),
+      this.scheduleService.getSchedule(user.sub, id),
+    ]);
+
+    return {
+      moim: toMoimDto(moim),
+      members: members.map(toMemberDto),
+      polls: polls.map(resultToDto),
+      // GET /moims/:id/schedule 의 body 형태({ schedule })와 동일하게 감싼다(미설정이면 { schedule: null }).
+      schedule: { schedule: schedule ? toScheduleDto(schedule) : null },
+    };
   }
 
   // GET /moims/:id/members — 멤버 목록(nickname 포함, 멤버 한정, REQ-MOIM-006 / AC-5).

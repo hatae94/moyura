@@ -132,10 +132,15 @@ describe('validateEnv (AC-B1 / AC-B2)', () => {
 });
 
 describe('isOriginAllowed (AC-F1 / AC-F3)', () => {
-  const allowlist = ['http://192.168.219.102:3000', 'http://192.168.219.102:8081'];
+  const allowlist = [
+    'http://192.168.219.102:3000',
+    'http://192.168.219.102:8081',
+  ];
 
   it('허용 목록에 있는 origin은 허용한다 (AC-F1)', () => {
-    expect(isOriginAllowed('http://192.168.219.102:3000', allowlist)).toBe(true);
+    expect(isOriginAllowed('http://192.168.219.102:3000', allowlist)).toBe(
+      true,
+    );
   });
 
   it('허용 목록에 없는 origin은 거부한다 (AC-F3)', () => {

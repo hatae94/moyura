@@ -1,18 +1,22 @@
-// 모임 상세 페이지 (Server Component, SPEC-MOIM-003 REQ-MOIM3-002/004/005 + SPEC-MOIM-005 REQ-MOIM5-006) —
-// 이름·멤버·채팅 입장·투표.
+// 모임 상세 페이지 (Server Component, SPEC-MOIM-003 REQ-MOIM3-002/004/005 + SPEC-MOIM-005 REQ-MOIM5-006
+// + SPEC-MOIM-DETAIL-001) — 이름·멤버·채팅 입장·투표.
 //
-// 서버에서 세션 access_token 으로 GET /moims/:id + GET /moims/:id/members + GET /moims/:id/polls 를 조회해
-// 모임 이름·멤버 목록·"채팅 입장" 링크와 투표 섹션을 렌더한다. (main) 그룹 하위라 (main)/layout.tsx 의
-// requireNamedSession() 가드를 상속한다 — 여기서 다시 호출하는 것은 (1) access_token 확보 (2) 직접 URL 진입 시
-// 가드 재확인 목적이다(idempotent — 쿠키 세션 읽기). SPEC-WEB-GUARD-001 정책과 일관.
+// 서버에서 세션 access_token 으로 GET /moims/:id/detail(집계) 를 1회 조회해 모임 이름·멤버 목록·"채팅 입장"
+// 링크·투표 섹션·일정 요약을 렌더한다. (main) 그룹 하위라 (main)/layout.tsx 의 requireNamedSession() 가드를
+// 상속하지만, 직접 URL 진입 보호 + access_token 확보를 위해 여기서 다시 호출한다(idempotent — 쿠키 세션 읽기).
+//
+// SPEC-MOIM-DETAIL-001: 이전에는 moim/members/polls/schedule 을 4개 개별 엔드포인트로 병렬 조회했으나(Vercel→
+// 백엔드 네트워크 4콜), 백엔드 집계 엔드포인트 GET /moims/:id/detail 로 1콜에 합쳤다 — 백엔드가 DB fan-out 을
+// 로컬에서 수행하므로 Vercel→백엔드 왕복이 1개로 준다. 인가는 백엔드가 단일 assertMember 게이트로 강제하고,
+// 응답 각 필드 형태는 개별 엔드포인트와 byte-identical 하다. polls 는 집계에 함께 실려 오므로 별도 스트리밍이
+// 불필요하다(1콜 후 전체 렌더 — 페이지 진입 스켈레톤은 loading.tsx 가 담당).
 //
 // SPEC-MOIM-005: 투표/생성은 인터랙티브하므로 본체(이 Server Component)는 데이터 fetch + 가드를 유지하고,
 // 투표 컨트롤·생성 폼은 Client 하위 컴포넌트(<PollsSection/>) + Server Action(poll-actions.ts)으로 분리한다.
 // polls 는 plain object(직렬화 가능)만 Client 섬에 전달한다(함수/인스턴스 금지 — Server→Client 경계 보존).
 //
 // 비멤버/미존재 안전 처리(REQ-MOIM3-005): 백엔드가 비멤버 403·미존재 404 를 반환하며(인가 단일 출처,
-// 약화하지 않는다), 양쪽 모두 notFound() 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
-import { Suspense } from "react";
+// 약화하지 않는다), 양쪽 모두 notFound()/redirect 로 처리해 모임 콘텐츠/토큰/오류 상세를 노출하지 않는다.
 import { notFound, redirect } from "next/navigation";
 import { Calendar, MapPin } from "lucide-react";
 
@@ -21,15 +25,11 @@ import { createApiClient } from "@moyura/api-client";
 import { API_BASE_URL } from "@/lib/env";
 import { requireNamedSession } from "@/lib/auth/require-named-session";
 import {
-  type MoimDetail,
-  type MoimMember,
+  type MoimDetailBundle,
   formatMoimSchedule,
-  getMoim,
-  getMoimMembers,
+  getMoimDetail,
   moimErrorStatus,
 } from "@/lib/moim/api";
-import { type PollWithResults, listPolls } from "@/lib/moim/polls";
-import { type ScheduleEvent, getSchedule } from "@/lib/schedule/api";
 import { PollsSection } from "./polls-section";
 import { InviteButton } from "./invite-button";
 import { MembersSection } from "./members-section";
@@ -53,31 +53,15 @@ export default async function MoimDetailPage({
     getToken: () => session.access_token,
   });
 
-  // 모임·멤버·투표·일정을 단일 파(wave)로 동시 발사한다(SSR 워터폴 축소). 셸(헤더/일정/멤버)은 인가 게이트
-  // (moim/members)만 await 해 즉시 렌더하고, 가장 무거운 투표 섹션(자체 fetch + 큰 클라 섬 + realtime 구독)은
-  // <Suspense>로 스트리밍한다 — 첫 의미있는 페인트가 polls 완료를 기다리지 않는다. 네 fetch 모두 여기서 동시
-  // 시작되므로(단일 웨이브) polls 도 셸이 준비될 즈음 대부분 해소돼 있다.
-  const moimP = getMoim(api, id);
-  const membersP = getMoimMembers(api, id);
-  const scheduleP = getSchedule(api, id);
-  // polls 는 아래 <Suspense> 경계 뒤에서 소비된다. 게이트가 notFound/redirect 로 단락돼도 unhandled
-  // rejection 이 나지 않도록, 그리고 조회 실패 시 graceful degrade(빈 배열 — "아직 투표가 없어요")하도록
-  // 여기서 catch 한다.
-  const pollsP: Promise<PollWithResults[]> = listPolls(api, id).catch(() => []);
-
-  // 인가 게이트: moim/members 는 필수. Next 16 스트리밍은 Suspense 가 스트림을 시작하면 HTTP 상태코드를
-  // 커밋하므로, 404/403 분기는 어떤 Suspense 경계보다 먼저(여기서) 이뤄져야 한다. schedule 은 셸 상단 위젯이라
-  // 함께 게이트에서 해소한다(graceful degrade — 실패 시 undefined → 위젯 미렌더).
-  const [moimSettled, membersSettled, scheduleSettled] = await Promise.allSettled([
-    moimP,
-    membersP,
-    scheduleP,
-  ]);
-
-  // moim/members 는 필수. 각각 실패 시 상태코드로 분기한다. raise 는 never 반환 함수 선언이라(화살표
-  // const 는 TS never-내로잉이 불안정 — 함수 선언만 신뢰 가능), 두 if 이후 moimSettled/membersSettled 는
-  // fulfilled 로 좁혀진다(TS 제어흐름 내로잉).
-  function raiseMoimAccessError(err: unknown): never {
+  // SPEC-MOIM-DETAIL-001: 모임+멤버+투표+일정을 집계 엔드포인트로 1회에 조회한다(4개 병렬 백엔드 호출 → 1개).
+  // 인가는 백엔드가 단일 게이트로 강제한다 — 비멤버 403 은 로그인 상태로 리다이렉트, 미존재 404 는 notFound()
+  // 로 처리한다. 일시적 실패(타임아웃/네트워크/5xx)는 404 로 숨기지 않고 에러 경계(app/error.tsx)로 승격해
+  // 재시도 UI 를 노출한다(타임아웃 없는 fetch 가 콜드 백엔드에 영구 pending 되던 근인을 api-client 타임아웃으로
+  // 끊고, 사용자가 갇히지 않게 재시도로 연결한다).
+  let detail: MoimDetailBundle;
+  try {
+    detail = await getMoimDetail(api, id);
+  } catch (err) {
     const status = moimErrorStatus(err);
     if (status === 404) {
       // 모임이 존재하지 않음 → 404 페이지(콘텐츠/토큰 비노출).
@@ -89,19 +73,13 @@ export default async function MoimDetailPage({
       const isRealAccount = session.user?.is_anonymous !== true;
       redirect(isRealAccount ? "/home" : "/login");
     }
-    // 일시적 실패(타임아웃/네트워크/5xx — status 404/403 아님)는 404 로 숨기지 않고 에러 경계(app/error.tsx)로
-    // 승격해 재시도 UI 를 노출한다. 타임아웃 없는 fetch 가 콜드 백엔드에 영구 pending 되어 로딩이 멈추던 근인을
-    // api-client 타임아웃(ApiTimeoutError)으로 끊고, 여기서 사용자가 갇히지 않게 재시도로 연결한다.
     throw err;
   }
-  if (moimSettled.status === "rejected") raiseMoimAccessError(moimSettled.reason);
-  if (membersSettled.status === "rejected") raiseMoimAccessError(membersSettled.reason);
 
-  const moim: MoimDetail = moimSettled.value;
-  const members: MoimMember[] = membersSettled.value;
-  // schedule graceful degrade: 실패 → undefined(요약 위젯 미렌더, 오해 소지 있는 CTA 방지).
-  const schedule: ScheduleEvent | null | undefined =
-    scheduleSettled.status === "fulfilled" ? scheduleSettled.value.schedule : undefined;
+  const { moim, members, polls } = detail;
+  // 일정 요약: 집계 응답의 { schedule } 래퍼를 언랩한다. schedule 이 null 이면 미설정 → ScheduleVoteBar 가
+  // "일정 조율 시작" CTA 로 대체한다(허위 값 금지).
+  const schedule = detail.schedule.schedule;
 
   const createdDate = new Date(moim.createdAt).toLocaleDateString("ko-KR", {
     year: "numeric",
@@ -155,15 +133,13 @@ export default async function MoimDetailPage({
         {/* 채팅·일정 조율·경비 액션은 우측 하단 speed dial FAB(MoimActionDock)로 이동했다 — 트리 끝에서 렌더.
             목적지/기능은 동일하며, 초대·멤버·투표는 콘텐츠 흐름에 그대로 유지한다. */}
 
-        {/* 최상단 — 후보 날짜별 참여(투표) 현황 가로 스크롤 바 그래프(일정 조율 요약). 미설정이면 "시작" CTA.
-            조회 실패(undefined) 시에만 미렌더(오해 소지 있는 CTA 노출 방지). 탭 → 일정 조율 페이지. */}
-        {schedule !== undefined ? (
-          <ScheduleVoteBar
-            moimId={moim.id}
-            schedule={schedule}
-            memberCount={members.length}
-          />
-        ) : null}
+        {/* 최상단 — 후보 날짜별 참여(투표) 현황 가로 스크롤 바 그래프(일정 조율 요약). 미설정(null)이면 "시작" CTA.
+            집계라 schedule 은 항상 로드돼 있어(atomic) 조건 없이 렌더한다 — null 처리는 ScheduleVoteBar 담당. */}
+        <ScheduleVoteBar
+          moimId={moim.id}
+          schedule={schedule}
+          memberCount={members.length}
+        />
 
         {/* SPEC-MOIM-011: owner 전용 초대 링크 발급(비-owner 면 null 렌더). 모바일 WebView 안에서도 동작. */}
         <InviteButton moimId={moim.id} isOwner={isOwner} />
@@ -182,58 +158,17 @@ export default async function MoimDetailPage({
 
         {/* SPEC-MOIM-006/007: 투표 섹션(Client 섬). 투표 목록·득표 막대·내 표 강조·단일/다중 투표·마감·생성 폼.
             currentUserId(세션 user.id = JWT sub) 는 생성자 전용 "마감하기" 버튼 노출 판정에 쓰인다(직렬화 string).
-            가장 무거운 섹션이라 <Suspense>로 스트리밍한다 — 셸(헤더/일정/멤버)이 먼저 페인트되고, polls 해소 시
-            아래 자리표시자가 실제 투표 섹션으로 교체된다(첫 페인트가 polls fetch 를 기다리지 않음). */}
-        <Suspense fallback={<PollsSectionFallback />}>
-          <PollsSectionStreamed
-            pollsPromise={pollsP}
-            moimId={moim.id}
-            currentUserId={session.user.id}
-            accessToken={session.access_token}
-          />
-        </Suspense>
+            집계로 polls 가 이미 로드돼 있어 스트리밍(Suspense) 불필요 — 직접 렌더한다. */}
+        <PollsSection
+          moimId={moim.id}
+          polls={polls}
+          currentUserId={session.user.id}
+          accessToken={session.access_token}
+        />
       </div>
 
       {/* 우측 하단 플로팅 speed dial — 채팅/일정 조율/경비 액션(fixed, 문서 흐름 밖). */}
       <MoimActionDock moimId={moim.id} />
     </div>
-  );
-}
-
-/**
- * 투표 섹션 스트리밍 래퍼(Server) — 상위에서 시작한 pollsP 를 <Suspense> 경계 안에서 await 해 기존
- * 클라이언트 <PollsSection> 에 값(직렬화 가능)으로 전달한다. 이 컴포넌트가 suspend 되는 동안 상위 셸은 이미
- * 페인트돼 있고, polls 해소 시 이 서브트리만 스트리밍돼 자리표시자를 교체한다(sibling 셸을 블록하지 않음).
- */
-async function PollsSectionStreamed({
-  pollsPromise,
-  moimId,
-  currentUserId,
-  accessToken,
-}: {
-  pollsPromise: Promise<PollWithResults[]>;
-  moimId: string;
-  currentUserId: string;
-  accessToken: string | null;
-}) {
-  const polls = await pollsPromise;
-  return (
-    <PollsSection
-      moimId={moimId}
-      polls={polls}
-      currentUserId={currentUserId}
-      accessToken={accessToken}
-    />
-  );
-}
-
-/** 투표 섹션 스트리밍 폴백 — 헤더 + 카드 자리표시자(loading.tsx 와 동일한 skeleton 시각 언어, 공간 예약으로 CLS 완화). */
-function PollsSectionFallback() {
-  return (
-    <section className="flex flex-col gap-3" aria-busy="true" aria-label="투표 불러오는 중">
-      <div className="skeleton h-5 w-20 rounded-md" />
-      <div className="skeleton h-28 w-full rounded-2xl" />
-      <div className="skeleton h-28 w-full rounded-2xl" />
-    </section>
   );
 }

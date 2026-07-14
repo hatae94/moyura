@@ -240,7 +240,9 @@ function requireSlotArray(value: unknown): SlotInput[] {
 
 // ── DTO 변환 ────────────────────────────────────────────────────────────────
 
-function toScheduleDto(event: ScheduleEventWithSlots) {
+// SPEC-MOIM-DETAIL-001: MoimController 의 상세 집계(GET /moims/:id/detail)가 GET /moims/:id/schedule 의
+// body.schedule 과 byte-identical 한 형태를 만들기 위해 이 매퍼를 재사용한다 — 형태 드리프트 방지를 위해 export 한다.
+export function toScheduleDto(event: ScheduleEventWithSlots) {
   return {
     id: event.id,
     moimId: event.moimId,

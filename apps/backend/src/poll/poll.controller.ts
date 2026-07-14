@@ -289,7 +289,9 @@ function newPollToDto(poll: PollWithOptions): PollResponseDto {
 // 집계 결과 poll → DTO(createdAt ISO-8601 직렬화, multiSelect + myVotes 목록).
 // SPEC-MOIM-007: closesAt(ISO|null) + isClosed(서버 계산, aggregatePolls 가 이미 계산) 추가.
 // SPEC-MOIM-008: kind + optionDate + finalize 필드 추가. vote/list 응답은 finalize 필드 null.
-function resultToDto(poll: PollWithResults): PollResponseDto {
+// SPEC-MOIM-DETAIL-001: MoimController 의 상세 집계(GET /moims/:id/detail)가 GET /moims/:id/polls 와
+// byte-identical 한 poll 형태를 만들기 위해 이 매퍼를 재사용한다 — 형태 드리프트 방지를 위해 export 한다.
+export function resultToDto(poll: PollWithResults): PollResponseDto {
   return {
     id: poll.id,
     question: poll.question,
