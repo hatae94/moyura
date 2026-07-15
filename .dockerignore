@@ -1,0 +1,50 @@
+# ============================================================
+# .dockerignore — moyura 모노레포 Docker 빌드 제외 목록
+# 빌드 컨텍스트 크기를 최소화하여 빌드 속도를 높인다.
+# ============================================================
+
+# 의존성 (스테이지 내에서 설치하므로 제외)
+**/node_modules
+
+# Git
+.git
+.gitignore
+
+# 빌드 결과물 (스테이지 내에서 생성하므로 제외)
+**/dist
+apps/backend/coverage
+
+# 환경 파일 (시크릿 유출 방지)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Nx 캐시
+.nx/cache
+
+# Supabase 로컬 개발 데이터
+supabase/.branches
+supabase/.temp
+
+# 테스트/개발 전용 파일
+**/*.spec.ts
+**/*.test.ts
+
+# OS / IDE
+.DS_Store
+**/.DS_Store
+.vscode
+.idea
+
+# 문서 (런타임 불필요)
+docs
+*.md
+!apps/backend/README.md
+
+# Railway / Render 설정 (Cloud Run 불필요)
+railway.json
+render.yaml
+
+# Mobile / Web 앱 (백엔드 빌드에 불필요)
+apps/web
+apps/mobile
