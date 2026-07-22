@@ -1,0 +1,205 @@
+{
+  "head_sha": "7fc4b9ef5898b077ada78f32a8297b34c78561fb",
+  "computed_at": "2026-07-22T02:02:11Z",
+  "count": 0,
+  "records": [
+    {
+      "SPECID": "SPEC-ACCOUNT-001",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-AUTH-001",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-AUTH-002",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-CHAT-001",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-CHAT-002",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-ENV-SETUP-001",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-LOGIN-UI-001",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOBILE-001",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOBILE-002",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOBILE-003",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOBILE-004",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOBILE-NATIVE-UI-001",
+      "FrontmatterStatus": "draft",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOBILE-NAV-001",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-001",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-002",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-003",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-004",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-005",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-006",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-007",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-008",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-009",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-010",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-011",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-EDIT-001",
+      "FrontmatterStatus": "draft",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-MOIM-EXPENSE-001",
+      "FrontmatterStatus": "draft",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-PROFILE-001",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-SAFETY-001",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-WEB-GUARD-001",
+      "FrontmatterStatus": "completed",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-WEB-VIEWPORT-001",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-WEBVIEW-NATIVE-FEEL-001",
+      "FrontmatterStatus": "draft",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-WEBVIEW-SHELL-001",
+      "FrontmatterStatus": "in-progress",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    },
+    {
+      "SPECID": "SPEC-WEBVIEW-UNIFY-001",
+      "FrontmatterStatus": "draft",
+      "GitImpliedStatus": "era-exempt",
+      "Drifted": false
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "session_id": "3429e984-daaf-49a7-ad0a-8edf6d16374f",
+    "spec_id": "(none)",
+    "phase": "(none)",
+    "started_at": "2026-07-22T02:02:11.24186Z",
+    "last_heartbeat": "2026-07-22T02:02:11.24186Z",
+    "pid": 66951,
+    "host": "hataeui-MacBookPro-2.local",
+    "cwd": "/Users/hatae/Documents/personal/moyura"
+  }
+]
