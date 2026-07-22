@@ -22,6 +22,10 @@ const config: StorybookConfig = {
     // (Storybook Vite 는 tsconfig paths 를 자동 해석하지 않음 — CP-3).
     viteConfig.resolve = {
       ...viteConfig.resolve,
+      // React 인스턴스 중복 해석 방지 — pnpm workspace 에서 스토리 컴포넌트의 `react` 와 Storybook
+      // 렌더러의 `react` 가 서로 다른 물리 복사본으로 잡히면 hook(useState/useId)이
+      // "Invalid hook call: more than one copy of React" 로 깨진다. 단일 react/react-dom 을 강제한다.
+      dedupe: [...(viteConfig.resolve?.dedupe ?? []), "react", "react-dom"],
       alias: {
         ...viteConfig.resolve?.alias,
         "@": fileURLToPath(new URL("..", import.meta.url)),
