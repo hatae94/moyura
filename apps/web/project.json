@@ -28,6 +28,12 @@
       "cache": true,
       "dependsOn": ["api-client:generate"],
       "options": { "command": "tsc --noEmit", "cwd": "apps/web" }
+    },
+    "build-storybook": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "outputs": ["{projectRoot}/storybook-static"],
+      "options": { "command": "storybook build", "cwd": "apps/web" }
     }
   }
 }

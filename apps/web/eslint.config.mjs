@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Storybook 빌드 산출물(SPEC-WEB-STORYBOOK-001) — 번들된 산출물이라 린트 대상이 아니다.
+    "storybook-static/**",
   ]),
 ]);
 

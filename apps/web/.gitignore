@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# storybook (SPEC-WEB-STORYBOOK-001 — 빌드 산출물, 빌드 타깃 Next 와 분리)
+/storybook-static/
+
 # production
 /build
 
