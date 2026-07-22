@@ -1,6 +1,6 @@
 # moyura
 
-**🔗 라이브: [htyong.com](https://htyong.com)**
+**🔗 라이브: [htyong.com](https://htyong.com) · 🎨 UI 컴포넌트 카탈로그(Storybook): [design.htyong.com](https://design.htyong.com)**
 
 **모임(moim) 도메인 중심의 B2C 생산성·유틸리티 앱** — 모임 생성부터 초대·채팅·일정/장소/투표 조율·회비 정산까지 하나의 흐름으로 묶는다. React Native(Expo) 웹뷰 하이브리드 아키텍처로 iOS·Android·Web을 단일 웹 UI로 공유한다.
 
@@ -145,6 +145,7 @@ Supabase 사용은 하이브리드다 — 책임을 명확히 분리한다.
 ## 배포
 
 - **web**: Vercel — [htyong.com](https://htyong.com)
+- **UI 컴포넌트 카탈로그(Storybook)**: Vercel — [design.htyong.com](https://design.htyong.com) (`apps/web/components/ui` 공용 프리미티브, 실 디자인 시스템으로 렌더)
 - **backend**: Render (Cloud Run 서울 리전 이관 설계 진행)
 - **DB/Auth/Realtime**: Supabase
 - **mobile**: EAS Build
